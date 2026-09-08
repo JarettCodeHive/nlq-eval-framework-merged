@@ -1,0 +1,13 @@
+join_path_id,chain,join_keys,join_type,tier_usage,notes
+JP1,contacts -> accounts,contacts.account_id = accounts.account_id,INNER;LEFT,T2;T3;T4,contacts.account_id is nullable (unassigned contacts)
+JP2,contact_campaigns -> contacts,contact_campaigns.contact_id = contacts.contact_id,INNER,T2;T4,junction table - NOT NULL FK
+JP3,contact_campaigns -> campaigns,contact_campaigns.campaign_id = campaigns.campaign_id,INNER,T2;T4,junction table - NOT NULL FK
+JP4,interactions -> contacts,interactions.contact_id = contacts.contact_id,INNER,T2;T4,NOT NULL FK
+JP5,interactions -> accounts,interactions.account_id = accounts.account_id,INNER;LEFT,T2;T3,nullable redundant account path
+JP6,interactions -> campaigns,interactions.campaign_id = campaigns.campaign_id,INNER;LEFT,T2;T3,NULL campaign_id = organic / unattributed engagement
+JP7,support_cases -> accounts,support_cases.account_id = accounts.account_id,INNER,T2;T4,NOT NULL FK
+JP8,support_cases -> contacts,support_cases.contact_id = contacts.contact_id,INNER;LEFT,T3;T4,nullable - account-level cases have NULL contact_id
+JP9,accounts -> contacts -> interactions,accounts.account_id = contacts.account_id AND contacts.contact_id = interactions.contact_id,INNER,T4;T5,account engagement through its contacts
+JP10,accounts -> contacts -> support_cases,accounts.account_id = contacts.account_id AND contacts.contact_id = support_cases.contact_id,INNER,T4,account cases raised by its contacts
+JP11,contacts -> contact_campaigns -> campaigns,contacts.contact_id = contact_campaigns.contact_id AND contact_campaigns.campaign_id = campaigns.campaign_id,INNER,T4;T5,resolves the contacts<->campaigns many-to-many
+JP12,campaigns -> interactions,campaigns.campaign_id = interactions.campaign_id,LEFT,T3,campaigns with no attributed interactions

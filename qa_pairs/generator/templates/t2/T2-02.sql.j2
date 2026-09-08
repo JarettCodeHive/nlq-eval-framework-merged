@@ -1,0 +1,4 @@
+SELECT a.customer_tier AS entity, COUNT(s.case_id) AS metric
+FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id
+WHERE s.priority = '{{ priority }}'
+GROUP BY a.customer_tier ORDER BY metric DESC, entity ASC LIMIT 1;

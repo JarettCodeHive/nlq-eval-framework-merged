@@ -1,0 +1,944 @@
+{
+  "domain": "crm",
+  "dataset_version": "dataset-v1.0.0",
+  "schema_source": "schemas/crm/crm_ddl.sql",
+  "fixed_values": {
+    "seed_source": "config/generation/base.json:seed",
+    "reference_today_source": "config/generation/base.json:reference_today",
+    "manifest_generated_at": "2026-09-04T00:00:00"
+  },
+  "output_paths": {
+    "dev": "tmp/generated/crm/dev",
+    "full": "release/crm/dataset-v1.0.0"
+  },
+  "release_rules": {
+    "release_profile": "full",
+    "refuse_release_export_for_profiles": [
+      "dev"
+    ],
+    "immutable_after_manifest": true,
+    "correction_policy": "Create a new dataset version rather than editing an immutable release."
+  },
+  "table_order": [
+    "accounts",
+    "contacts",
+    "campaigns",
+    "contact_campaigns",
+    "interactions",
+    "support_cases"
+  ],
+  "generation_notes": {
+    "row_target_policy": "Use explicit per-table row_targets. Dev is intentionally small and is not required to equal exactly 1% of full.",
+    "release_profile": "full",
+    "release_directory": "release/crm/dataset-v1.0.0",
+    "row_cap_source": "config/generation/base.json:max_rows_per_table",
+    "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version to preserve byte-identical regeneration.",
+    "domain_boundary": "CRM covers account and contact engagement, campaign attribution, and support-case SLA analysis. Sales pipeline and revenue concepts are excluded.",
+    "currency_policy": "CRM is USD-only. Mixed-currency and FX conversion belong to Finance."
+  },
+  "domain_values": {
+    "customer_tiers": [
+      "Standard",
+      "Preferred",
+      "Strategic"
+    ],
+    "campaign_types": [
+      "Awareness",
+      "Nurture",
+      "Retention",
+      "Reengagement",
+      "CustomerEducation"
+    ],
+    "campaign_channels": [
+      "Email",
+      "Phone",
+      "Web",
+      "Webinar",
+      "Event",
+      "Social"
+    ],
+    "campaign_statuses": [
+      "Draft",
+      "Scheduled",
+      "Active",
+      "Completed",
+      "Cancelled"
+    ],
+    "campaign_member_statuses": [
+      "Targeted",
+      "Sent",
+      "Engaged",
+      "Responded",
+      "Converted",
+      "OptedOut"
+    ],
+    "engagement_types": [
+      "EmailOpen",
+      "LinkClick",
+      "FormSubmission",
+      "PhoneCall",
+      "Meeting",
+      "WebinarAttendance",
+      "EventAttendance"
+    ],
+    "interaction_directions": [
+      "Inbound",
+      "Outbound"
+    ],
+    "support_case_categories": [
+      "ProductIssue",
+      "Billing",
+      "Access",
+      "Integration",
+      "ServiceRequest",
+      "GeneralInquiry"
+    ],
+    "support_case_priorities": [
+      "Low",
+      "Medium",
+      "High",
+      "Critical"
+    ],
+    "support_case_statuses": [
+      "New",
+      "InProgress",
+      "PendingCustomer",
+      "Resolved",
+      "Closed"
+    ]
+  },
+  "business_mappings": {
+    "engagement_points": {
+      "EmailOpen": 1,
+      "LinkClick": 3,
+      "PhoneCall": 5,
+      "WebinarAttendance": 7,
+      "FormSubmission": 8,
+      "EventAttendance": 8,
+      "Meeting": 10
+    },
+    "engagement_channels": {
+      "EmailOpen": "Email",
+      "LinkClick": "Web",
+      "FormSubmission": "Web",
+      "PhoneCall": "Phone",
+      "Meeting": "Phone",
+      "WebinarAttendance": "Webinar",
+      "EventAttendance": "Event"
+    },
+    "sla_calendar_hours": {
+      "Low": 72,
+      "Medium": 48,
+      "High": 24,
+      "Critical": 4
+    },
+    "resolved_case_statuses": [
+      "Resolved",
+      "Closed"
+    ],
+    "unresolved_case_statuses": [
+      "New",
+      "InProgress",
+      "PendingCustomer"
+    ],
+    "currency_code": "USD",
+    "attribution": {
+      "minimum_weight": "0.0000",
+      "maximum_weight": "1.0000",
+      "weight_scale": 4,
+      "sum_scope": "contact",
+      "expected_sum_before_imperfections": "1.0000",
+      "maximum_primary_campaigns_per_contact": 1
+    }
+  },
+  "distribution_targets": {
+    "campaign_budget": {
+      "table": "campaigns",
+      "field": "budget_amount",
+      "distribution": "pareto",
+      "parameter_source": "config/generation/base.json:distributions.campaign_budget",
+      "currency": "USD"
+    },
+    "interaction_frequency": {
+      "table": "interactions",
+      "group_by": "contact_id",
+      "distribution": "poisson",
+      "parameter_source": "config/generation/base.json:distributions.event_frequency"
+    },
+    "date_clustering": {
+      "distribution": "gaussian_mixture",
+      "parameter_source": "config/generation/base.json:distributions.date_clustering",
+      "targets": [
+        "accounts.created_at",
+        "contacts.created_at",
+        "campaigns.start_date",
+        "campaigns.created_at",
+        "contact_campaigns.first_touch_at",
+        "contact_campaigns.last_touch_at",
+        "interactions.interaction_at",
+        "interactions.created_at",
+        "support_cases.opened_at"
+      ]
+    },
+    "support_case_duration": {
+      "table": "support_cases",
+      "anchor_field": "opened_at",
+      "derived_fields": [
+        "sla_due_at",
+        "resolved_at"
+      ],
+      "sla_source": "business_mappings.sla_calendar_hours"
+    }
+  },
+  "imperfection_targets": {
+    "near_duplicate_contacts": {
+      "table": "contacts",
+      "fields": [
+        "first_name",
+        "email"
+      ],
+      "rate_source": "config/generation/base.json:imperfections.duplicate_pct"
+    },
+    "missing_attribution_weights": {
+      "table": "contact_campaigns",
+      "field": "attribution_weight",
+      "rate_source": "config/generation/base.json:imperfections.null_pct"
+    },
+    "engagement_point_outliers": {
+      "table": "interactions",
+      "field": "engagement_points",
+      "rate_source": "config/generation/base.json:imperfections.outlier_pct",
+      "minimum_value": 50,
+      "maximum_value": 100
+    },
+    "support_case_boundary_timestamps": {
+      "table": "support_cases",
+      "anchor_field": "opened_at",
+      "derived_fields": [
+        "sla_due_at",
+        "resolved_at"
+      ],
+      "values_source": "config/generation/base.json:imperfections.boundary_dates"
+    }
+  },
+  "tables": {
+    "accounts": {
+      "primary_key": "account_id",
+      "role": "dimension",
+      "row_targets": {
+        "dev": 100,
+        "full": 24000
+      },
+      "fields": [
+        {
+          "name": "account_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "account_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "normalized_faker_company"
+        },
+        {
+          "name": "account_size",
+          "type": "integer",
+          "nullable": true,
+          "synthetic_source": "bounded_company_size"
+        },
+        {
+          "name": "industry",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "configured_industry"
+        },
+        {
+          "name": "region",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "configured_region"
+        },
+        {
+          "name": "customer_tier",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": true,
+          "synthetic_source": "domain_values.customer_tiers"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "weighted_boolean"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "contacts": {
+      "primary_key": "contact_id",
+      "role": "dimension",
+      "row_targets": {
+        "dev": 300,
+        "full": 48000
+      },
+      "fields": [
+        {
+          "name": "contact_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "integer",
+          "nullable": true,
+          "key": "foreign",
+          "references": {
+            "table": "accounts",
+            "field": "account_id"
+          },
+          "null_semantics": "Contact is not assigned to an account."
+        },
+        {
+          "name": "first_name",
+          "type": "varchar",
+          "max_length": 128,
+          "nullable": false,
+          "synthetic_source": "faker_first_name"
+        },
+        {
+          "name": "last_name",
+          "type": "varchar",
+          "max_length": 128,
+          "nullable": false,
+          "synthetic_source": "faker_last_name"
+        },
+        {
+          "name": "email",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "faker_email"
+        },
+        {
+          "name": "address",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": true,
+          "synthetic_source": "single_line_faker_address"
+        },
+        {
+          "name": "title",
+          "type": "varchar",
+          "max_length": 128,
+          "nullable": true,
+          "synthetic_source": "faker_job"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "weighted_boolean"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "campaigns": {
+      "primary_key": "campaign_id",
+      "role": "dimension",
+      "row_targets": {
+        "dev": 50,
+        "full": 5000
+      },
+      "fields": [
+        {
+          "name": "campaign_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "campaign_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "synthetic_campaign_name"
+        },
+        {
+          "name": "campaign_type",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "synthetic_source": "domain_values.campaign_types"
+        },
+        {
+          "name": "primary_channel",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.campaign_channels"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.campaign_statuses"
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "deterministic_date"
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "status_aware_campaign_end_date",
+          "null_semantics": "Active or open-ended campaign."
+        },
+        {
+          "name": "budget_amount",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "pareto_campaign_budget",
+          "distribution": "pareto"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "fixed_usd"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "contact_campaigns": {
+      "primary_key": [
+        "contact_id",
+        "campaign_id"
+      ],
+      "role": "junction",
+      "row_targets": {
+        "dev": 750,
+        "full": 180000
+      },
+      "fields": [
+        {
+          "name": "contact_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary_foreign",
+          "references": {
+            "table": "contacts",
+            "field": "contact_id"
+          }
+        },
+        {
+          "name": "campaign_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary_foreign",
+          "references": {
+            "table": "campaigns",
+            "field": "campaign_id"
+          }
+        },
+        {
+          "name": "member_status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.campaign_member_statuses"
+        },
+        {
+          "name": "first_touch_at",
+          "type": "timestamp",
+          "nullable": true,
+          "synthetic_source": "campaign_window_timestamp"
+        },
+        {
+          "name": "last_touch_at",
+          "type": "timestamp",
+          "nullable": true,
+          "synthetic_source": "campaign_window_timestamp"
+        },
+        {
+          "name": "attribution_weight",
+          "type": "decimal",
+          "precision": 5,
+          "scale": 4,
+          "nullable": true,
+          "synthetic_source": "normalized_contact_attribution_weight",
+          "imperfection_target": "controlled_null"
+        },
+        {
+          "name": "is_primary_attribution",
+          "type": "boolean",
+          "nullable": false,
+          "default": false,
+          "synthetic_source": "single_primary_per_contact"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "interactions": {
+      "primary_key": "interaction_id",
+      "role": "fact",
+      "row_targets": {
+        "dev": 1000,
+        "full": 200000
+      },
+      "fields": [
+        {
+          "name": "interaction_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "contact_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "contacts",
+            "field": "contact_id"
+          }
+        },
+        {
+          "name": "account_id",
+          "type": "integer",
+          "nullable": true,
+          "key": "foreign",
+          "references": {
+            "table": "accounts",
+            "field": "account_id"
+          },
+          "null_semantics": "The interaction has no directly assigned account."
+        },
+        {
+          "name": "campaign_id",
+          "type": "integer",
+          "nullable": true,
+          "key": "foreign",
+          "references": {
+            "table": "campaigns",
+            "field": "campaign_id"
+          },
+          "null_semantics": "Organic or unattributed interaction."
+        },
+        {
+          "name": "engagement_type",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "synthetic_source": "domain_values.engagement_types"
+        },
+        {
+          "name": "channel",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "business_mappings.engagement_channels"
+        },
+        {
+          "name": "direction",
+          "type": "varchar",
+          "max_length": 16,
+          "nullable": false,
+          "synthetic_source": "domain_values.interaction_directions"
+        },
+        {
+          "name": "engagement_points",
+          "type": "integer",
+          "nullable": false,
+          "synthetic_source": "business_mappings.engagement_points",
+          "imperfection_target": "high_value_outlier"
+        },
+        {
+          "name": "interaction_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "support_cases": {
+      "primary_key": "case_id",
+      "role": "fact",
+      "row_targets": {
+        "dev": 800,
+        "full": 144000
+      },
+      "fields": [
+        {
+          "name": "case_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "accounts",
+            "field": "account_id"
+          }
+        },
+        {
+          "name": "contact_id",
+          "type": "integer",
+          "nullable": true,
+          "key": "foreign",
+          "references": {
+            "table": "contacts",
+            "field": "contact_id"
+          },
+          "null_semantics": "Account-level support case without a requesting contact."
+        },
+        {
+          "name": "case_number",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "key": "unique",
+          "synthetic_source": "deterministic_case_number"
+        },
+        {
+          "name": "subject",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "synthetic_support_subject"
+        },
+        {
+          "name": "category",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "synthetic_source": "domain_values.support_case_categories"
+        },
+        {
+          "name": "priority",
+          "type": "varchar",
+          "max_length": 16,
+          "nullable": false,
+          "synthetic_source": "domain_values.support_case_priorities"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.support_case_statuses"
+        },
+        {
+          "name": "opened_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        },
+        {
+          "name": "sla_due_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "priority_based_sla_deadline"
+        },
+        {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "nullable": true,
+          "synthetic_source": "status_aware_resolution_timestamp",
+          "null_semantics": "Unresolved support case."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "parent_table": "accounts",
+      "parent_field": "account_id",
+      "child_table": "contacts",
+      "child_field": "account_id",
+      "cardinality": "1:N optional",
+      "join_type": "left"
+    },
+    {
+      "parent_table": "contacts",
+      "parent_field": "contact_id",
+      "child_table": "contact_campaigns",
+      "child_field": "contact_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "parent_table": "campaigns",
+      "parent_field": "campaign_id",
+      "child_table": "contact_campaigns",
+      "child_field": "campaign_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "parent_table": "contacts",
+      "parent_field": "contact_id",
+      "child_table": "interactions",
+      "child_field": "contact_id",
+      "cardinality": "1:N",
+      "join_type": "left"
+    },
+    {
+      "parent_table": "accounts",
+      "parent_field": "account_id",
+      "child_table": "interactions",
+      "child_field": "account_id",
+      "cardinality": "1:N optional",
+      "join_type": "left"
+    },
+    {
+      "parent_table": "campaigns",
+      "parent_field": "campaign_id",
+      "child_table": "interactions",
+      "child_field": "campaign_id",
+      "cardinality": "1:N optional",
+      "join_type": "left"
+    },
+    {
+      "parent_table": "accounts",
+      "parent_field": "account_id",
+      "child_table": "support_cases",
+      "child_field": "account_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "parent_table": "contacts",
+      "parent_field": "contact_id",
+      "child_table": "support_cases",
+      "child_field": "contact_id",
+      "cardinality": "1:N optional",
+      "join_type": "left"
+    }
+  ],
+  "join_path_requirements": [
+    {
+      "id": "crm_jp_001",
+      "name": "accounts_to_contacts",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "accounts",
+        "contacts"
+      ],
+      "join_condition": "accounts.account_id = contacts.account_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "contacts.account_id IS NULL",
+      "purpose": "Supports accounts without contacts and optional account membership."
+    },
+    {
+      "id": "crm_jp_002",
+      "name": "contacts_to_interactions",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "contacts",
+        "interactions"
+      ],
+      "join_condition": "contacts.contact_id = interactions.contact_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "interactions.contact_id IS NULL",
+      "purpose": "Supports engagement scoring and contacts without engagement."
+    },
+    {
+      "id": "crm_jp_003",
+      "name": "accounts_to_contacts_to_interactions",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "accounts",
+        "contacts",
+        "interactions"
+      ],
+      "join_condition": "contacts.account_id = accounts.account_id AND interactions.contact_id = contacts.contact_id",
+      "required_result": "non_empty",
+      "purpose": "Supports account engagement aggregation through contacts."
+    },
+    {
+      "id": "crm_jp_004",
+      "name": "contacts_to_contact_campaigns_to_campaigns",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "contacts",
+        "contact_campaigns",
+        "campaigns"
+      ],
+      "join_condition": "contact_campaigns.contact_id = contacts.contact_id AND contact_campaigns.campaign_id = campaigns.campaign_id",
+      "required_result": "non_empty",
+      "purpose": "Supports explicit many-to-many campaign participation and attribution."
+    },
+    {
+      "id": "crm_jp_005",
+      "name": "campaigns_to_interactions",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "campaigns",
+        "interactions"
+      ],
+      "join_condition": "campaigns.campaign_id = interactions.campaign_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "interactions.campaign_id IS NULL",
+      "purpose": "Supports campaigns without attributed interactions."
+    },
+    {
+      "id": "crm_jp_006",
+      "name": "interactions_to_campaigns",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "interactions",
+        "campaigns"
+      ],
+      "join_condition": "interactions.campaign_id = campaigns.campaign_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "campaigns.campaign_id IS NULL",
+      "purpose": "Supports organic or unattributed interactions."
+    },
+    {
+      "id": "crm_jp_007",
+      "name": "accounts_to_support_cases",
+      "tier_support": [
+        "T2",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "accounts",
+        "support_cases"
+      ],
+      "join_condition": "support_cases.account_id = accounts.account_id",
+      "required_result": "non_empty",
+      "purpose": "Supports account-level case volume, backlog, and SLA metrics."
+    },
+    {
+      "id": "crm_jp_008",
+      "name": "contacts_to_support_cases",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "contacts",
+        "support_cases"
+      ],
+      "join_condition": "contacts.contact_id = support_cases.contact_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "support_cases.contact_id IS NULL",
+      "purpose": "Supports contacts without support cases and account-level cases."
+    },
+    {
+      "id": "crm_jp_009",
+      "name": "accounts_to_support_cases_to_contacts",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "accounts",
+        "support_cases",
+        "contacts"
+      ],
+      "join_condition": "support_cases.account_id = accounts.account_id AND support_cases.contact_id = contacts.contact_id",
+      "required_result": "non_empty",
+      "purpose": "Supports three-table account, case, and requester analysis."
+    }
+  ],
+  "consistency_rules": [
+    "contact_campaigns must contain unique contact_id and campaign_id pairs.",
+    "The generated bridge must include contacts in multiple campaigns and campaigns with multiple contacts.",
+    "Each contact may have at most one primary campaign attribution.",
+    "Before imperfection injection, attribution weights for each contact must sum to 1.0000.",
+    "When interactions.account_id is populated, it must equal the referenced contact account_id.",
+    "When interactions.campaign_id is populated, the same contact_id and campaign_id pair must exist in contact_campaigns.",
+    "Campaign end_date must be null or on or after start_date.",
+    "Campaign touches must be ordered and remain within the applicable campaign window.",
+    "Support-case contacts must belong to the same account as the case when contact_id is populated.",
+    "Support-case SLA deadlines are derived from opened_at and priority using calendar hours.",
+    "Resolved and Closed cases require resolved_at; unresolved statuses require resolved_at to be null.",
+    "All campaign currency_code values must equal USD."
+  ]
+}

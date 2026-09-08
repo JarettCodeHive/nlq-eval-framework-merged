@@ -1,1 +1,5 @@
 .venv/
+tmp/
+release/
+qa_pairs/dataset/
+qa_pairs/qa_pairs/

@@ -1,0 +1,3 @@
+SELECT COUNT(s.case_id) AS result
+FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id
+WHERE a.region = '{{ region }}';

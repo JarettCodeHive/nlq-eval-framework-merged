@@ -1,0 +1,11 @@
+WITH by_region AS (
+  SELECT a.region,
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS prev_q,
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-07-01' AND i.interaction_at < DATE '2026-10-01' THEN i.engagement_points ELSE 0 END) AS this_q
+  FROM accounts a INNER JOIN interactions i ON a.account_id = i.account_id
+  WHERE a.region IS NOT NULL AND a.customer_tier = '{{ customer_tier }}'
+  GROUP BY a.region
+)
+SELECT region AS entity, prev_q AS prev_quarter_points, this_q AS this_quarter_points,
+  ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change
+FROM by_region ORDER BY pct_change DESC NULLS LAST, region ASC LIMIT 1;

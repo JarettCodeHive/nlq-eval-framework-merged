@@ -1,0 +1,3 @@
+SELECT COUNT(c.contact_id) AS result
+FROM contacts c INNER JOIN accounts a ON c.account_id = a.account_id
+WHERE a.industry = '{{ industry }}';

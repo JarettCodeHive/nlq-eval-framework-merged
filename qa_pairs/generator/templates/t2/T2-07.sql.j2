@@ -1,0 +1,3 @@
+SELECT COUNT(i.interaction_id) AS result
+FROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id
+WHERE i.channel = '{{ channel }}' AND c.title = '{{ title }}';

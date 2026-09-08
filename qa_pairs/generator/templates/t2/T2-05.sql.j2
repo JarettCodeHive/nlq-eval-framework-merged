@@ -1,0 +1,4 @@
+SELECT i.direction AS entity, COUNT(*) AS metric
+FROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id
+WHERE c.is_active = {{ is_active }}
+GROUP BY i.direction ORDER BY metric DESC, entity ASC;

@@ -1,0 +1,67 @@
+{
+  "seed": 42,
+  "reference_today": "2026-08-01",
+  "max_rows_per_table": 250000,
+  "release_profile": "full",
+  "profiles": {
+    "dev": {
+      "scale": 0.01,
+      "description": "Fast local validation profile. Never deliver as a golden dataset artifact."
+    },
+    "full": {
+      "scale": 1.0,
+      "description": "Delivery-scale profile. Required for versioned release output."
+    }
+  },
+  "csv_format": {
+    "encoding": "utf-8",
+    "include_bom": false,
+    "line_ending": "lf",
+    "null_representation": "",
+    "boolean_true": "true",
+    "boolean_false": "false",
+    "date_format": "YYYY-MM-DD",
+    "timestamp_format": "YYYY-MM-DDTHH:MM:SS",
+    "decimal_separator": ".",
+    "thousands_separator": false
+  },
+  "distributions": {
+    "campaign_budget": {
+      "name": "pareto",
+      "alpha": 1.16,
+      "min_amount": 5000,
+      "max_amount": 2000000,
+      "scale": 2
+    },
+    "event_frequency": {
+      "name": "poisson",
+      "lambda": 3.2
+    },
+    "date_clustering": {
+      "name": "gaussian_mixture",
+      "components": 3,
+      "component_centers": [
+        0.2,
+        0.55,
+        0.85
+      ],
+      "component_weights": [
+        0.35,
+        0.35,
+        0.3
+      ],
+      "std_fraction": 0.035
+    }
+  },
+  "imperfections": {
+    "duplicate_pct": 1.0,
+    "null_pct": 2.5,
+    "outlier_pct": 0.5,
+    "boundary_dates": [
+      "1900-01-01",
+      "2038-01-19",
+      "2099-12-31",
+      "2026-08-01"
+    ]
+  }
+}

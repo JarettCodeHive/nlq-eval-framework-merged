@@ -1,0 +1,17 @@
+WITH open_cases AS (
+  SELECT account_id, COUNT(*) AS open_case_count FROM support_cases
+  WHERE status IN ('New', 'InProgress', 'PendingCustomer') GROUP BY account_id
+), recent_engagement AS (
+  SELECT account_id, COUNT(*) AS recent_interaction_count FROM interactions
+  WHERE interaction_at >= DATE '2026-06-02' AND account_id IS NOT NULL GROUP BY account_id
+)
+SELECT a.account_name AS entity,
+       COALESCE(oc.open_case_count, 0) AS open_case_count,
+       COALESCE(re.recent_interaction_count, 0) AS recent_interaction_count
+FROM accounts a
+LEFT JOIN open_cases oc ON a.account_id = oc.account_id
+LEFT JOIN recent_engagement re ON a.account_id = re.account_id
+WHERE a.industry = '{{ industry }}'
+  AND COALESCE(oc.open_case_count, 0) >= 3
+  AND COALESCE(re.recent_interaction_count, 0) = 0
+ORDER BY open_case_count DESC, entity ASC LIMIT 5;

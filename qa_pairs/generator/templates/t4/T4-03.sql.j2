@@ -1,0 +1,5 @@
+SELECT COUNT(s.case_id) AS result
+FROM accounts a
+INNER JOIN contacts c ON a.account_id = c.account_id
+INNER JOIN support_cases s ON c.contact_id = s.contact_id
+WHERE a.industry = '{{ industry }}';

@@ -1,0 +1,8 @@
+imperfection,scope_doc_ref,where_in_data,covering_family,how_it_is_exercised
+near-duplicate contacts (~1%),Section 7.5,"contacts: same name+account, distinct contact_id/email",T2-03; T4-02,"COUNT(contact_id) includes the near-duplicates - the answer is the count as delivered, not de-duplicated"
+missing values (~2.5%),Section 7.5,contact_campaigns.attribution_weight NULL,T4-04 (reserved),"attribution-weighted questions must define NULL handling; POC seeds avoid it pending authoring"
+outlier records (~0.5%),Section 7.5,interactions.engagement_points 50-100,T4-01; T4-03; T5-01,SUM(engagement_points) includes the outliers because the question asks for the total as delivered
+boundary dates,Section 7.5,"support_cases opened_at/sla_due_at/resolved_at at 1900-01-01, 2099-12-31 etc.",T1-03; T5-02,COUNT and backlog questions include boundary-date cases; T5 period windows must not silently swallow them
+missing relationship - accounts without contacts,Section 7.6,LEFT JOIN accounts->contacts,T3-01,unmatched-parent LEFT JOIN
+missing relationship - contacts without interactions,Section 7.6,LEFT JOIN contacts->interactions,T3-03,unmatched-parent LEFT JOIN
+missing relationship - organic interactions,Section 7.6,interactions.campaign_id IS NULL,T2-04; T3-05,INNER JOIN on campaign_id excludes organic; LEFT JOIN surfaces campaigns with none

@@ -1,0 +1,3 @@
+SELECT COUNT(i.interaction_id) AS result
+FROM interactions i INNER JOIN campaigns c ON i.campaign_id = c.campaign_id
+WHERE c.campaign_type = '{{ campaign_type }}';

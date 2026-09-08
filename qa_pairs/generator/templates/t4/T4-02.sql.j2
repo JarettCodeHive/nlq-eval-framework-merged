@@ -1,0 +1,5 @@
+SELECT SUM(i.engagement_points) AS result
+FROM accounts a
+INNER JOIN contacts c ON a.account_id = c.account_id
+INNER JOIN interactions i ON c.contact_id = i.contact_id
+WHERE a.industry = '{{ industry }}';

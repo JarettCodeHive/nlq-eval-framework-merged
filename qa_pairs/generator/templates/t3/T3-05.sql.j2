@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS result
+FROM campaigns ca LEFT JOIN interactions i ON ca.campaign_id = i.campaign_id
+WHERE ca.campaign_type = '{{ campaign_type }}' AND i.interaction_id IS NULL;

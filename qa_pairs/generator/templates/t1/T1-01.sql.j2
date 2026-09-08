@@ -1,0 +1,3 @@
+SELECT ROUND(SUM(budget_amount), 2) AS result
+FROM campaigns
+WHERE campaign_type = '{{ campaign_type }}';

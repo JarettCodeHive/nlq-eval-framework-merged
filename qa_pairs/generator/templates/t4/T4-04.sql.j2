@@ -1,0 +1,5 @@
+SELECT COUNT(i.interaction_id) AS result
+FROM interactions i
+INNER JOIN contacts c ON i.contact_id = c.contact_id
+INNER JOIN accounts a ON c.account_id = a.account_id
+WHERE i.engagement_type = '{{ engagement_type }}' AND a.customer_tier = '{{ customer_tier }}';

@@ -1,0 +1,29 @@
+family_id,tier,join_path_id,parameter,param_count,poc_status,question_shape,description
+T1-01,T1,-,campaign_type,5,scaled(HELD),scalar_money,Total campaign budget for a given campaign type
+T1-02,T1,-,campaign_status,5,scaled(HELD),scalar_int,Count of campaigns in a given status
+T1-03,T1,-,priority,4,scaled(HELD),scalar_int,Count of support cases at a given priority
+T1-04,T1,-,category,6,scaled(HELD),scalar_int,Count of support cases in a given category
+T1-05,T1,-,engagement_type,7,scaled(HELD),scalar_int,Count of interactions of a given engagement type
+T1-06,T1,-,region,5,scaled(HELD),scalar_int,Count of accounts in a given region
+T2-01,T2,JP7,region,5,scaled,scalar_int,Support cases owned by accounts in a given region
+T2-02,T2,JP7,priority,4,scaled,entity_metric,Customer tier with the most cases at a given priority
+T2-03,T2,JP1,industry,7,scaled,scalar_int,Contacts across accounts in a given industry
+T2-04,T2,JP6,campaign_type,5,scaled,scalar_int,Interactions attributed to campaigns of a given type
+T2-05,T2,JP4,is_active,2,scaled,ranked_list,Inbound/outbound interaction split for active vs inactive contacts
+T2-06,T2,JP5,engagement_type,7,scaled,ranked_list,Top 5 accounts by direct interactions of a given engagement type
+T2-07,T2,JP4,channel x title,10,scaled,scalar_int,Interactions on a channel from contacts with a given title
+T3-01,T3,JP1,region,5,scaled(HELD),scalar_int,Accounts in a given region with no contacts
+T3-02,T3,JP1,industry,7,scaled(HELD),scalar_int,Accounts in a given industry with no contacts
+T3-03,T3,JP4,title,7,scaled(HELD),scalar_int,Contacts with a given title and no interactions
+T3-04,T3,JP2,title,7,scaled(HELD),scalar_int,Contacts with a given title not enrolled in any campaign
+T3-05,T3,JP12,campaign_type,5,scaled(HELD),scalar_int,Campaigns of a given type with no attributed interactions
+T3-06,T3,JP12,campaign_status,5,scaled(HELD),scalar_int,Campaigns in a given status with no attributed interactions
+T4-01,T4,JP9,region,5,scaled,scalar_int,Total engagement points via contacts at accounts in a given region
+T4-02,T4,JP9,industry,7,scaled,scalar_int,Total engagement points via contacts at accounts in a given industry
+T4-03,T4,JP10,industry,7,scaled,scalar_int,Support cases raised by contacts at accounts in a given industry
+T4-04,T4,JP4+JP1,engagement_type x customer_tier,21,scaled,scalar_int,Interactions of a type from contacts at accounts in a given tier (capped at quota)
+T5-01,T5,JP11+JP9,region,5,scaled,ranked_list,Top 3 campaign types by engagement among accounts in a given region
+T5-02,T5,JP7,category,6,scaled,ranked_list,Top 5 accounts by open backlog of cases in a given category
+T5-03,T5,JP10+JP5,industry,7,scaled,ranked_list,At-risk accounts in a given industry (open backlog + no recent engagement)
+T5-04,T5,JP5,region,5,scaled,two_value,Engagement last quarter vs this quarter for a given region
+T5-05,T5,JP5,customer_tier,3,scaled,entity_multi,Fastest-growing region vs last quarter among accounts in a given tier

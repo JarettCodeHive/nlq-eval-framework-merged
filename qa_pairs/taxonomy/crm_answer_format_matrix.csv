@@ -1,0 +1,9 @@
+question_shape,tier(s),serialization,example,notes
+scalar_int,T1;T2;T3;T4,"single integer, str(value)",29049,COUNT results; DuckDB BIGINT rendered plain
+scalar_money,T1,"ROUND(SUM(x),2), str(value) - trailing zero not padded",25549190.91,"OI-2 interim: period decimal, no thousands separator, no currency symbol"
+entity_metric,T2;T5,"label + ' | ' + metric",Standard | 6229,single-row GROUP BY ... LIMIT 1
+ranked_list,T2;T4;T5,"rows joined by '; ', columns within a row joined by ' | '",Chen Bell | 448; Fernandez Perez | 424,ORDER BY ... LIMIT N ; deterministic tie-break column required
+two_value,T5,"v1 + ' | ' + v2",112097 | 16730,two aggregates in one row (period comparison)
+entity_multi,T5,"label + ' | ' + v1 + ' | ' + v2 + ' | ' + v3",Central | 17742 | 2872 | -83.81,single-row multi-column result
+blocked_zero_rows,-,verification log only,-,pair is logged and withheld from the CSV
+blocked_null_scalar,-,verification log only,-,NULL where a number is expected; withheld
