@@ -1,0 +1,1 @@
+"""Schema contract test packages."""

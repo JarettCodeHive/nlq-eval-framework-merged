@@ -1,0 +1,154 @@
+// ============================================================
+// Logistics Golden Dataset - ERD
+// Paste directly into https://dbdiagram.io/
+// ============================================================
+//
+// STATUS: Draft v0.1
+//
+// Source alignment:
+//   v3 execution scope locks Logistics to:
+//     shipments, orders, carriers, warehouses, inventory
+//   Logistics focuses on shipment/carrier joins, order/warehouse LEFT JOIN
+//   behavior, 3-table Order-to-Shipment-to-Carrier aggregation, and
+//   duplicate-sensitive COUNT vs COUNT DISTINCT questions.
+//
+// Join semantics annotated:
+//   INNER JOIN paths must produce non-empty results.
+//   LEFT OUTER JOIN paths must produce at least one unmatched row.
+//
+// Required Logistics join paths from v3 scope:
+//   shipments -> orders
+//   shipments -> carriers
+//   inventory -> warehouses
+//   orders LEFT JOIN warehouses
+//   orders -> shipments -> carriers for 3-table aggregation
+//
+// Imperfection injection:
+//   shipments: near-duplicate rows ~1% (domain's declared focus)
+//   orders.warehouse_id: some values are NULL and some are orphaned by design
+//   shipment business-key duplicates share order_id, carrier_id, and
+//   tracking_number, while shipment_id remains unique.
+//
+// Orphan exception:
+//   orders.warehouse_id deliberately has no SQL FK. Values may be:
+//     valid warehouse_id
+//     NULL warehouse_id
+//     non-existent warehouse_id
+//   This is the declared Logistics orphan exception and must be listed in
+//   orphan-exclusion config when FK validation is implemented.
+//
+// NOT-NULL rules:
+//   INNER-JOIN FKs are NOT NULL:
+//     shipments.order_id
+//     shipments.carrier_id
+//     inventory.warehouse_id
+//   LEFT-JOIN and optional analytical fields are nullable:
+//     orders.warehouse_id
+//     carriers.base_rate
+//     shipments.ship_date
+//     shipments.delivery_date
+//     shipments.shipping_cost
+//
+// Junction-table decision:
+//   No separate junction table is required for the v3 Logistics scope.
+//   Orders and shipments are one-to-many, carriers and shipments are
+//   one-to-many, and warehouses link directly to inventory. Introducing a
+//   many-to-many bridge would add schema surface not requested by the domain
+//   join requirements.
+
+// ------------------------------------------------------------
+// CARRIERS
+// ------------------------------------------------------------
+Table carriers {
+  carrier_id integer [pk, not null, note: 'Unique carrier ID']
+  carrier_name varchar [not null]
+  service_level varchar [not null, note: 'enum: Standard | Express | Overnight']
+  carrier_type varchar [note: 'enum: Parcel | Freight | Air | Ocean | Rail']
+  base_rate decimal(10, 2) [note: 'Nullable; some carriers negotiate per-shipment']
+  currency_code char(3) [not null, default: 'USD']
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+
+  Note: 'Reference / lookup - target 50 rows. Carriers join to shipments for shipment-cost, delivery, and service-level questions.'
+}
+
+// ------------------------------------------------------------
+// WAREHOUSES
+// ------------------------------------------------------------
+Table warehouses {
+  warehouse_id integer [pk, not null, note: 'Unique warehouse ID']
+  warehouse_name varchar [not null]
+  region varchar [note: 'enum: NA | EU | APAC | LATAM']
+  country_code char(2) [note: 'Synthetic ISO-style country code']
+  capacity_units integer
+  utilization_pct decimal(5, 2) [note: 'Synthetic warehouse utilization percentage']
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+
+  Note: 'Reference / lookup - target 100 rows. Warehouses join to inventory through an INNER JOIN and to orders through a LEFT JOIN with intentional unmatched rows.'
+}
+
+// ------------------------------------------------------------
+// ORDERS
+// ------------------------------------------------------------
+Table orders {
+  order_id integer [pk, not null, note: 'Unique order ID']
+  warehouse_id integer [note: 'Nullable and no SQL FK; valid, NULL, and orphaned warehouse IDs are intentional']
+  customer_name varchar [not null, note: 'Synthetic customer name']
+  order_date date [not null]
+  status varchar [not null, note: 'enum: Pending | Shipped | Delivered | Cancelled | Returned']
+  order_priority varchar [not null, note: 'enum: Low | Medium | High | Urgent']
+  total_amount decimal(15, 2) [not null]
+  currency_code char(3) [not null, default: 'USD']
+  created_at timestamp [not null]
+
+  Note: 'Fact / transaction table - target 100,000 rows. Some warehouse_id values are NULL or orphaned by design to exercise Logistics LEFT JOIN behavior.'
+}
+
+// ------------------------------------------------------------
+// SHIPMENTS
+// ------------------------------------------------------------
+Table shipments {
+  shipment_id integer [pk, not null, note: 'Unique shipment ID; duplicate shipments share business keys, not shipment_id']
+  order_id integer [not null, ref: > orders.order_id, note: 'INNER JOIN path - NOT NULL']
+  carrier_id integer [not null, ref: > carriers.carrier_id, note: 'INNER JOIN path - NOT NULL']
+  tracking_number varchar [not null, note: 'Not unique; duplicate shipments share tracking_number by design']
+  ship_date date [note: 'Nullable; duplicates may vary this field']
+  delivery_date date [note: 'Nullable; undelivered shipments have no delivery date']
+  status varchar [not null, note: 'enum: Booked | InTransit | Delivered | Failed | Lost']
+  shipping_cost decimal(15, 2) [note: 'Nullable; cost may still be pending']
+  currency_code char(3) [not null, default: 'USD']
+  created_at timestamp [not null]
+
+  Note: 'Fact - target 150,000 rows. Duplicate-shipment imperfection focus (~1%) for COUNT vs COUNT DISTINCT semantics.'
+}
+
+// ------------------------------------------------------------
+// INVENTORY
+// ------------------------------------------------------------
+Table inventory {
+  inventory_id integer [pk, not null, note: 'Unique inventory row ID']
+  warehouse_id integer [not null, ref: > warehouses.warehouse_id, note: 'INNER JOIN path - NOT NULL']
+  product_sku varchar [not null, note: 'String identifier; no FK to Sales.products because cross-domain joins are out of scope']
+  product_category varchar [note: 'enum: Software | Hardware | Supplies | FinishedGoods | RawMaterials']
+  quantity_on_hand integer [not null]
+  reorder_point integer [note: 'Inventory threshold for replenishment questions']
+  last_updated_at timestamp [not null]
+  created_at timestamp [not null]
+
+  Note: 'Fact / inventory snapshot - target 50,000 rows, approximately 100 warehouses by 500 SKUs. Links otherwise standalone products/SKUs to warehouses.'
+}
+
+// ------------------------------------------------------------
+// INTENTIONAL NON-FK RELATIONSHIPS
+// ------------------------------------------------------------
+// orders.warehouse_id is intentionally not declared as ref because Logistics
+// requires orphaned orders. Query generation and validation should use:
+//   orders LEFT JOIN warehouses
+//     ON orders.warehouse_id = warehouses.warehouse_id
+// and must expect at least one unmatched order row.
+//
+// The DBML visual reference below is for client-facing ERD readability only.
+// It must not be mirrored as a SQL FK, because orders.warehouse_id must remain
+// nullable and may contain orphaned values by design.
+Ref: orders.warehouse_id > warehouses.warehouse_id

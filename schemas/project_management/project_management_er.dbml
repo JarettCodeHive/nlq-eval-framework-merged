@@ -1,0 +1,159 @@
+// ============================================================
+// Project Management Golden Dataset - ERD
+// Paste directly into https://dbdiagram.io/
+// ============================================================
+//
+// STATUS: Draft v0.1
+//
+// Source alignment:
+//   v3 execution scope locks Project Management to:
+//     projects, tasks, milestones, resources, time_entries
+//   The domain focus is project/task/resource execution, milestone completion
+//   percentage, and 3-table Project-to-Task-to-Time_Entry aggregation.
+//
+// Ambiguity rules to define before Q&A authoring:
+//   overdue = tasks.due_date < fixed TODAY AND tasks.completed_date IS NULL
+//   in_progress = tasks.status = 'InProgress'
+//   this_quarter = time_entries.entry_date in the current calendar quarter of
+//   the fixed reference date.
+//
+// Join semantics annotated:
+//   INNER JOIN paths must produce non-empty results.
+//   LEFT OUTER JOIN paths must produce at least one unmatched row.
+//
+// Required Project Management join paths from v3 scope:
+//   tasks -> projects
+//   tasks -> resources through task_resources
+//   milestones -> projects
+//   time_entries -> tasks
+//   time_entries -> resources
+//   projects -> tasks -> time_entries for 3-table aggregation
+//
+// Imperfection injection:
+//   projects.end_date: NULLs 2-3% for open-ended projects
+//   tasks.due_date: NULLs 2-3% for open-ended work
+//   tasks.completed_date: NULLs for unfinished work
+//   milestones.actual_date: NULLs for incomplete milestones
+//   tasks.start_date and tasks.due_date: configured boundary dates injected
+//
+// NOT-NULL rules:
+//   INNER-JOIN FKs are NOT NULL:
+//     tasks.project_id
+//     task_resources.task_id
+//     task_resources.resource_id
+//     milestones.project_id
+//     time_entries.task_id
+//     time_entries.resource_id
+//   LEFT-JOIN and optional analytical fields are nullable:
+//     projects.end_date
+//     tasks.due_date
+//     tasks.completed_date
+//     milestones.actual_date
+//     resources.hourly_rate
+//
+// Explicit many-to-many bridge:
+//   tasks -> task_resources <- resources
+//   task_resources models assignment independent of whether time has been
+//   logged. time_entries remains the work-log fact table and must reference
+//   a valid task/resource combination during generation.
+
+// ------------------------------------------------------------
+// PROJECTS
+// ------------------------------------------------------------
+Table projects {
+  project_id integer [pk, not null, note: 'Unique project ID']
+  project_name varchar [not null]
+  project_code varchar [not null, note: 'Synthetic project code']
+  status varchar [not null, note: 'enum: Planning | Active | OnHold | Completed | Cancelled']
+  priority varchar [not null, note: 'enum: Low | Medium | High | Critical']
+  start_date date [not null, note: 'Project start date']
+  end_date date [note: 'Nullable; open-ended project imperfection focus']
+  budget_amount decimal(15, 2) [note: 'Nullable; some projects are unbudgeted']
+  currency_code char(3) [not null, default: 'USD']
+  created_at timestamp [not null]
+
+  Note: 'Dimension - target 500 rows. Projects are the parent for tasks and milestones; some projects must have zero tasks to exercise LEFT JOIN behavior.'
+}
+
+// ------------------------------------------------------------
+// RESOURCES
+// ------------------------------------------------------------
+Table resources {
+  resource_id integer [pk, not null, note: 'Unique resource ID']
+  resource_name varchar [not null]
+  role varchar [not null, note: 'enum: Developer | Designer | PM | QA | Analyst']
+  department varchar [note: 'Delivery group for utilization and staffing questions']
+  location varchar [note: 'Synthetic work location or region']
+  hourly_rate decimal(10, 2) [note: 'Nullable; some contractors have no set rate']
+  currency_code char(3) [not null, default: 'USD']
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+
+  Note: 'Dimension - target 100 rows. Resources join to tasks through task_resources and to actual work through time_entries.'
+}
+
+// ------------------------------------------------------------
+// TASKS
+// ------------------------------------------------------------
+Table tasks {
+  task_id integer [pk, not null, note: 'Unique task ID']
+  project_id integer [not null, ref: > projects.project_id, note: 'INNER JOIN path - NOT NULL']
+  task_name varchar [not null]
+  status varchar [not null, note: 'enum: NotStarted | InProgress | Blocked | Completed']
+  task_type varchar [note: 'enum: Feature | Bug | Documentation | Testing | Deployment']
+  start_date date [not null, note: 'Boundary-date injection target']
+  due_date date [note: 'Nullable; open-ended work. Overdue means due_date < TODAY and completed_date IS NULL']
+  completed_date date [note: 'Nullable; NULL means task is not complete']
+  estimate_hours decimal(8, 2) [note: 'Estimated work effort']
+  created_at timestamp [not null]
+
+  Note: 'Dimension / work item table - target 10,000 rows. Task-to-resource assignment is modeled through task_resources to support many-to-many staffing.'
+}
+
+// ------------------------------------------------------------
+// TASK_RESOURCES
+// ------------------------------------------------------------
+Table task_resources {
+  task_id integer [pk, not null, ref: > tasks.task_id, note: 'INNER JOIN path - NOT NULL']
+  resource_id integer [pk, not null, ref: > resources.resource_id, note: 'INNER JOIN path - NOT NULL']
+  assignment_role varchar [note: 'enum: Owner | Contributor | Reviewer | Approver']
+  allocation_pct decimal(5, 2) [not null, default: 100, note: 'Percent allocation for the task assignment']
+  assigned_at date [not null, note: 'Date the resource was assigned to the task']
+  released_at date [note: 'Nullable; active assignments have no release date']
+  created_at timestamp [not null]
+
+  Note: 'Junction table - explicit many-to-many bridge between tasks and resources. Composite primary key keeps each task/resource assignment unique.'
+}
+
+// ------------------------------------------------------------
+// MILESTONES
+// ------------------------------------------------------------
+Table milestones {
+  milestone_id integer [pk, not null, note: 'Unique milestone ID']
+  project_id integer [not null, ref: > projects.project_id, note: 'INNER JOIN path - NOT NULL']
+  milestone_name varchar [not null]
+  milestone_type varchar [note: 'enum: Kickoff | Design | Build | UAT | Launch']
+  planned_date date [not null]
+  actual_date date [note: 'Nullable; milestone completion percentage counts actual_date IS NOT NULL over all milestones']
+  status varchar [not null, note: 'enum: Planned | AtRisk | Completed | Missed']
+  created_at timestamp [not null]
+
+  Note: 'Dimension - target 2,500 rows, approximately 5 milestones per project. Supports milestone completion percentage questions.'
+}
+
+// ------------------------------------------------------------
+// TIME_ENTRIES
+// ------------------------------------------------------------
+Table time_entries {
+  entry_id integer [pk, not null, note: 'Unique time entry ID']
+  task_id integer [not null, ref: > tasks.task_id, note: 'INNER JOIN path - NOT NULL']
+  resource_id integer [not null, ref: > resources.resource_id, note: 'INNER JOIN path - NOT NULL']
+  entry_date date [not null, note: 'this_quarter filter uses this column']
+  hours decimal(6, 2) [not null]
+  billable boolean [not null, default: true]
+  work_type varchar [not null, note: 'enum: Delivery | Review | Meeting | Rework | Support']
+  notes varchar
+  created_at timestamp [not null]
+
+  Note: 'Fact - target 150,000 rows. Supports 3-table Project to Task to Time_Entry aggregation and resource utilization questions.'
+}

@@ -1,0 +1,145 @@
+// ============================================================
+// Sales Golden Dataset - ERD
+// Paste directly into https://dbdiagram.io/
+// ============================================================
+//
+// STATUS: Draft v0.1
+//
+// Source alignment:
+//   v3 execution scope locks Sales to:
+//     leads, deals, products, quotations, targets
+//   Sales focus is deal/product/quota-centric and must remain distinct from CRM,
+//   which is account/contact/activity-centric.
+//
+// Join semantics annotated:
+//   INNER JOIN paths must produce non-empty results.
+//   LEFT OUTER JOIN paths must produce at least one unmatched row.
+//   String-key quota path uses deals.rep_name = targets.rep_name plus a period
+//   filter over deals.close_date BETWEEN targets.period_start AND targets.period_end.
+//
+// Required Sales join paths from v3 scope:
+//   deals -> leads
+//   quotations -> deals
+//   quotations -> products
+//   deals -> targets by rep_name for quota attainment SUM
+//   leads -> deals -> quotations -> products for Lead-to-Deal-to-Product questions
+//   Note: because Deal-to-Product is normalized through quotation line items,
+//   this is a 4-table physical path while preserving the business path required
+//   by the v3 scope.
+//
+// Imperfection injection:
+//   products.list_price: NULLs 2-3% (domain's declared focus: missing product prices)
+//   quotations: near-duplicate rows ~1% (domain's declared focus: duplicate deal lines)
+//   nullable date/score fields: NULLs 2-3% where configured to drive NULL handling
+//
+// NOT-NULL rules:
+//   INNER-JOIN FKs are NOT NULL:
+//     deals.lead_id
+//     quotations.deal_id
+//     quotations.product_id
+//   LEFT-JOIN and optional analytical fields are nullable:
+//     deals.close_date
+//     products.list_price
+//
+// Explicit many-to-many bridge:
+//   deals -> quotations <- products
+//   quotations is both the line-item fact table and the junction table between
+//   deals and products. It uses a surrogate quotation_id because duplicate
+//   deal-line imperfections are intentionally represented as rows, not collapsed
+//   by a composite deal_id/product_id key.
+
+// ------------------------------------------------------------
+// LEADS
+// ------------------------------------------------------------
+Table leads {
+  lead_id integer [pk, not null, note: 'Unique lead ID']
+  lead_name varchar [not null, note: 'Synthetic lead or prospect name']
+  company_name varchar [not null, note: 'Synthetic prospect company name; not a CRM account dimension']
+  lead_source varchar [not null, note: 'enum: WebForm | Referral | EventBooth | ColdCall | Inbound']
+  lead_status varchar [not null, note: 'enum: New | Contacted | Qualified | Disqualified | Converted']
+  rep_name varchar [not null, note: 'Owner rep; joins analytically to targets.rep_name for quota questions']
+  territory varchar [note: 'Sales territory for GROUP BY and filter questions']
+  score integer [note: '0-100 lead score; nullable if selected for NULL injection']
+  created_at timestamp [not null]
+
+  Note: 'Dimension - target 15,000 rows. Leads feed deals through deals.lead_id; not every lead converts, so Lead LEFT JOIN Deal paths must include unmatched leads.'
+}
+
+// ------------------------------------------------------------
+// DEALS
+// ------------------------------------------------------------
+Table deals {
+  deal_id integer [pk, not null, note: 'Unique deal ID']
+  lead_id integer [not null, ref: > leads.lead_id, note: 'INNER JOIN path - NOT NULL']
+  deal_name varchar [not null]
+  rep_name varchar [not null, note: 'Analytical string key to targets.rep_name for quota attainment']
+  stage varchar [not null, note: 'enum: Prospecting | Negotiation | Won | Lost']
+  deal_amount decimal(15, 2) [not null, note: 'Revenue/sales amount; Pareto alpha=1.16 for sales-amount questions']
+  currency_code char(3) [not null, default: 'USD']
+  close_date date [note: 'Nullable; used with target periods and LEFT JOIN / NULL-handling questions']
+  expected_close_date date
+  created_at timestamp [not null]
+
+  Note: 'Transaction-like table - target 5,000 rows, approximately 33% lead conversion. Quota attainment is derived from SUM(deals.deal_amount) joined to targets by rep_name and close-date period.'
+}
+
+// ------------------------------------------------------------
+// PRODUCTS
+// ------------------------------------------------------------
+Table products {
+  product_id integer [pk, not null, note: 'Unique product ID']
+  sku varchar [not null, note: 'Synthetic stock keeping unit']
+  product_name varchar [not null]
+  category varchar [note: 'enum: Software | Hardware | Services | Subscription']
+  list_price decimal(15, 2) [note: 'Nullable; domain imperfection focus: missing product prices']
+  currency_code char(3) [not null, default: 'USD']
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+
+  Note: 'Reference / lookup - target 500 rows. Product pricing questions should use quotations.unit_price when asking about quoted revenue, and products.list_price when asking about catalog price.'
+}
+
+// ------------------------------------------------------------
+// QUOTATIONS
+// ------------------------------------------------------------
+Table quotations {
+  quotation_id integer [pk, not null, note: 'Unique quotation line ID']
+  deal_id integer [not null, ref: > deals.deal_id, note: 'INNER JOIN path - NOT NULL']
+  product_id integer [not null, ref: > products.product_id, note: 'INNER JOIN path - NOT NULL']
+  quote_number varchar [not null, note: 'Synthetic business quote number; multiple line rows may share a quote_number']
+  quantity integer [not null]
+  unit_price decimal(15, 2) [not null, note: 'Captured quote-time price; insulated from products.list_price NULLs']
+  discount_pct decimal(5, 2) [not null, default: 0]
+  quote_status varchar [not null, note: 'enum: Draft | Sent | Accepted | Rejected | Expired']
+  quoted_at timestamp [not null]
+  created_at timestamp [not null]
+
+  Note: 'Fact / junction table - target 30,000 rows, approximately 6 line items per deal. Explicit many-to-many bridge for Deal to Product through line items. Duplicate deal-line imperfection focus (~1%).'
+}
+
+// ------------------------------------------------------------
+// TARGETS
+// ------------------------------------------------------------
+Table targets {
+  target_id integer [pk, not null, note: 'Unique sales target ID']
+  rep_name varchar [not null, note: 'Analytical string key to deals.rep_name']
+  territory varchar [note: 'Sales territory for quota segmentation']
+  period_start date [not null]
+  period_end date [not null]
+  quota_amount decimal(15, 2) [not null, note: 'Target quota amount; sales amount distribution can use Pareto alpha=1.16']
+  currency_code char(3) [not null, default: 'USD']
+  created_at timestamp [not null]
+
+  Note: 'Reference - target 400 rows, approximately 50 reps by 8 quarters. Targets are linked to deals by rep_name and date range, not by a strict FK, because each rep has multiple quota periods.'
+}
+
+// ------------------------------------------------------------
+// ANALYTICAL / STRING-KEY RELATIONSHIPS
+// ------------------------------------------------------------
+// dbdiagram.io cannot express the full quota condition:
+//   deals.rep_name = targets.rep_name
+//   AND deals.close_date >= targets.period_start
+//   AND deals.close_date < targets.period_end
+// The visual link below captures the rep-name relationship only; validation and
+// query generation must also apply the period predicate.
+Ref: deals.rep_name > targets.rep_name

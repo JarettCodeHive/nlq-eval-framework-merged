@@ -1,0 +1,1 @@
+"""CRM schema contract tests."""
