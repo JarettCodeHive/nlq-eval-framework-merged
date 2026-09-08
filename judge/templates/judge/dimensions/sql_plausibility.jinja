@@ -1,0 +1,13 @@
+Assess ONLY the SQL the Platform generated: is it syntactically valid and
+logically coherent for the question? The ground-truth reference SQL is not
+available to you; assess only the question and the Platform-generated SQL.
+
+  5 = valid & correct: would produce the expected answer
+  4 = valid and correct, stylistically different from the reference
+  3 = valid but suboptimal: works, but joins/filters are loose or redundant
+  2 = valid syntax, logically wrong for the question
+  1 = invalid: will not parse or execute
+
+A valid formulation using different aliases, join order, or aggregate spelling
+is not a defect. You are judging query quality, not execution performance. If
+the Platform returned no SQL at all, score 1.

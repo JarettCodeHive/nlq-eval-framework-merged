@@ -1,0 +1,92 @@
+[
+  {
+    "question_id": "crm-t1-001",
+    "domain": "crm",
+    "tier": "T1",
+    "natural_language_question": "How many active accounts do we have?",
+    "expected_answer": "There are 72 active accounts.",
+    "judge_reference": "The response should clearly state that there are 72 active accounts and should not introduce extra numbers or alter the meaning.",
+    "reference_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true"
+  },
+  {
+    "question_id": "crm-t1-002",
+    "domain": "crm",
+    "tier": "T1",
+    "natural_language_question": "How many enterprise accounts are active?",
+    "expected_answer": "There are 14 active enterprise accounts.",
+    "judge_reference": "The response should state the exact count of active enterprise accounts and keep the answer concise.",
+    "reference_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND account_tier = 'enterprise'"
+  },
+  {
+    "question_id": "crm-t2-001",
+    "domain": "crm",
+    "tier": "T2",
+    "natural_language_question": "Which sales rep closed the most deal value in Q2 2026, and how much was it?",
+    "expected_answer": "Priya Raghavan - 4,182,650.00",
+    "judge_reference": "Priya Raghavan closed the most deal value in Q2 2026, and the answer should report the exact total of 4,182,650.00.",
+    "reference_sql": "SELECT a.owner_name, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-04-01' AND o.close_date < '2026-07-01' GROUP BY a.owner_name ORDER BY total_closed DESC LIMIT 1"
+  },
+  {
+    "question_id": "crm-t2-002",
+    "domain": "crm",
+    "tier": "T2",
+    "natural_language_question": "Which account has the highest open pipeline value?",
+    "expected_answer": "Acme Corp - 2,350,000.00",
+    "judge_reference": "The response should identify Acme Corp as the account with the highest open pipeline value and state 2,350,000.00 exactly.",
+    "reference_sql": "SELECT a.account_name, SUM(o.deal_amount) AS open_value FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage IN ('Open', 'Proposal') GROUP BY a.account_name ORDER BY open_value DESC LIMIT 1"
+  },
+  {
+    "question_id": "crm-t3-001",
+    "domain": "crm",
+    "tier": "T3",
+    "natural_language_question": "How many contacts have no account assigned?",
+    "expected_answer": "5",
+    "judge_reference": "The response should say that 5 contacts have no account assigned and reflect the NULL-account interpretation clearly.",
+    "reference_sql": "SELECT COUNT(*) FROM contacts c LEFT JOIN accounts a ON c.account_id = a.account_id WHERE a.account_id IS NULL"
+  },
+  {
+    "question_id": "crm-t3-002",
+    "domain": "crm",
+    "tier": "T3",
+    "natural_language_question": "How many active accounts are owned by Priya Raghavan?",
+    "expected_answer": "4",
+    "judge_reference": "The response should state that Priya Raghavan owns 4 active accounts and keep the count exact.",
+    "reference_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND owner_name = 'Priya Raghavan'"
+  },
+  {
+    "question_id": "crm-t4-001",
+    "domain": "crm",
+    "tier": "T4",
+    "natural_language_question": "For each industry, what was the total closed deal value in H1 2026?",
+    "expected_answer": "Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00",
+    "judge_reference": "The response should present the H1 2026 closed deal totals by industry, with Technology first, then Finance, then Healthcare, using the exact numeric values.",
+    "reference_sql": "SELECT a.industry, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY a.industry ORDER BY total_closed DESC"
+  },
+  {
+    "question_id": "crm-t4-002",
+    "domain": "crm",
+    "tier": "T4",
+    "natural_language_question": "Which region had the most closed-won opportunities in H1 2026?",
+    "expected_answer": "West 13",
+    "judge_reference": "The response should identify the West region as having the most closed-won opportunities in H1 2026 and report the count as 13.",
+    "reference_sql": "SELECT o.region, COUNT(*) AS closed_won_count FROM opportunities o WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY o.region ORDER BY closed_won_count DESC LIMIT 1"
+  },
+  {
+    "question_id": "crm-t5-001",
+    "domain": "crm",
+    "tier": "T5",
+    "natural_language_question": "Which three accounts show the fastest opportunity-count growth quarter over quarter?",
+    "expected_answer": "Weiss, Dominguez and Johnson (+140%); Patton, Smith and Anderson (+92%); Duran-Griffith (+78%)",
+    "judge_reference": "The response should rank the top three accounts by quarter-over-quarter opportunity-count growth, keep the percentages exact, and frame the list as a trend-oriented answer.",
+    "reference_sql": "WITH per_q AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, COUNT(*) AS n FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.n - q1.n) * 1.0 / q1.n) AS growth FROM per_q q1 INNER JOIN per_q q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY growth DESC LIMIT 3"
+  },
+  {
+    "question_id": "crm-t5-002",
+    "domain": "crm",
+    "tier": "T5",
+    "natural_language_question": "Which three accounts are leading in revenue trend this quarter?",
+    "expected_answer": "Acme Corp (+18%); Beta Ltd (+14%); Vertex Media (+11%)",
+    "judge_reference": "The response should present the top three accounts as a trend ranking for this quarter, keep the percentage values exact, and emphasize the directional summary.",
+    "reference_sql": "WITH quarter_revenue AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, SUM(o.deal_amount) AS revenue FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.revenue - q1.revenue) * 1.0 / q1.revenue) AS trend FROM quarter_revenue q1 INNER JOIN quarter_revenue q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY trend DESC LIMIT 3"
+  }
+]

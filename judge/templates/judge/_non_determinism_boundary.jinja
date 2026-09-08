@@ -1,0 +1,64 @@
+{# HC-3 non-determinism boundary, with worked examples per §10.2 note. This is
+   load-bearing: without the examples, judges consistently over-penalise
+   phrasing variation, which corrupts every downstream regression comparison. #}
+NON-DETERMINISM BOUNDARY — READ CAREFULLY (§HC-3)
+
+Numeric values MUST be identical to the EXPECTED ANSWER. Any numeric variance
+is a factual failure. Wording, sentence length, ordering of prose, tone,
+currency formatting, and dashboard presentation are NEVER deductions. Only
+substance and numeric accuracy are scored.
+
+WORKED EXAMPLES — these are how the boundary applies in practice.
+
+DO NOT DEDUCT (all four should score 5 on the dimensions shown):
+
+Example A — Prose wrapper around the number, no factual change.
+  EXPECTED ANSWER: 72
+  PLATFORM ANSWER: "There are 72 active accounts in the CRM."
+  → factual_correctness = 5, completeness = 5, format_adherence = 5.
+    The prose wrapper is not a deduction. The number matches exactly.
+
+Example B — Currency formatting differs, number identical.
+  EXPECTED ANSWER: Priya Raghavan — 4,182,650.00
+  PLATFORM ANSWER: "Priya Raghavan closed $4,182,650 in Q2, a strong quarter."
+  → factual_correctness = 5, completeness = 5.
+    Currency prefix and dropped `.00` are cosmetic. Rep name and number match.
+
+Example C — Different wording, same substance.
+  EXPECTED ANSWER: 5 orphan contacts
+  PLATFORM ANSWER: "Five contacts have no account assigned."
+  → factual_correctness = 5. Spelled numeral is not a factual defect.
+
+Example D — Sentence order and length differ, same information carried.
+  EXPECTED ANSWER: Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00
+  PLATFORM ANSWER: "H1 leaders were Healthcare (4,988,300.00), Finance
+    (6,102,750.00), and Technology (8,240,100.00)."
+  → factual_correctness = 5, completeness = 5. Order reversed but every value
+    is present with identical numerics. Not a deduction.
+
+DO DEDUCT (all four should score 1 on the dimensions shown):
+
+Example E — Number wrong, wording irrelevant.
+  EXPECTED ANSWER: 72
+  PLATFORM ANSWER: "There are 68 active accounts."
+  → factual_correctness = 1. Any numeric variance is zero tolerance.
+
+Example F — Number rounded to fewer digits than expected.
+  EXPECTED ANSWER: 4,182,650.00
+  PLATFORM ANSWER: "4,182,000"
+  → factual_correctness = 1. Rounding-loss is still numeric variance.
+
+Example G — Missing an entity the question or judge_reference requires.
+  EXPECTED ANSWER: Priya Raghavan — 4,182,650.00
+  PLATFORM ANSWER: "4,182,650.00"
+  → completeness = 1. Number is right; rep name absent = incomplete.
+
+Example H — Answer is entirely verbal, no numbers where numbers were asked.
+  EXPECTED ANSWER: Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00
+  PLATFORM ANSWER: "Technology led H1 2026 in closed deal value."
+  → factual_correctness = 1, completeness = 1. The specific numbers were the
+    substance of the answer; a category without figures does not answer this
+    question.
+
+RULE OF THUMB: if you find yourself deducting for HOW something is said rather
+than WHAT is said, stop and re-check against the examples above.

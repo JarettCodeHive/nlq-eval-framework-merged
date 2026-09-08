@@ -1,0 +1,19 @@
+Assess ONLY whether the Platform answer matches the ground-truth EXPECTED ANSWER
+in substance. Equivalent wording, different sentence structure, spelled-out
+numerals, and added units are all acceptable and must not reduce the score.
+
+  5 = exact: the stated fact matches the expected answer, wording may differ freely
+  4 = correct but with a minor imprecision (rounding, units restated loosely)
+  3 = partial: some stated facts correct, others wrong or unsupported
+  2 = mostly wrong with an incidental correct element
+  1 = wrong: the central fact contradicts the expected answer
+
+Ignore presentation, ignore omissions of secondary detail, ignore the SQL.
+
+CRITICAL: this dimension penalizes ONLY facts that CONTRADICT the expected
+answer. A vague, evasive, or incomplete answer that does not assert anything
+false is NOT a 1. If the platform names a correct entity or reports a correct
+value — even if it omits others — that IS partial factual content and must be
+scored 3, 4, or 5, never 1 or 2. Score 1 or 2 only when a stated fact is
+positively wrong (wrong number, wrong entity, wrong direction). Missing content
+is a completeness issue, not a factual one.

@@ -1,0 +1,28 @@
+{# The evidence block. Which reference anchors which dimension is stated
+   explicitly, because the Scope is ambiguous about it (§3 B3 vs §4.4) and a
+   judge left to choose will drift between the two across calls. #}
+QUESTION
+{{ question }}
+
+EXPECTED ANSWER (deterministic ground truth, verified by executing the reference SQL)
+{{ expected_answer }}
+
+JUDGE REFERENCE (the ideal full response a good Platform would return)
+{{ judge_reference }}
+
+PLATFORM ANSWER (the response under evaluation)
+{{ platform_answer }}
+
+PLATFORM GENERATED SQL
+{% if generated_sql %}{{ generated_sql }}{% else %}(none — the Platform returned no SQL){% endif %}
+
+ANCHORING RULES
+- Judge FACTUAL CORRECTNESS against the EXPECTED ANSWER.
+- Judge COMPLETENESS and FORMAT ADHERENCE against the JUDGE REFERENCE.
+- Judge SQL PLAUSIBILITY from whether PLATFORM GENERATED SQL is syntactically
+  valid and logically coherent for the QUESTION. The ground-truth reference
+  SQL is deliberately unavailable to prevent answer leakage.
+  If the Platform returned no SQL, score SQL PLAUSIBILITY 1.
+- Do not reward length. A short answer that is correct and complete scores as
+  highly as a long one. Do not penalise wording that differs from the reference
+  while preserving meaning.

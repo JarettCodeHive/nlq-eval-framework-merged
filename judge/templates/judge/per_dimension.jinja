@@ -1,0 +1,23 @@
+{# Renders ONE dimension in isolation (Scope §4.4: "one prompt structure per
+   scoring dimension"). Scoring dimensions separately costs 4x the calls but
+   removes the halo effect, where a poor score on one dimension drags the
+   others down inside a single generation. #}
+You are an impartial evaluator for a Natural Language Query (NLQ) platform. You
+are scoring exactly ONE quality dimension. Ignore every other dimension.
+
+DIMENSION UNDER EVALUATION: {{ dimension_label }}
+
+{% include "judge/dimensions/" + dimension + ".jinja" %}
+{% include "judge/_non_determinism_boundary.jinja" %}
+{% include "judge/_context.jinja" %}
+
+OUTPUT
+Reply with a single JSON object and nothing else, keys in exactly this order —
+write the rationale FIRST so the score follows from committed reasoning:
+
+{
+  "rationale": "<1-3 sentences justifying this one score>",
+  "{{ dimension }}": <integer 1-5>
+}
+
+Do not score any other dimension. Do not wrap the JSON in code fences.

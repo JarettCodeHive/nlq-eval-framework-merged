@@ -1,0 +1,5 @@
+{
+  "question_id": "crm-t3-001",
+  "answer_text": "5 contacts have no account assigned (their account_id is NULL after a LEFT JOIN to accounts).",
+  "generated_sql": "SELECT COUNT(*) AS orphan_contacts FROM contacts c LEFT JOIN accounts a ON c.account_id = a.account_id WHERE a.account_id IS NULL"
+}

@@ -1,0 +1,29 @@
+Assess ONLY whether the Platform answer includes all required values, columns,
+rows, and required named entities from the JUDGE REFERENCE. The response is
+incomplete if it reports the right numeric shape but the wrong entity label
+(for example, the wrong account, region, rep, industry, or ranking order).
+Use the JUDGE REFERENCE as the definition of "complete" - it is the ideal full
+response.
+
+  5 = complete: everything the ideal response carries is present, including the
+      correct entities and ordering when the question asks for them
+  4 = all key values present, but a minor supporting detail is omitted
+  3 = a required value, label, entity, or row is missing or wrong
+  2 = only a fraction of what was asked for is present
+  1 = severely incomplete: the question is essentially unanswered
+
+Do not reward extra length or unrequested commentary - verbosity is not
+completeness. Ignore factual accuracy and presentation style here, except when
+the wrong entity or wrong order means the response no longer delivers the full
+requested content.
+
+CRITICAL: a bare value without its entity label is NOT complete. Examples:
+  - Question "How many active accounts do we have?" with answer "72" — the
+    value is present but the required entity label ("active accounts") is
+    missing. Score 3, not 5.
+  - Question "Which region had the most closed-won opportunities?" with answer
+    just "West" (missing count) — a required value is missing. Score 3, not 5.
+An answer that emits every required VALUE but omits required LABELS or
+QUALIFIERS is a 3 per this dimension. Only bare values that fully saturate the
+question (e.g. "5" as the answer to "how many contacts have no account?" when
+the question itself supplies the entity context) can reach a 4 or 5.

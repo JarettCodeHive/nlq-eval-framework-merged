@@ -1,0 +1,52 @@
+{
+  "crm-t1-001": {
+    "question_id": "crm-t1-001",
+    "answer_text": "There are 72 active accounts.",
+    "generated_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true"
+  },
+  "crm-t1-002": {
+    "question_id": "crm-t1-002",
+    "answer_text": "There are 14 active enterprise accounts.",
+    "generated_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND account_tier = 'enterprise'"
+  },
+  "crm-t2-001": {
+    "question_id": "crm-t2-001",
+    "answer_text": "Priya Raghavan closed the most deal value in Q2 2026 at 4,182,650.00.",
+    "generated_sql": "SELECT a.owner_name, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-04-01' AND o.close_date < '2026-07-01' GROUP BY a.owner_name ORDER BY total_closed DESC LIMIT 1"
+  },
+  "crm-t2-002": {
+    "question_id": "crm-t2-002",
+    "answer_text": "Acme Corp has the highest open pipeline value at 2,350,000.00.",
+    "generated_sql": "SELECT a.account_name, SUM(o.deal_amount) AS open_value FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage IN ('Open', 'Proposal') GROUP BY a.account_name ORDER BY open_value DESC LIMIT 1"
+  },
+  "crm-t3-001": {
+    "question_id": "crm-t3-001",
+    "answer_text": "5 contacts have no account assigned.",
+    "generated_sql": "SELECT COUNT(*) FROM contacts c LEFT JOIN accounts a ON c.account_id = a.account_id WHERE a.account_id IS NULL"
+  },
+  "crm-t3-002": {
+    "question_id": "crm-t3-002",
+    "answer_text": "Priya Raghavan owns 4 active accounts.",
+    "generated_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND owner_name = 'Priya Raghavan'"
+  },
+  "crm-t4-001": {
+    "question_id": "crm-t4-001",
+    "answer_text": "Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00",
+    "generated_sql": "SELECT a.industry, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY a.industry ORDER BY total_closed DESC"
+  },
+  "crm-t4-002": {
+    "question_id": "crm-t4-002",
+    "answer_text": "West 13",
+    "generated_sql": "SELECT o.region, COUNT(*) AS closed_won_count FROM opportunities o WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY o.region ORDER BY closed_won_count DESC LIMIT 1"
+  },
+  "crm-t5-001": {
+    "question_id": "crm-t5-001",
+    "answer_text": "Weiss, Dominguez and Johnson (+140%); Patton, Smith and Anderson (+92%); Duran-Griffith (+78%)",
+    "generated_sql": "WITH per_q AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, COUNT(*) AS n FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.n - q1.n) * 1.0 / q1.n) AS growth FROM per_q q1 INNER JOIN per_q q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY growth DESC LIMIT 3"
+  },
+  "crm-t5-002": {
+    "question_id": "crm-t5-002",
+    "answer_text": "Acme Corp (+18%); Beta Ltd (+14%); Vertex Media (+11%)",
+    "generated_sql": "WITH quarter_revenue AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, SUM(o.deal_amount) AS revenue FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.revenue - q1.revenue) * 1.0 / q1.revenue) AS trend FROM quarter_revenue q1 INNER JOIN quarter_revenue q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY trend DESC LIMIT 3"
+  }
+}

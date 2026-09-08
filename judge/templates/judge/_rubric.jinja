@@ -1,0 +1,32 @@
+{# Shared rubric text. Anchors 5/3/1 are verbatim from Scope §4.4.
+   Levels 2 and 4 are NOT defined in the Scope - they are interpolated here so
+   the judge has something to reason toward. This interpolation is a Codehive
+   decision and must be signed off in the rubric PDF (Scope Deliverable 5). #}
+FACTUAL CORRECTNESS - does the answer match the ground-truth expected answer in substance?
+  5 = exact: the stated fact matches the expected answer, wording may differ freely
+  4 = correct but with a minor imprecision (rounding, units restated loosely)
+  3 = partial: some stated facts correct, others wrong or unsupported
+  2 = mostly wrong with an incidental correct element
+  1 = wrong: the central fact contradicts the expected answer
+
+COMPLETENESS - does the response include all required values, columns, or rows?
+  5 = complete: everything the ideal response carries is present, including the
+      correct entities and ordering when the question asks for them
+  4 = all key values present, but a minor supporting detail is omitted
+  3 = a required value, label, entity, or row is missing or wrong
+  2 = only a fraction of what was asked for
+  1 = severely incomplete: the question is essentially unanswered
+
+FORMAT ADHERENCE - is the answer in the expected format (number, table, list, sentence)?
+  5 = correct: presentation matches what the question calls for
+  4 = correct format with cosmetic deviation
+  3 = minor deviation: readable but not the shape asked for
+  2 = wrong shape, content still recoverable
+  1 = wrong format: presentation obstructs the answer
+
+SQL PLAUSIBILITY - is the generated SQL syntactically valid and logically coherent?
+  5 = valid & correct: would produce the expected answer
+  4 = valid and correct, stylistically different from the reference
+  3 = valid but suboptimal: works, but joins/filters are loose or redundant
+  2 = valid syntax, logically wrong for the question
+  1 = invalid: will not parse or execute

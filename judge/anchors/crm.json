@@ -1,0 +1,212 @@
+[
+  {
+    "question_id": "crm-t1-001",
+    "natural_language_question": "How many active accounts do we have?",
+    "expected_answer": "There are 72 active accounts.",
+    "judge_reference": "The response should clearly state that there are 72 active accounts and should not introduce extra numbers or alter the meaning.",
+    "reference_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true",
+    "platform_answer": "72",
+    "generated_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true",
+    "human_scores": {
+      "factual_correctness": 5,
+      "completeness": 3,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "The number 72 is the correct count of active accounts.",
+      "completeness": "Bare number without the 'active accounts' label — required value is present, entity label is missing. Score 3 per rubric ('a required label is missing').",
+      "format_adherence": "Number format is appropriate for a count question.",
+      "sql_plausibility": "Reference SQL, correct."
+    }
+  },
+  {
+    "question_id": "crm-t1-002",
+    "natural_language_question": "How many enterprise accounts are active?",
+    "expected_answer": "There are 14 active enterprise accounts.",
+    "judge_reference": "The response should state the exact count of active enterprise accounts and keep the answer concise.",
+    "reference_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND account_tier = 'enterprise'",
+    "platform_answer": "14 accounts",
+    "generated_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND account_tier = 'enterprise'",
+    "human_scores": {
+      "factual_correctness": 5,
+      "completeness": 3,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "The number 14 is correct.",
+      "completeness": "Count present, but the 'enterprise' and 'active' qualifiers are dropped — required labels missing. Score 3 per rubric.",
+      "format_adherence": "Short answer format is acceptable.",
+      "sql_plausibility": "Correct filter conditions."
+    }
+  },
+  {
+    "question_id": "crm-t2-001",
+    "natural_language_question": "Which sales rep closed the most deal value in Q2 2026, and how much was it?",
+    "expected_answer": "Priya Raghavan - 4,182,650.00",
+    "judge_reference": "Priya Raghavan closed the most deal value in Q2 2026, and the answer should report the exact total of 4,182,650.00.",
+    "reference_sql": "SELECT a.owner_name, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-04-01' AND o.close_date < '2026-07-01' GROUP BY a.owner_name ORDER BY total_closed DESC LIMIT 1",
+    "platform_answer": "Priya Raghavan closed the most deal value in Q2 2026 at 4,182,650.00.",
+    "generated_sql": "SELECT a.owner_name, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-04-01' AND o.close_date < '2026-07-01' GROUP BY a.owner_name ORDER BY total_closed DESC LIMIT 1",
+    "human_scores": {
+      "factual_correctness": 5,
+      "completeness": 5,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "Rep name and amount both correct.",
+      "completeness": "Both required elements present (rep + amount) with the Q2 2026 context.",
+      "format_adherence": "Natural-language sentence appropriate for the question.",
+      "sql_plausibility": "Correct join, filter, aggregation, and LIMIT."
+    }
+  },
+  {
+    "question_id": "crm-t2-002",
+    "natural_language_question": "Which account has the highest open pipeline value?",
+    "expected_answer": "Acme Corp - 2,350,000.00",
+    "judge_reference": "The response should identify Acme Corp as the account with the highest open pipeline value and state 2,350,000.00 exactly.",
+    "reference_sql": "SELECT a.account_name, SUM(o.deal_amount) AS open_value FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage IN ('Open', 'Proposal') GROUP BY a.account_name ORDER BY open_value DESC LIMIT 1",
+    "platform_answer": "Acme Corp has the highest open pipeline at 2,350,000.00.",
+    "generated_sql": "SELECT a.account_name, SUM(o.deal_amount) AS open_value FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage IN ('Open', 'Proposal') GROUP BY a.account_name ORDER BY open_value DESC LIMIT 1",
+    "human_scores": {
+      "factual_correctness": 5,
+      "completeness": 4,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "Account name and amount both correct.",
+      "completeness": "Drops the word 'value' after 'pipeline' — minor supporting detail omission. Key values (account + amount) intact. Score 4 per rubric.",
+      "format_adherence": "Sentence format matches the question.",
+      "sql_plausibility": "Correct join and open-stage filter."
+    }
+  },
+  {
+    "question_id": "crm-t3-001",
+    "natural_language_question": "How many contacts have no account assigned?",
+    "expected_answer": "5",
+    "judge_reference": "The response should say that 5 contacts have no account assigned and reflect the NULL-account interpretation clearly.",
+    "reference_sql": "SELECT COUNT(*) FROM contacts c LEFT JOIN accounts a ON c.account_id = a.account_id WHERE a.account_id IS NULL",
+    "platform_answer": "There are 5 contacts total.",
+    "generated_sql": "SELECT COUNT(*) FROM contacts c LEFT JOIN accounts a ON c.account_id = a.account_id WHERE a.account_id IS NULL",
+    "human_scores": {
+      "factual_correctness": 5,
+      "completeness": 3,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "Number 5 is the correct count for the NULL-account slice.",
+      "completeness": "Says 'total' instead of 'with no account assigned' — the NULL-account constraint is dropped, so a reader can't tell this answers the actual question. Score 3.",
+      "format_adherence": "Short sentence is appropriate.",
+      "sql_plausibility": "LEFT JOIN + IS NULL correctly captures the NULL-account slice."
+    }
+  },
+  {
+    "question_id": "crm-t3-002",
+    "natural_language_question": "How many active accounts are owned by Priya Raghavan?",
+    "expected_answer": "4",
+    "judge_reference": "The response should state that Priya Raghavan owns 4 active accounts and keep the count exact.",
+    "reference_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND owner_name = 'Priya Raghavan'",
+    "platform_answer": "Priya Raghavan owns 4 accounts.",
+    "generated_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true AND owner_name = 'Priya Raghavan'",
+    "human_scores": {
+      "factual_correctness": 5,
+      "completeness": 4,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "Count 4 is correct.",
+      "completeness": "Drops the 'active' qualifier — a minor supporting detail is omitted. Key values (owner + count) are present. Score 4 per rubric.",
+      "format_adherence": "Short sentence is appropriate.",
+      "sql_plausibility": "Correct WHERE clause on both fields."
+    }
+  },
+  {
+    "question_id": "crm-t4-001",
+    "natural_language_question": "For each industry, what was the total closed deal value in H1 2026?",
+    "expected_answer": "Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00",
+    "judge_reference": "The response should present the H1 2026 closed deal totals by industry, with Technology first, then Finance, then Healthcare, using the exact numeric values.",
+    "reference_sql": "SELECT a.industry, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY a.industry ORDER BY total_closed DESC",
+    "platform_answer": "Technology had 8,240,100.00 in H1 2026.",
+    "generated_sql": "SELECT a.industry, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY a.industry ORDER BY total_closed DESC",
+    "human_scores": {
+      "factual_correctness": 5,
+      "completeness": 1,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "The one value reported (Technology 8,240,100) is correct.",
+      "completeness": "Reports only 1 of the 3 industries requested. Two required rows (Finance, Healthcare) are entirely missing. Severely incomplete — score 1.",
+      "format_adherence": "Numeric format is acceptable for what was reported.",
+      "sql_plausibility": "The SQL is fully correct — it would produce all three rows; the platform truncated the output, not the query."
+    }
+  },
+  {
+    "question_id": "crm-t4-002",
+    "natural_language_question": "Which region had the most closed-won opportunities in H1 2026?",
+    "expected_answer": "West 13",
+    "judge_reference": "The response should identify the West region as having the most closed-won opportunities in H1 2026 and report the count as 13.",
+    "reference_sql": "SELECT o.region, COUNT(*) AS closed_won_count FROM opportunities o WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY o.region ORDER BY closed_won_count DESC LIMIT 1",
+    "platform_answer": "Several regions had closed-won opportunities in H1 2026.",
+    "generated_sql": "SELECT o.region, COUNT(*) AS closed_won_count FROM opportunities o WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY o.region ORDER BY closed_won_count DESC LIMIT 1",
+    "human_scores": {
+      "factual_correctness": 3,
+      "completeness": 1,
+      "format_adherence": 5,
+      "sql_plausibility": 5
+    },
+    "human_rationale": {
+      "factual_correctness": "Statement is trivially true but does not report the expected fact (West, 13). Per rubric 3 = 'partial: some stated facts correct, others wrong or unsupported'.",
+      "completeness": "The question asked to identify which single region had the most and to report the count. The answer names no region and provides no count. Essentially unanswered — score 1.",
+      "format_adherence": "Sentence format is fine for what was reported.",
+      "sql_plausibility": "The SQL is correct; the platform decided to summarize rather than surface the top row."
+    }
+  },
+  {
+    "question_id": "crm-t5-001",
+    "natural_language_question": "Which three accounts show the fastest opportunity-count growth quarter over quarter?",
+    "expected_answer": "Weiss, Dominguez and Johnson (+140%); Patton, Smith and Anderson (+92%); Duran-Griffith (+78%)",
+    "judge_reference": "The response should rank the top three accounts by quarter-over-quarter opportunity-count growth, keep the percentages exact, and frame the list as a trend-oriented answer.",
+    "reference_sql": "WITH per_q AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, COUNT(*) AS n FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.n - q1.n) * 1.0 / q1.n) AS growth FROM per_q q1 INNER JOIN per_q q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY growth DESC LIMIT 3",
+    "platform_answer": "Weiss, Dominguez and Johnson is trending up.",
+    "generated_sql": "WITH per_q AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, SUM(o.deal_amount) AS n FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.n - q1.n) * 1.0 / q1.n) AS growth FROM per_q q1 INNER JOIN per_q q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY growth DESC LIMIT 3",
+    "human_scores": {
+      "factual_correctness": 3,
+      "completeness": 1,
+      "format_adherence": 3,
+      "sql_plausibility": 2
+    },
+    "human_rationale": {
+      "factual_correctness": "Names one correct account (Weiss, Dominguez and Johnson) but omits the other two and all percentages. Per rubric 3 = 'partial: some stated facts correct, others wrong or unsupported'.",
+      "completeness": "Only 1 of 3 accounts named, no percentages, no ranking framing. Severely incomplete — score 1.",
+      "format_adherence": "Question asks for a top-3 ranking; answer is a prose sentence about one entity. Per rubric 3 = 'minor deviation: readable but not the shape asked for'.",
+      "sql_plausibility": "Valid SQL, but it computes revenue growth (SUM of deal_amount) instead of opportunity-count growth (COUNT). Wrong metric for the question — score 2 per rubric ('valid syntax, logically wrong for the question')."
+    }
+  },
+  {
+    "question_id": "crm-t5-002",
+    "natural_language_question": "Which three accounts are leading in revenue trend this quarter?",
+    "expected_answer": "Acme Corp (+18%); Beta Ltd (+14%); Vertex Media (+11%)",
+    "judge_reference": "The response should present the top three accounts as a trend ranking for this quarter, keep the percentage values exact, and emphasize the directional summary.",
+    "reference_sql": "WITH quarter_revenue AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, SUM(o.deal_amount) AS revenue FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.revenue - q1.revenue) * 1.0 / q1.revenue) AS trend FROM quarter_revenue q1 INNER JOIN quarter_revenue q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY trend DESC LIMIT 3",
+    "platform_answer": "Acme Corp is doing well this quarter.",
+    "generated_sql": "WITH per_q AS (SELECT o.account_id, DATE_TRUNC('quarter', o.close_date) AS q, COUNT(*) AS n FROM opportunities o WHERE o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.n - q1.n) * 1.0 / q1.n) AS trend FROM per_q q1 INNER JOIN per_q q2 ON q1.account_id = q2.account_id AND q1.q = '2026-01-01' AND q2.q = '2026-04-01' INNER JOIN accounts a ON a.account_id = q1.account_id ORDER BY trend DESC LIMIT 3",
+    "human_scores": {
+      "factual_correctness": 3,
+      "completeness": 1,
+      "format_adherence": 2,
+      "sql_plausibility": 2
+    },
+    "human_rationale": {
+      "factual_correctness": "Names one correct account (Acme Corp) but omits the other two and all percentages. Per rubric 3 = 'partial: some stated facts correct, others wrong or unsupported'.",
+      "completeness": "Only 1 of 3 accounts, no percentages, no explicit ranking. Essentially unanswered as a trend list — score 1.",
+      "format_adherence": "Question asks for a ranked top-3 with percentages; answer is a single vague sentence with no ranking or numbers. Per rubric 2 = 'wrong shape, content still recoverable'.",
+      "sql_plausibility": "Valid SQL, but it counts opportunities (COUNT(*)) rather than summing revenue (SUM(deal_amount)). Wrong metric for a revenue-trend question — score 2 per rubric."
+    }
+  }
+]

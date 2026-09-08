@@ -1,0 +1,5 @@
+{
+  "question_id": "crm-t4-001",
+  "answer_text": "H1 2026 total closed deal value by industry: Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00 lead the pack.",
+  "generated_sql": "SELECT a.industry, SUM(o.deal_amount) AS total_closed FROM opportunities o INNER JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-01-01' AND o.close_date < '2026-07-01' GROUP BY a.industry ORDER BY total_closed DESC"
+}

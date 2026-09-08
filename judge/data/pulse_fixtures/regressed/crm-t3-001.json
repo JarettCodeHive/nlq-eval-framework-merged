@@ -1,0 +1,5 @@
+{
+  "question_id": "crm-t3-001",
+  "answer_text": "0 contacts have no account assigned.",
+  "generated_sql": "SELECT COUNT(*) FROM contacts c INNER JOIN accounts a ON c.account_id = a.account_id WHERE a.account_id IS NULL"
+}
