@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-01-V01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "WITH q AS (\n  SELECT\n    SUM(CASE WHEN i.interaction_at >= DATE '2026-01-01' AND i.interaction_at < DATE '2026-04-01' THEN i.engagement_points ELSE 0 END) AS prev_q,\n    SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS this_q\n  FROM interactions i\n  INNER JOIN contacts c ON i.contact_id = c.contact_id\n  INNER JOIN accounts a ON c.account_id = a.account_id\n  WHERE a.region = 'Central'\n)\nSELECT\n  prev_q AS prev_quarter_points,\n  this_q AS this_quarter_points,\n  this_q - prev_q AS absolute_change,\n  ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change,\n  CASE WHEN this_q > prev_q THEN 'up' WHEN this_q < prev_q THEN 'down' ELSE 'flat' END AS direction\nFROM q;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "3b043d60ba107966bc397d4f82569f5ba1d6bedb2c7c0542b55937ad3dca38ed",
+  "generated_expected_answer": "320 | 42 | -278 | -86.88 | down",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-01",
+  "base_question_id": "CRM-T5-04-18"
+}

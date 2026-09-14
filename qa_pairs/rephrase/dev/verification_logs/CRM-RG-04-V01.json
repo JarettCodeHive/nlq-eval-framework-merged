@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-04-V01",
+  "domain": "crm",
+  "tier": "T3",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(*) AS account_count\nFROM accounts a LEFT JOIN contacts c ON a.account_id = c.account_id\nWHERE a.region = 'Central' AND c.contact_id IS NULL;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+  "generated_expected_answer": "2",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-04",
+  "base_question_id": "CRM-T3-01-01"
+}

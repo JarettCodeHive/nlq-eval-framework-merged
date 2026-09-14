@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-14-V01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "WITH open_cases AS (\n  SELECT account_id, COUNT(*) AS open_case_count FROM support_cases\n  WHERE status IN ('New', 'InProgress', 'PendingCustomer') GROUP BY account_id\n), recent_engagement AS (\n  SELECT c.account_id, COUNT(*) AS recent_interaction_count\n  FROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id\n  WHERE i.interaction_at >= DATE '2026-06-02' AND c.account_id IS NOT NULL\n  GROUP BY c.account_id\n)\nSELECT a.account_name AS entity,\n       COALESCE(oc.open_case_count, 0) AS open_case_count,\n       COALESCE(re.recent_interaction_count, 0) AS recent_interaction_count\nFROM accounts a\nLEFT JOIN open_cases oc ON a.account_id = oc.account_id\nLEFT JOIN recent_engagement re ON a.account_id = re.account_id\nWHERE a.industry = 'Education'\n  AND COALESCE(oc.open_case_count, 0) >= 3\n  AND COALESCE(re.recent_interaction_count, 0) = 0\nORDER BY open_case_count DESC, entity ASC LIMIT 5;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "16e210ef5a87fa82ef2dc145db2eb22621b57bf2c45bffa9f7536de19b2a7c41",
+  "generated_expected_answer": "Hansen LLC | 7 | 0; Jones PLC | 6 | 0; Lynn PLC | 6 | 0; Smith and Sons | 6 | 0; Blankenship Alexander | 5 | 0",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-14",
+  "base_question_id": "CRM-T5-03-12"
+}

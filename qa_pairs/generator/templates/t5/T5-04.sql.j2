@@ -1,5 +1,16 @@
+WITH q AS (
+  SELECT
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-01-01' AND i.interaction_at < DATE '2026-04-01' THEN i.engagement_points ELSE 0 END) AS prev_q,
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS this_q
+  FROM interactions i
+  INNER JOIN contacts c ON i.contact_id = c.contact_id
+  INNER JOIN accounts a ON c.account_id = a.account_id
+  WHERE a.region = {{ region | sqlstr }}
+)
 SELECT
-  ROUND(SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END), 2) AS prev_quarter_points,
-  ROUND(SUM(CASE WHEN i.interaction_at >= DATE '2026-07-01' AND i.interaction_at < DATE '2026-10-01' THEN i.engagement_points ELSE 0 END), 2) AS this_quarter_points
-FROM interactions i INNER JOIN accounts a ON i.account_id = a.account_id
-WHERE a.region = '{{ region }}';
+  prev_q AS prev_quarter_points,
+  this_q AS this_quarter_points,
+  this_q - prev_q AS absolute_change,
+  ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change,
+  CASE WHEN this_q > prev_q THEN 'up' WHEN this_q < prev_q THEN 'down' ELSE 'flat' END AS direction
+FROM q;

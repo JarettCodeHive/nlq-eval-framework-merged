@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-16-V01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT c.title AS entity,\n       ROUND(SUM(cc.attribution_weight), 4) AS total_attribution_weight\nFROM contacts c\nINNER JOIN contact_campaigns cc ON c.contact_id = cc.contact_id\nINNER JOIN campaigns ca ON cc.campaign_id = ca.campaign_id\nWHERE ca.campaign_type = 'Awareness'\n  AND c.title IS NOT NULL\nGROUP BY c.title\nORDER BY total_attribution_weight DESC, entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 7,
+  "result_hash": "4623169002d38a0295b9e3fd28124313d43a8e4fc858f33ca931b087d1b84fc8",
+  "generated_expected_answer": "Business Analyst | 8.9691; Procurement Manager | 8.9451; Operations Director | 7.2499; IT Director | 5.3333; Program Manager | 4.3167; Service Delivery Manager | 2.8334; Customer Success Manager | 2.6999",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-16",
+  "base_question_id": "CRM-T4-04-16"
+}

@@ -1,5 +1,7 @@
-SELECT SUM(i.engagement_points) AS result
+SELECT i.channel AS entity, SUM(i.engagement_points) AS engagement_points
 FROM accounts a
 INNER JOIN contacts c ON a.account_id = c.account_id
 INNER JOIN interactions i ON c.contact_id = i.contact_id
-WHERE a.region = '{{ region }}';
+WHERE a.region = {{ region | sqlstr }}
+GROUP BY i.channel
+ORDER BY engagement_points DESC, entity ASC;

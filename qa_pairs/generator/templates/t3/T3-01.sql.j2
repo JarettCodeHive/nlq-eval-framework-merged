@@ -1,3 +1,3 @@
-SELECT COUNT(*) AS result
+SELECT COUNT(*) AS account_count
 FROM accounts a LEFT JOIN contacts c ON a.account_id = c.account_id
-WHERE a.region = '{{ region }}' AND c.contact_id IS NULL;
+WHERE a.region = {{ region | sqlstr }} AND c.contact_id IS NULL;

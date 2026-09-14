@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-10-V01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(c.contact_id) AS contact_count\nFROM contacts c INNER JOIN accounts a ON c.account_id = a.account_id\nWHERE a.industry = 'Education';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "0b918943df0962bc7a1824c0555a389347b4febdc7cf9d1254406d80ce44e3f9",
+  "generated_expected_answer": "39",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-10",
+  "base_question_id": "CRM-T2-03-10"
+}

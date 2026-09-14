@@ -1,3 +1,3 @@
-SELECT COUNT(*) AS result
+SELECT COUNT(*) AS contact_count
 FROM contacts c LEFT JOIN interactions i ON c.contact_id = i.contact_id
-WHERE c.title = '{{ title }}' AND i.interaction_id IS NULL;
+WHERE c.title = {{ title | sqlstr }} AND i.interaction_id IS NULL;

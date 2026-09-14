@@ -30,8 +30,10 @@ Dataset in scope: `crm_dataset_v2` (`accounts`, `contacts`, `campaigns`,
 - [ ] Each Section 7.5 imperfection (near-duplicates, missing values,
       outliers, boundary dates) and each missing-relationship scenario is
       mapped to ≥ 1 covering family — `crm_edge_case_coverage_map.csv`.
-- [ ] Rephrase groups are planned toward ~10% coverage —
-      `crm_rephrase_plan.csv` (8 groups; variants not yet generated).
+- [x] Rephrase groups deliver ~10% coverage — `crm_rephrase_plan.csv`
+      (16 groups, 19 reworded variants, 3 classes; each base is one of the
+      real 160 pairs; `generator/rephrase.py` re-verifies numeric identity
+      per variant).
 - [ ] Question families are business-relevant — no purely mechanical
       schema-probing questions.
 - [ ] No family is ambiguous — each has exactly one defensible answer
@@ -63,14 +65,9 @@ Dataset in scope: `crm_dataset_v2` (`accounts`, `contacts`, `campaigns`,
 
 ## Open items affecting this checklist
 
-- **OI-1** (T1 single-table tier) — UNRESOLVED. T1 pairs are generated
-  but held (`crm_t1_pairs_HELD.csv`). Do not include T1 in a frozen
-  taxonomy sign-off until OI-1 is confirmed in writing.
-- **OI-2** (numeric equality format) — UNRESOLVED. `crm_answer_format_matrix.csv`
-  uses a default assumption; re-verify once confirmed.
-- **OI-4** (NULL ingestion semantics) — UNRESOLVED. All T3 families are
-  held as contingent (`crm_t3_pairs_HELD.csv`). Do not include T3 in a
-  frozen sign-off until OI-4 is confirmed in writing.
+- **OI-1** (T1 single-table tier) — **RESOLVED 2026-09-08**: T1 stays. All 32 T1 pairs are in `crm_qa_pairs.csv`.
+- **OI-2** (numeric format) — **RESOLVED 2026-09-08**: golden answers are plain numbers; the eval tool's deterministic evaluator compares numerically.
+- **OI-4** (NULL ingestion) — **RESOLVED 2026-09-08**: empty CSV field ingests as SQL NULL. All 32 T3 pairs are in `crm_qa_pairs.csv`.
 
 ## Sign-off
 

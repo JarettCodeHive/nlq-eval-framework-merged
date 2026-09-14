@@ -1,0 +1,133 @@
+natural_language_question,expected_answer,reference_sql,reference_tables,reference_fields,judge_reference,derivation_rationale
+"For Central-region accounts, compare engagement in the previous quarter with the quarter before it.",320 | 42 | -278 | -86.88 | down,"WITH q AS (
+  SELECT
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-01-01' AND i.interaction_at < DATE '2026-04-01' THEN i.engagement_points ELSE 0 END) AS prev_q,
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS this_q
+  FROM interactions i
+  INNER JOIN contacts c ON i.contact_id = c.contact_id
+  INNER JOIN accounts a ON c.account_id = a.account_id
+  WHERE a.region = 'Central'
+)
+SELECT
+  prev_q AS prev_quarter_points,
+  this_q AS this_quarter_points,
+  this_q - prev_q AS absolute_change,
+  ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change,
+  CASE WHEN this_q > prev_q THEN 'up' WHEN this_q < prev_q THEN 'down' ELSE 'flat' END AS direction
+FROM q;","interactions, contacts, accounts","interactions.contact_id, interactions.interaction_at, interactions.engagement_points, contacts.contact_id, contacts.account_id, accounts.account_id, accounts.region","Total engagement_points for Q1 2026 and Q2 2026 for the named region, the absolute and percentage change, and the direction. Q1 and Q2 are the two most recent complete calendar quarters relative to the reference date 2026-08-01.","Q1 2026 = 2026-01-01..2026-04-01, Q2 2026 = 2026-04-01..2026-07-01 - the two most recent COMPLETE quarters (data ends 2026-07-28, so Q3 is excluded). INNER JOIN interactions -> contacts -> accounts, filter to the region, SUM(engagement_points) per window, then compute absolute and percentage change and direction."
+How did engagement among Central-region accounts change from the January-March 2026 period to the April-June 2026 period?,320 | 42 | -278 | -86.88 | down,"WITH q AS (
+  SELECT
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-01-01' AND i.interaction_at < DATE '2026-04-01' THEN i.engagement_points ELSE 0 END) AS prev_q,
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS this_q
+  FROM interactions i
+  INNER JOIN contacts c ON i.contact_id = c.contact_id
+  INNER JOIN accounts a ON c.account_id = a.account_id
+  WHERE a.region = 'Central'
+)
+SELECT
+  prev_q AS prev_quarter_points,
+  this_q AS this_quarter_points,
+  this_q - prev_q AS absolute_change,
+  ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change,
+  CASE WHEN this_q > prev_q THEN 'up' WHEN this_q < prev_q THEN 'down' ELSE 'flat' END AS direction
+FROM q;","interactions, contacts, accounts","interactions.contact_id, interactions.interaction_at, interactions.engagement_points, contacts.contact_id, contacts.account_id, accounts.account_id, accounts.region","Total engagement_points for Q1 2026 and Q2 2026 for the named region, the absolute and percentage change, and the direction. Q1 and Q2 are the two most recent complete calendar quarters relative to the reference date 2026-08-01.","Q1 2026 = 2026-01-01..2026-04-01, Q2 2026 = 2026-04-01..2026-07-01 - the two most recent COMPLETE quarters (data ends 2026-07-28, so Q3 is excluded). INNER JOIN interactions -> contacts -> accounts, filter to the region, SUM(engagement_points) per window, then compute absolute and percentage change and direction."
+"Among Central-region accounts, which three campaign types generated the most customer activity?",Nurture | 341; CustomerEducation | 279; Awareness | 265,"SELECT ca.campaign_type AS entity, SUM(i.engagement_points) AS metric
+FROM campaigns ca
+INNER JOIN interactions i ON ca.campaign_id = i.campaign_id
+INNER JOIN contacts c ON i.contact_id = c.contact_id
+INNER JOIN accounts a ON c.account_id = a.account_id
+WHERE a.region = 'Central'
+GROUP BY ca.campaign_type ORDER BY metric DESC, entity ASC LIMIT 3;","campaigns, interactions, contacts, accounts","campaigns.campaign_id, campaigns.campaign_type, interactions.campaign_id, interactions.contact_id, interactions.engagement_points, contacts.contact_id, contacts.account_id, accounts.account_id, accounts.region","Exactly three campaign types ranked by total engagement_points among accounts in the named region, highest first, with totals.","Join campaigns -> interactions -> contacts -> accounts, filter to the region, SUM(engagement_points) per campaign_type, order desc with campaign_type tie-break, top 3."
+"For Central-region accounts, name the top three campaign types by total engagement score.",Nurture | 341; CustomerEducation | 279; Awareness | 265,"SELECT ca.campaign_type AS entity, SUM(i.engagement_points) AS metric
+FROM campaigns ca
+INNER JOIN interactions i ON ca.campaign_id = i.campaign_id
+INNER JOIN contacts c ON i.contact_id = c.contact_id
+INNER JOIN accounts a ON c.account_id = a.account_id
+WHERE a.region = 'Central'
+GROUP BY ca.campaign_type ORDER BY metric DESC, entity ASC LIMIT 3;","campaigns, interactions, contacts, accounts","campaigns.campaign_id, campaigns.campaign_type, interactions.campaign_id, interactions.contact_id, interactions.engagement_points, contacts.contact_id, contacts.account_id, accounts.account_id, accounts.region","Exactly three campaign types ranked by total engagement_points among accounts in the named region, highest first, with totals.","Join campaigns -> interactions -> contacts -> accounts, filter to the region, SUM(engagement_points) per campaign_type, order desc with campaign_type tie-break, top 3."
+What is the combined planned spend across all awareness campaigns?,71138.54,"SELECT ROUND(SUM(budget_amount), 2) AS total_budget
+FROM campaigns
+WHERE campaign_type = 'Awareness';",campaigns,"campaigns.campaign_type, campaigns.budget_amount",A single total budget figure for campaigns of the named type.,"Filter campaigns to the given campaign_type, ROUND(SUM(budget_amount), 2). Campaigns with a NULL budget contribute nothing."
+How much budget is allocated to awareness campaigns in total?,71138.54,"SELECT ROUND(SUM(budget_amount), 2) AS total_budget
+FROM campaigns
+WHERE campaign_type = 'Awareness';",campaigns,"campaigns.campaign_type, campaigns.budget_amount",A single total budget figure for campaigns of the named type.,"Filter campaigns to the given campaign_type, ROUND(SUM(budget_amount), 2). Campaigns with a NULL budget contribute nothing."
+"Among Central-region accounts, how many are missing any contact record?",2,"SELECT COUNT(*) AS account_count
+FROM accounts a LEFT JOIN contacts c ON a.account_id = c.account_id
+WHERE a.region = 'Central' AND c.contact_id IS NULL;","accounts, contacts","accounts.account_id, accounts.region, contacts.account_id, contacts.contact_id",A single count of accounts in the named region with zero associated contacts.,"LEFT JOIN accounts to contacts on account_id, filter accounts to the region, keep rows where contact_id IS NULL, count."
+"Right now, which accounts are carrying the biggest unresolved queue of access support cases?",Reynolds Williams and Williams | 3; Barnett Brown | 2; Gordon Rivers and Arnold | 2; Hansen LLC | 2; Hodges Group | 2,"SELECT a.account_name AS entity, COUNT(s.case_id) AS metric
+FROM accounts a INNER JOIN support_cases s ON a.account_id = s.account_id
+WHERE s.category = 'Access'
+  AND s.status IN ('New', 'InProgress', 'PendingCustomer')
+GROUP BY a.account_id, a.account_name ORDER BY metric DESC, entity ASC LIMIT 5;","accounts, support_cases","accounts.account_id, accounts.account_name, support_cases.account_id, support_cases.category, support_cases.status, support_cases.case_id","Top accounts by count of unresolved support cases in the named category, highest first.","INNER JOIN accounts to support_cases on account_id, filter to the category and unresolved statuses, count by account, order desc with account_name tie-break, top 5."
+"Looking at preferred-tier accounts, which region's engagement held up best between the January-March and April-June 2026 periods?",West | 25 | 18 | -28.00,"WITH by_region AS (
+  SELECT a.region,
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-01-01' AND i.interaction_at < DATE '2026-04-01' THEN i.engagement_points ELSE 0 END) AS prev_q,
+    SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS this_q
+  FROM accounts a
+  INNER JOIN contacts c ON a.account_id = c.account_id
+  INNER JOIN interactions i ON c.contact_id = i.contact_id
+  WHERE a.region IS NOT NULL AND a.customer_tier = 'Preferred'
+  GROUP BY a.region
+)
+SELECT region AS entity, prev_q AS prev_quarter_points, this_q AS this_quarter_points,
+  ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change
+FROM by_region ORDER BY pct_change DESC NULLS LAST, region ASC LIMIT 1;","accounts, contacts, interactions","accounts.account_id, accounts.region, accounts.customer_tier, contacts.account_id, contacts.contact_id, interactions.contact_id, interactions.engagement_points, interactions.interaction_at","The single region with the highest percentage change in engagement_points from Q1 2026 to Q2 2026 among accounts in the named customer tier - the largest gain, or (if every region declined) the smallest decline. Regions with zero Q1 engagement are excluded.","Q1 2026 = 2026-01-01..2026-04-01, Q2 2026 = 2026-04-01..2026-07-01 (the two most recent COMPLETE quarters; data ends 2026-07-28). INNER JOIN accounts -> contacts -> interactions, restrict to the tier, SUM(engagement_points) per region per window. pct_change = (Q2 - Q1) / Q1 * 100. Regions with zero Q1 are undefined and sorted last. Take the region with the highest pct_change (does NOT assume growth)."
+"For active contacts, what is the split between inbound and outbound interactions?",Outbound | 493; Inbound | 440,"SELECT i.direction AS entity, COUNT(*) AS metric
+FROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id
+WHERE c.is_active = true
+GROUP BY i.direction ORDER BY metric DESC, entity ASC;","interactions, contacts","interactions.contact_id, interactions.direction, contacts.contact_id, contacts.is_active","Interactions split by direction (Inbound / Outbound) with counts, restricted to contacts matching the active flag.","INNER JOIN interactions to contacts on contact_id, filter to the is_active value, group by direction, order desc with direction tie-break."
+"Of the contacts titled Business Analyst, how many have we never interacted with?",11,"SELECT COUNT(*) AS contact_count
+FROM contacts c LEFT JOIN interactions i ON c.contact_id = i.contact_id
+WHERE c.title = 'Business Analyst' AND i.interaction_id IS NULL;","contacts, interactions","contacts.contact_id, contacts.title, interactions.contact_id, interactions.interaction_id",A single count of contacts holding the named title that have zero interactions.,"LEFT JOIN contacts to interactions on contact_id, filter contacts to the title, keep rows where interaction_id IS NULL, count."
+How many support cases were opened by accounts located in the Central region?,129,"SELECT COUNT(s.case_id) AS case_count
+FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id
+WHERE a.region = 'Central';","support_cases, accounts","support_cases.account_id, support_cases.case_id, accounts.account_id, accounts.region",A single count of support cases whose owning account is in the named region.,"INNER JOIN support_cases to accounts on account_id, filter to the region, count cases."
+"Across our education-sector accounts, how many contacts do we hold?",39,"SELECT COUNT(c.contact_id) AS contact_count
+FROM contacts c INNER JOIN accounts a ON c.account_id = a.account_id
+WHERE a.industry = 'Education';","contacts, accounts","contacts.account_id, contacts.contact_id, accounts.account_id, accounts.industry",A single count of contacts belonging to accounts in the named industry.,"INNER JOIN contacts to accounts on account_id, filter to the industry, count contacts. Unassigned contacts (NULL account_id) are excluded by the INNER JOIN."
+How many support tickets are marked critical?,65,"SELECT COUNT(*) AS case_count
+FROM support_cases
+WHERE priority = 'Critical';",support_cases,support_cases.priority,A single count of support cases at the named priority.,"Filter support_cases to the given priority and count rows, boundary-date cases included."
+"For education-industry accounts, what share of support cases met the SLA deadline?",19.05,"SELECT ROUND(
+  COUNT(*) FILTER (WHERE s.resolved_at IS NOT NULL AND s.resolved_at <= s.sla_due_at)
+  * 100.0 / COUNT(*), 2) AS sla_compliance_pct
+FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id
+WHERE a.industry = 'Education';","support_cases, accounts","support_cases.account_id, support_cases.resolved_at, support_cases.sla_due_at, accounts.account_id, accounts.industry","A single percentage (0-100, two decimals): of all support cases for accounts in the named industry, the share resolved on or before their SLA deadline. Unresolved cases count against the rate.","INNER JOIN support_cases to accounts on account_id, filter to the industry. A case is within SLA when resolved_at IS NOT NULL AND resolved_at <= sla_due_at. Rate = 100.0 * within-SLA count / total case count, rounded to 2 places."
+"For Central-region accounts, give the engagement total for each interaction channel.",Web | 500; Phone | 475; Webinar | 245; Event | 152; Email | 36,"SELECT i.channel AS entity, SUM(i.engagement_points) AS engagement_points
+FROM accounts a
+INNER JOIN contacts c ON a.account_id = c.account_id
+INNER JOIN interactions i ON c.contact_id = i.contact_id
+WHERE a.region = 'Central'
+GROUP BY i.channel
+ORDER BY engagement_points DESC, entity ASC;","accounts, contacts, interactions","accounts.account_id, accounts.region, contacts.account_id, contacts.contact_id, interactions.contact_id, interactions.channel, interactions.engagement_points","Interaction channels ranked by total engagement_points, restricted to interactions of contacts whose account is in the named region, highest first, with totals.","INNER JOIN accounts -> contacts -> interactions, filter to the region, GROUP BY channel, SUM(engagement_points), order desc with channel tie-break."
+"Among education-industry accounts, which ones have a large unresolved case backlog and no engagement in the last 60 days?",Hansen LLC | 7 | 0; Jones PLC | 6 | 0; Lynn PLC | 6 | 0; Smith and Sons | 6 | 0; Blankenship Alexander | 5 | 0,"WITH open_cases AS (
+  SELECT account_id, COUNT(*) AS open_case_count FROM support_cases
+  WHERE status IN ('New', 'InProgress', 'PendingCustomer') GROUP BY account_id
+), recent_engagement AS (
+  SELECT c.account_id, COUNT(*) AS recent_interaction_count
+  FROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id
+  WHERE i.interaction_at >= DATE '2026-06-02' AND c.account_id IS NOT NULL
+  GROUP BY c.account_id
+)
+SELECT a.account_name AS entity,
+       COALESCE(oc.open_case_count, 0) AS open_case_count,
+       COALESCE(re.recent_interaction_count, 0) AS recent_interaction_count
+FROM accounts a
+LEFT JOIN open_cases oc ON a.account_id = oc.account_id
+LEFT JOIN recent_engagement re ON a.account_id = re.account_id
+WHERE a.industry = 'Education'
+  AND COALESCE(oc.open_case_count, 0) >= 3
+  AND COALESCE(re.recent_interaction_count, 0) = 0
+ORDER BY open_case_count DESC, entity ASC LIMIT 5;","accounts, support_cases, interactions, contacts","accounts.account_id, accounts.account_name, accounts.industry, support_cases.account_id, support_cases.status, interactions.contact_id, interactions.interaction_at, contacts.contact_id, contacts.account_id","Accounts in the named industry with at least three unresolved support cases and zero interactions (via their contacts) in the 60 days before the reference date, with the two supporting numbers.","Count unresolved cases per account and interactions since 2026-06-02 (60 days before reference_today 2026-08-01) attributed through the contact's account. Filter to the industry, >= 3 open cases, 0 recent interactions, order by open-case count desc with account_name tie-break, top 5."
+How many interactions are email opens?,158,"SELECT COUNT(*) AS interaction_count
+FROM interactions
+WHERE engagement_type = 'EmailOpen';",interactions,interactions.engagement_type,A single count of interactions of the named engagement type.,Filter interactions to the given engagement_type and count rows.
+"For awareness campaigns, rank contact titles by their total multi-touch attribution weight.",Business Analyst | 8.9691; Procurement Manager | 8.9451; Operations Director | 7.2499; IT Director | 5.3333; Program Manager | 4.3167; Service Delivery Manager | 2.8334; Customer Success Manager | 2.6999,"SELECT c.title AS entity,
+       ROUND(SUM(cc.attribution_weight), 4) AS total_attribution_weight
+FROM contacts c
+INNER JOIN contact_campaigns cc ON c.contact_id = cc.contact_id
+INNER JOIN campaigns ca ON cc.campaign_id = ca.campaign_id
+WHERE ca.campaign_type = 'Awareness'
+  AND c.title IS NOT NULL
+GROUP BY c.title
+ORDER BY total_attribution_weight DESC, entity ASC;","contacts, contact_campaigns, campaigns","contacts.contact_id, contacts.title, contact_campaigns.contact_id, contact_campaigns.campaign_id, contact_campaigns.attribution_weight, campaigns.campaign_id, campaigns.campaign_type","Contact titles ranked by summed attribution_weight for memberships of campaigns of the named type, four decimals, highest first. Memberships whose attribution_weight is missing contribute nothing.","INNER JOIN contacts -> contact_campaigns -> campaigns (all three essential: contacts supplies the grouping title, contact_campaigns the weight, campaigns the filter). Filter to the campaign_type, GROUP BY contacts.title, ROUND(SUM(contact_campaigns.attribution_weight), 4). Rows with a NULL attribution_weight (the ~2.5% missing-value imperfection) are skipped by SUM - the declared NULL handling for this measure. Order desc with title tie-break."

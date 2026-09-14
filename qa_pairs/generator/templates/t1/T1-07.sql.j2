@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS resolved_within_sla
+FROM support_cases
+WHERE priority = {{ priority | sqlstr }}
+  AND resolved_at IS NOT NULL AND resolved_at <= sla_due_at;

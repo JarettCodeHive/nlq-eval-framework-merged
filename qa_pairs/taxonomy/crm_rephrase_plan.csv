@@ -1,9 +1,17 @@
-rephrase_group_id,base_family_id,variant_class,variant_description,expected_numeric_identity
-RG-01,T5-04,Temporal,"Base uses ""from last quarter to this quarter""; variant uses the explicit ranges 2026-04-01..2026-07-01 and 2026-07-01..2026-10-01",All variants must return identical prev_quarter_points and this_quarter_points for the same region
-RG-02,T5-01,Lexical,"Base: ""drove the most engagement""; variant: ""generated the most customer activity""; variant: ""had the highest engagement-point total""",All three variants must return an identical top-3 ranked list of campaign types with identical totals
-RG-03,T1-01,Lexical,"Base: ""total budget""; variant: ""total planned spend""; variant: ""combined campaign budget"" for the same campaign type",All variants must return identical ROUND(SUM(budget_amount), 2)
-RG-04,T3-01,Rephrase,"Base: ""How many {region}-region accounts have no contacts on record?""; variant: ""Among accounts in the {region} region, how many are missing any contact record?""",Both variants must return an identical count
-RG-05,T5-02,Referential,"Base names a specific account; variant refers to ""the account with the largest {category} backlog"" resolved from a prior T5-02 answer",Both variants must resolve to the same account_name and identical open-case count
-RG-06,T5-05,Temporal,"Base: ""compared to last quarter""; variant: explicit prior-quarter range 2026-04-01..2026-07-01",Both variants must return the same region and identical pct_change
-RG-07,T2-05,Lexical,"Base: ""inbound/outbound interaction breakdown""; variant: ""split between inbound and outbound interactions"" for the same contact-active flag",Both variants must return an identical two-row Direction -> count list
-RG-08,T3-03,Rephrase,"Base: ""How many contacts with the title {title} have no recorded interactions?""; variant: ""Of contacts titled {title}, how many have we never interacted with?""",Both variants must return an identical count
+rephrase_group_id,base_family_id,base_parameter,variant_class,variant_count,expected_numeric_identity
+CRM-RG-01,T5-04,region=Central,Temporal,3,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-02,T5-01,region=Central,Lexical,3,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-03,T1-01,campaign_type=Awareness,Lexical,3,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-04,T3-01,region=Central,Rephrase,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-05,T5-02,category=Access,Lexical,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-06,T5-05,customer_tier=Preferred,Temporal,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-07,T2-05,is_active=true,Lexical,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-08,T3-03,title=Business Analyst,Rephrase,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-09,T2-01,region=Central,Rephrase,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-10,T2-03,industry=Education,Lexical,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-11,T1-03,priority=Critical,Lexical,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-12,T2-08,industry=Education,Rephrase,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-13,T4-01,region=Central,Rephrase,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-14,T5-03,industry=Education,Rephrase,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-15,T1-05,engagement_type=EmailOpen,Lexical,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"
+CRM-RG-16,T4-04,campaign_type=Awareness,Rephrase,2,"all variants share the base pair's reference_sql, expected_answer and result_hash"

@@ -1,5 +1,9 @@
-SELECT COUNT(s.case_id) AS result
+SELECT s.category AS entity, ROUND(
+  COUNT(*) FILTER (WHERE s.resolved_at IS NOT NULL AND s.resolved_at <= s.sla_due_at)
+  * 100.0 / COUNT(*), 2) AS sla_compliance_pct
 FROM accounts a
 INNER JOIN contacts c ON a.account_id = c.account_id
 INNER JOIN support_cases s ON c.contact_id = s.contact_id
-WHERE a.industry = '{{ industry }}';
+WHERE a.customer_tier = {{ customer_tier | sqlstr }}
+GROUP BY s.category
+ORDER BY entity ASC;

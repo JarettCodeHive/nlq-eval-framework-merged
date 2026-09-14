@@ -22,21 +22,51 @@ import json
 import sys
 from pathlib import Path
 
-import duckdb
-
 BASE = Path(__file__).resolve().parent.parent
-TABLES = ["accounts", "campaigns", "contacts", "contact_campaigns",
-          "interactions", "support_cases"]
+sys.path.insert(0, str(BASE))
+from utils.duckdb_io import connect_typed  # noqa: E402
+
+TABLES = ["accounts", "campaigns", "contacts", "contact_campaigns", "interactions", "support_cases"]
 
 FK_CHECKS = [
     ("contacts.account_id -> accounts", "contacts", "account_id", "accounts", "account_id"),
-    ("contact_campaigns.contact_id -> contacts", "contact_campaigns", "contact_id", "contacts", "contact_id"),
-    ("contact_campaigns.campaign_id -> campaigns", "contact_campaigns", "campaign_id", "campaigns", "campaign_id"),
+    (
+        "contact_campaigns.contact_id -> contacts",
+        "contact_campaigns",
+        "contact_id",
+        "contacts",
+        "contact_id",
+    ),
+    (
+        "contact_campaigns.campaign_id -> campaigns",
+        "contact_campaigns",
+        "campaign_id",
+        "campaigns",
+        "campaign_id",
+    ),
     ("interactions.contact_id -> contacts", "interactions", "contact_id", "contacts", "contact_id"),
     ("interactions.account_id -> accounts", "interactions", "account_id", "accounts", "account_id"),
-    ("interactions.campaign_id -> campaigns", "interactions", "campaign_id", "campaigns", "campaign_id"),
-    ("support_cases.account_id -> accounts", "support_cases", "account_id", "accounts", "account_id"),
-    ("support_cases.contact_id -> contacts", "support_cases", "contact_id", "contacts", "contact_id"),
+    (
+        "interactions.campaign_id -> campaigns",
+        "interactions",
+        "campaign_id",
+        "campaigns",
+        "campaign_id",
+    ),
+    (
+        "support_cases.account_id -> accounts",
+        "support_cases",
+        "account_id",
+        "accounts",
+        "account_id",
+    ),
+    (
+        "support_cases.contact_id -> contacts",
+        "support_cases",
+        "contact_id",
+        "contacts",
+        "contact_id",
+    ),
 ]
 
 INNER_PATHS = {
@@ -56,28 +86,16 @@ LEFT_UNMATCHED = {
 }
 
 IMPERFECTIONS = {
-    "near-duplicate contacts (same name+account, distinct id/email)":
-        "SELECT COUNT(*) FROM (SELECT first_name, last_name, account_id FROM contacts "
-        "GROUP BY 1, 2, 3 HAVING COUNT(*) > 1)",
-    "missing attribution_weight (~2.5%)":
-        "SELECT COUNT(*) FROM contact_campaigns WHERE attribution_weight IS NULL",
-    "engagement_points outliers (>=50)":
-        "SELECT COUNT(*) FROM interactions WHERE engagement_points >= 50",
-    "boundary-date support cases":
-        "SELECT COUNT(*) FROM support_cases WHERE opened_at <= TIMESTAMP '1900-01-02' OR opened_at >= TIMESTAMP '2099-01-01'",
+    "near-duplicate contacts (same name+account, distinct id/email)": "SELECT COUNT(*) FROM (SELECT first_name, last_name, account_id FROM contacts "
+    "GROUP BY 1, 2, 3 HAVING COUNT(*) > 1)",
+    "missing attribution_weight (~2.5%)": "SELECT COUNT(*) FROM contact_campaigns WHERE attribution_weight IS NULL",
+    "engagement_points outliers (>=50)": "SELECT COUNT(*) FROM interactions WHERE engagement_points >= 50",
+    "boundary-date support cases": "SELECT COUNT(*) FROM support_cases WHERE opened_at <= TIMESTAMP '1900-01-02' OR opened_at >= TIMESTAMP '2099-01-01'",
 }
 
 
 def connect(profile: str):
-    data_dir = BASE / "dataset" / profile
-    if not data_dir.is_dir():
-        raise SystemExit(f"run generate_crm.py --profile {profile} first")
-    con = duckdb.connect()
-    for tbl in TABLES:
-        con.execute(
-            f"CREATE TABLE {tbl} AS SELECT * FROM "
-            f"read_csv_auto('{(data_dir / f'{tbl}.csv').as_posix()}', header=True)")
-    return con
+    return connect_typed(BASE / "dataset" / f"crm_{profile}.duckdb")
 
 
 def main() -> None:
@@ -91,7 +109,8 @@ def main() -> None:
     for label, ct, cc, pt, pc in FK_CHECKS:
         orphans = con.execute(
             f"SELECT COUNT(*) FROM {ct} x WHERE x.{cc} IS NOT NULL AND NOT EXISTS "
-            f"(SELECT 1 FROM {pt} p WHERE p.{pc} = x.{cc})").fetchone()[0]
+            f"(SELECT 1 FROM {pt} p WHERE p.{pc} = x.{cc})"
+        ).fetchone()[0]
         ok = orphans == 0
         failures += not ok
         print(f"  {'ok ' if ok else 'FAIL'} {label}: {orphans} orphan(s)")
@@ -110,14 +129,16 @@ def main() -> None:
         failures += not ok
         print(f"  {'ok ' if ok else 'FAIL'} {label}: {n:,} unmatched")
 
-    print(f"[{profile}] controlled imperfections (present at full scale; "
-          f"exact-match proxies may read 0 on the 1%% dev sample)")
+    print(
+        f"[{profile}] controlled imperfections (present at full scale; "
+        f"exact-match proxies may read 0 on the 1%% dev sample)"
+    )
     for label, sql in IMPERFECTIONS.items():
         n = con.execute(sql).fetchone()[0]
         if n > 0:
             mark = "ok  "
         elif profile == "dev":
-            mark = "warn"          # dev sample is too small to guarantee every type
+            mark = "warn"  # dev sample is too small to guarantee every type
         else:
             mark = "FAIL"
             failures += 1

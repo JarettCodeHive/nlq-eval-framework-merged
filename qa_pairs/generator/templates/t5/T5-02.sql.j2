@@ -1,5 +1,5 @@
 SELECT a.account_name AS entity, COUNT(s.case_id) AS metric
 FROM accounts a INNER JOIN support_cases s ON a.account_id = s.account_id
-WHERE s.category = '{{ category }}'
+WHERE s.category = {{ category | sqlstr }}
   AND s.status IN ('New', 'InProgress', 'PendingCustomer')
 GROUP BY a.account_id, a.account_name ORDER BY metric DESC, entity ASC LIMIT 5;

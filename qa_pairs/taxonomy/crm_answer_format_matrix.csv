@@ -1,9 +1,17 @@
-question_shape,tier(s),serialization,example,notes
-scalar_int,T1;T2;T3;T4,"single integer, str(value)",29049,COUNT results; DuckDB BIGINT rendered plain
-scalar_money,T1,"ROUND(SUM(x),2), str(value) - trailing zero not padded",25549190.91,"OI-2 interim: period decimal, no thousands separator, no currency symbol"
-entity_metric,T2;T5,"label + ' | ' + metric",Standard | 6229,single-row GROUP BY ... LIMIT 1
-ranked_list,T2;T4;T5,"rows joined by '; ', columns within a row joined by ' | '",Chen Bell | 448; Fernandez Perez | 424,ORDER BY ... LIMIT N ; deterministic tie-break column required
-two_value,T5,"v1 + ' | ' + v2",112097 | 16730,two aggregates in one row (period comparison)
-entity_multi,T5,"label + ' | ' + v1 + ' | ' + v2 + ' | ' + v3",Central | 17742 | 2872 | -83.81,single-row multi-column result
-blocked_zero_rows,-,verification log only,-,pair is logged and withheld from the CSV
-blocked_null_scalar,-,verification log only,-,NULL where a number is expected; withheld
+# OI-2 resolved 2026-09-08: golden answers are PLAIN NUMBERS (no $ / thousands separator / unit noun).
+# scoring_mode (Section 9.2, one per tier) is recorded per pair in crm_qa_pairs_companion.csv; utils/scoring.py implements all three.
+#   scalar_exact      = first number extracted from the response, numeric compare at zero tolerance
+#   table_exact       = row- and cell-exact, order significant, numeric cells at zero tolerance
+#   judge_plus_exact  = LLM Judge on the prose PLUS every golden number matched in order at zero tolerance
+question_shape,tier(s),scoring_mode,serialization (utils/serialization.py),example,notes
+scalar_int,T1;T2;T3,scalar_exact,"single integer, str(value)",29049,COUNT results; DuckDB BIGINT rendered plain
+scalar_money,T1,scalar_exact,"Decimal, quantized to 2 places always (never float)",23184584.00,"period decimal, no thousands separator, no currency symbol. Column name contains budget/amount/value."
+scalar_pct,T2,scalar_exact,"Decimal/float, 2 places",23.21,"SLA compliance percentage 0-100. Column name contains pct/percent/rate."
+entity_metric,T2,table_exact,"label + ' | ' + metric",Standard | 6229,single-row GROUP BY ... LIMIT 1 (T2-02)
+ranked_list,T2;T4,table_exact,"rows joined by '; ', columns within a row joined by ' | '",Phone | 85476; Web | 61950,ORDER BY ... [LIMIT N]; deterministic tie-break column required (T2-05/06; all T4)
+ranked_list,T5,judge_plus_exact,"rows joined by '; ', columns within a row joined by ' | '",Awareness | 40210; Nurture | 33110; Retention | 21877,"T5-01/02: numeric components enforced exactly, ranking prose judged"
+entity_pct_list,T4,table_exact,"label + ' | ' + pct per row, '; ' between rows",Access | 23.83; Billing | 22.29,T4-03 SLA rate grouped by category
+five_value (T5-04),T5,judge_plus_exact,"prev | this | absolute_change | pct_change | direction",43891 | 20923 | -22968 | -52.33 | down,"direction is up/down/flat; pct_change 2 places; NULL pct when prev = 0"
+entity_multi (T5-05),T5,judge_plus_exact,"region | prev_quarter_points | this_quarter_points | pct_change",Central | 11791 | 6277 | -46.76,single-row multi-column; ORDER BY pct_change DESC NULLS LAST picks the most favourable trend (not necessarily growth)
+blocked_zero_rows,-,-,"verification log only (*.blocked.json)",-,pair withheld from the CSV
+blocked_null_scalar,-,-,verification log only,-,1x1 NULL where a value is expected; withheld

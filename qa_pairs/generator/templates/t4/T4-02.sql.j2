@@ -1,5 +1,7 @@
-SELECT SUM(i.engagement_points) AS result
+SELECT s.priority AS entity, COUNT(s.case_id) AS case_count
 FROM accounts a
 INNER JOIN contacts c ON a.account_id = c.account_id
-INNER JOIN interactions i ON c.contact_id = i.contact_id
-WHERE a.industry = '{{ industry }}';
+INNER JOIN support_cases s ON c.contact_id = s.contact_id
+WHERE a.industry = {{ industry | sqlstr }}
+GROUP BY s.priority
+ORDER BY case_count DESC, entity ASC;

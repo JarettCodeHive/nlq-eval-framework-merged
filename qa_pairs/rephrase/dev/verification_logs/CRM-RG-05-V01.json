@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-05-V01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT a.account_name AS entity, COUNT(s.case_id) AS metric\nFROM accounts a INNER JOIN support_cases s ON a.account_id = s.account_id\nWHERE s.category = 'Access'\n  AND s.status IN ('New', 'InProgress', 'PendingCustomer')\nGROUP BY a.account_id, a.account_name ORDER BY metric DESC, entity ASC LIMIT 5;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "716bb2b8b32abd2dbef04e4b6dcd9d023d5666aa2aaa2506f9e9c2fc78e05cdc",
+  "generated_expected_answer": "Reynolds Williams and Williams | 3; Barnett Brown | 2; Gordon Rivers and Arnold | 2; Hansen LLC | 2; Hodges Group | 2",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-05",
+  "base_question_id": "CRM-T5-02-06"
+}

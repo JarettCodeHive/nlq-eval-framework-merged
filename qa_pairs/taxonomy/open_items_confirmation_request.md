@@ -1,116 +1,66 @@
-# Written Confirmation Request — CRM Open Items (OI-1, OI-2, OI-4)
+# CRM Open Items — status
 
-Source: `NLQ_Evaluation_Framework_Execution_Scope_updated.pdf`, Section 23
-(Open Items Requiring Decision). These three items block or risk CRM Q&A
-authoring. This file is a draft ready to send to the named owners; it is
-not itself a resolution.
-
-Dataset in scope: `crm_dataset_v2` — tables `accounts`, `contacts`,
-`campaigns`, `contact_campaigns`, `interactions`, `support_cases`.
+Source: `NLQ_Evaluation_Framework_Execution_Scope_updated.pdf`, Section 23.
+Dataset in scope: `crm_dataset_v2` — `accounts`, `contacts`, `campaigns`,
+`contact_campaigns`, `interactions`, `support_cases`.
 `reference_today` = `2026-08-01`.
 
----
+## 1. Resolved (Platform Owner team, Slack, 2026-09-08)
 
-## OI-1 — T1 single-table tier vs. shortcut-prevention rule
+| Item | Ruling | Who |
+|---|---|---|
+| **OI-1** T1 single-table tier | T1 stays a single-table control tier at the 20% / 32-pair quota; Section 8.2's minimum-join-depth rule is scoped to T2–T5. | Evan Uyehara |
+| **OI-2** numeric answer format | Golden answers are stored as **plain numbers** — no `$`, no thousands separator, no unit noun. The evaluator's **Deterministic** mode extracts the first number from the platform response and compares it numerically (configurable tolerance). Multi-value answers are handled by the **LLM Judge (Binary)** (Gemini 2.5 Flash). | Aichi Lin |
+| **OI-3** date-valued answers | Exact match, no tolerance. | Evan Uyehara |
+| **OI-4** empty CSV field on ingestion | Ingested as **SQL NULL** in the platform DB — the T3 LEFT-JOIN "missing relationship" assumption is correct. | Aichi Lin |
 
-**Owner:** Engagement Lead → Platform Owner
-**Blocking:** CRM T1 pair authoring
+### Evidence — replies as received
 
-**The conflict, as written in the scope doc:**
-- Section 9.1 sets T1 ("single-table aggregation") at 20% of all pairs —
-  32 of CRM's 160.
-- Section 8.2 states: *"for tiers T2 through T5, the schema must make it
-  impossible to answer the question correctly from a single table…
-  Minimum 2-hop join depth applies to T2–T5 questions."*
+> **Evan Uyehara:** "OI-1 — include the single-table tier as written, 20%.
+> The join-depth rule in 8.2 is for T2 through T5. OI-3 — dates are an exact
+> string match, no tolerance window."
 
-Section 8.2 scopes the join-depth rule to T2–T5, which reads as a
-built-in exemption for T1 — but Section 23 flags this as "directly
-contradictory" with no recorded resolution, so we are not treating the
-exemption as confirmed.
+> **Aichi Lin:** "OI-4 — an empty field in the CSV is stored as null in the
+> platform database, so your LEFT JOIN / IS NULL answers are right. OI-2 —
+> don't format the golden answer. Store `3663`, not `3,663 devices`. Store
+> `1772515.87`, not `$1,772,515.87`. The deterministic evaluator grabs the
+> first number in the model's response and does a numeric compare. For
+> anything that isn't a single number, the LLM judge does a semantic
+> pass/fail against your reference answer."
 
-**Question for the Platform Owner:**
-Is T1 a genuine single-table control tier (no join required, exempt from
-Section 8.2), at the 20% / 32-pair CRM quota? Or is the T1 quota
-redistributed into T2–T5, with every tier requiring at least one join?
+> **Aichi Lin (evaluator types, follow-up):** "Two evaluators. Deterministic
+> = first-number extraction + numeric compare, tolerance configurable — fast
+> but lower accuracy because it depends on where the number lands in the
+> response. LLM Judge (Binary) = Gemini 2.5 Flash, semantic, returns
+> pass/fail. Use the judge for lists and multi-part answers."
 
-**Interim handling:** CRM T1 pairs are generated (32, full quota) but
-written to `qa_pairs/<profile>/crm_t1_pairs_HELD.csv` and the T1 seeds to
-`crm_qa_pairs_seed_HELD.csv`. Either ruling costs a merge, not a rewrite
-(Risk R-10 mitigation).
+*(Slack thread: Platform Owner channel, 2026-09-08. Export/permalink to be
+attached to the milestone sign-off packet.)*
 
----
+## 2. Still open
 
-## OI-2 — Numeric equality semantics for `expected_answer`
+| # | Question | Owner | Blocks | Interim posture |
+|---|---|---|---|---|
+| a | Confirm numeric tolerance is set to **0** for our evaluation runs (spec change C2 mandates zero). | Platform Owner DRI | strict exact-match claim | `utils/scoring.py` compares at `Decimal("0")`; `config.json` `scoring.numeric_tolerance` is `"0"`. A non-zero platform tolerance would only *loosen* pass criteria. |
+| b | Confirm the list/composite serialization the **LLM Judge** expects for the **24 `judge_plus_exact` (T5)** answers. | Aichi Lin | T5 judge scoring | POC serializes rows as `a \| b; c \| d`; every numeric component is enforced exactly by `utils/scoring.py`; the judge only scores the prose. `scorer_status=draft` until confirmed. |
 
-**Owner:** Evaluation Engineer → Platform Owner DRI
-**Blocking:** affects every `expected_answer` value generated
+Note: the T4 and T2-02/05/06 answers are now `table_exact` (deterministic
+row/cell match), **not** judge-scored — they no longer depend on item b.
 
-**The gap, as written in the scope doc:**
-No section defines decimal precision, rounding, or string formatting for
-numeric answers. Section 9.4 requires exact-match with zero tolerance,
-which is undefined without a canonical numeric format. Concrete CRM
-cases:
-- `crm_t1_pairs_HELD.csv` budget totals: is `25549190.91` correct, or
-  `25,549,190.91`, or `25549190.9`? (DuckDB `ROUND(SUM(x),2)` currently
-  emits `25549190.91`.)
-- engagement-point counts render as bare integers (`28731`).
-- `crm_t5_pairs.csv` percentage-change values (`-83.2`) — precision and
-  rounding method are undefined.
+Neither blocks authoring — the pairs are generated and verified; only the
+downstream scoring configuration is pending.
 
-**Question for the Platform Owner:**
-Confirm the canonical format for numeric `expected_answer` values:
-- Fixed decimal places per measure (currency/budget = 2dp, counts = 0dp)?
-- Thousands separators absent (per the Section 8.1 CSV contract) — does
-  that rule apply to `expected_answer` strings, or only to exported CSV
-  data fields?
-- Rounding method (banker's vs round-half-up) for derived
-  averages/percentages?
+## 3. Interim handling in the POC
 
-**Interim handling:** the POC uses the Section 8.1 CSV convention (period
-decimal, no thousands separator, `ROUND(...,2)` on money) as the default
-— see `crm_answer_format_matrix.csv`.
-
----
-
-## OI-4 — NULL representation on ingestion
-
-**Owner:** Data Engineering Lead → Platform Owner DRI
-**Blocking:** before any T3 pair ships; affects every T3 (LEFT JOIN) pair
-
-**The risk, as written in the scope doc:**
-Golden CSVs represent NULL as an empty field (Section 8.1). If the
-platform's ingestion reads an empty CSV field as an empty string rather
-than SQL NULL, every T3 answer computed against true-NULL semantics will
-not match what the platform treats as "no match" — the whole T3 tier
-(32 CRM pairs) is at risk of a systematic mismatch that is a platform
-ingestion issue, not a dataset or taxonomy defect.
-
-CRM T3 families that depend on this: accounts with no contacts, accounts
-with no direct interactions, contacts with no interactions, contacts not
-in any campaign, campaigns with no attributed interactions, contacts with
-no support cases (`crm_t3_pairs_HELD.csv`, families T3-01…T3-06).
-
-**Question for the Platform Owner:**
-When the platform ingests a CSV with an empty field for a nullable
-column, is that value interpreted as SQL NULL (excluded from
-joins/aggregations) or as an empty string (a real value subject to
-string comparison)?
-
-**Interim handling:** T3 families and pairs are drafted against true-NULL
-semantics and held in `crm_t3_pairs_HELD.csv`; every T3 family is marked
-in `crm_edge_case_coverage_map.csv` as OI-4-dependent so they can be
-isolated for rework without touching approved T1/T2/T4/T5 content.
-
----
-
-## Summary for whoever sends these
-
-| ID | Send to | Blocks | Interim posture |
-|---|---|---|---|
-| OI-1 | Platform Owner (via Engagement Lead) | T1 quota validity | 32 T1 pairs generated, held in `*_HELD.csv` |
-| OI-2 | Platform Owner DRI (via Evaluation Engineer) | `expected_answer` format | Default to Section 8.1 CSV format |
-| OI-4 | Platform Owner DRI (via Data Engineering Lead) | All 32 T3 pairs | Generated against true-NULL, held as contingent |
-
-None of these block T2, T4, or T5 authoring — those depend on none of a
-single-table exemption, answer-format edge cases, or NULL/LEFT-JOIN
-ingestion semantics.
+- All 160 pairs are generated to full quota and written to
+  `qa_pairs/<profile>/crm_qa_pairs.csv`. The earlier held-file split for
+  T1/T3 was removed once OI-1 and OI-4 were resolved.
+- `generator/config.json` `resolved_open_items` records each ruling with
+  attribution and date.
+- `qa_pairs/<profile>/crm_qa_pairs_companion.csv` carries `scoring_mode`
+  (`scalar_exact` | `table_exact` | `judge_plus_exact`, one per tier per
+  Section 9.2) plus `answer_schema`, `numeric_components`, and
+  `scorer_status`, so the downstream evaluator scores each pair without
+  re-deriving anything. `utils/scoring.py` is the reference implementation.
+- Every T3 family is tagged in `crm_edge_case_coverage_map.csv` so the
+  LEFT-JOIN/NULL set stays isolable if OI-4 is ever revisited.

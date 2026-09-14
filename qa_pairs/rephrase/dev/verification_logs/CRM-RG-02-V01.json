@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-02-V01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT ca.campaign_type AS entity, SUM(i.engagement_points) AS metric\nFROM campaigns ca\nINNER JOIN interactions i ON ca.campaign_id = i.campaign_id\nINNER JOIN contacts c ON i.contact_id = c.contact_id\nINNER JOIN accounts a ON c.account_id = a.account_id\nWHERE a.region = 'Central'\nGROUP BY ca.campaign_type ORDER BY metric DESC, entity ASC LIMIT 3;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 3,
+  "result_hash": "c0fc8efed4902a66404956d918202b001901e955ff389c62a6eb0c2f02661c81",
+  "generated_expected_answer": "Nurture | 341; CustomerEducation | 279; Awareness | 265",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-02",
+  "base_question_id": "CRM-T5-01-01"
+}

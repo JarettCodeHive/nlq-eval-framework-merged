@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-07-V01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT i.direction AS entity, COUNT(*) AS metric\nFROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id\nWHERE c.is_active = true\nGROUP BY i.direction ORDER BY metric DESC, entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 2,
+  "result_hash": "22ad7d779d341edd60bbeab48de98720ef6eefe6b4ec989d14f151c3572cd889",
+  "generated_expected_answer": "Outbound | 493; Inbound | 440",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-07",
+  "base_question_id": "CRM-T2-05-22"
+}

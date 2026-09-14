@@ -1,0 +1,36 @@
+pair_group_id,question_id,is_base,variant_class,result_hash,natural_language_question
+CRM-RG-01,CRM-T5-04-18,yes,Temporal,3b043d60ba107966bc397d4f82569f5ba1d6bedb2c7c0542b55937ad3dca38ed,How did engagement among Central-region accounts change from Q1 2026 to Q2 2026?
+CRM-RG-01,CRM-RG-01-V01,no,Temporal,3b043d60ba107966bc397d4f82569f5ba1d6bedb2c7c0542b55937ad3dca38ed,"For Central-region accounts, compare engagement in the previous quarter with the quarter before it."
+CRM-RG-01,CRM-RG-01-V02,no,Temporal,3b043d60ba107966bc397d4f82569f5ba1d6bedb2c7c0542b55937ad3dca38ed,How did engagement among Central-region accounts change from the January-March 2026 period to the April-June 2026 period?
+CRM-RG-02,CRM-T5-01-01,yes,Lexical,c0fc8efed4902a66404956d918202b001901e955ff389c62a6eb0c2f02661c81,Which three campaign types drove the most engagement among Central-region accounts?
+CRM-RG-02,CRM-RG-02-V01,no,Lexical,c0fc8efed4902a66404956d918202b001901e955ff389c62a6eb0c2f02661c81,"Among Central-region accounts, which three campaign types generated the most customer activity?"
+CRM-RG-02,CRM-RG-02-V02,no,Lexical,c0fc8efed4902a66404956d918202b001901e955ff389c62a6eb0c2f02661c81,"For Central-region accounts, name the top three campaign types by total engagement score."
+CRM-RG-03,CRM-T1-01-01,yes,Lexical,0f0cd5f71522a01234be3befcaa294dc3a76b35e09a90ce691d92ea1ac51b1be,What is the total budget of awareness campaigns?
+CRM-RG-03,CRM-RG-03-V01,no,Lexical,0f0cd5f71522a01234be3befcaa294dc3a76b35e09a90ce691d92ea1ac51b1be,What is the combined planned spend across all awareness campaigns?
+CRM-RG-03,CRM-RG-03-V02,no,Lexical,0f0cd5f71522a01234be3befcaa294dc3a76b35e09a90ce691d92ea1ac51b1be,How much budget is allocated to awareness campaigns in total?
+CRM-RG-04,CRM-T3-01-01,yes,Rephrase,d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35,How many Central-region accounts have no contacts on record?
+CRM-RG-04,CRM-RG-04-V01,no,Rephrase,d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35,"Among Central-region accounts, how many are missing any contact record?"
+CRM-RG-05,CRM-T5-02-06,yes,Lexical,716bb2b8b32abd2dbef04e4b6dcd9d023d5666aa2aaa2506f9e9c2fc78e05cdc,Which accounts have the largest open backlog of access support cases right now?
+CRM-RG-05,CRM-RG-05-V01,no,Lexical,716bb2b8b32abd2dbef04e4b6dcd9d023d5666aa2aaa2506f9e9c2fc78e05cdc,"Right now, which accounts are carrying the biggest unresolved queue of access support cases?"
+CRM-RG-06,CRM-T5-05-22,yes,Temporal,32671dbd2c26434b05b02c3469f89b211ae9ab059aa2cc25592d1433c248b3b0,Which region had the best engagement trend among preferred-tier accounts from Q1 2026 to Q2 2026?
+CRM-RG-06,CRM-RG-06-V01,no,Temporal,32671dbd2c26434b05b02c3469f89b211ae9ab059aa2cc25592d1433c248b3b0,"Looking at preferred-tier accounts, which region's engagement held up best between the January-March and April-June 2026 periods?"
+CRM-RG-07,CRM-T2-05-22,yes,Lexical,22ad7d779d341edd60bbeab48de98720ef6eefe6b4ec989d14f151c3572cd889,What is the inbound / outbound interaction breakdown for active contacts?
+CRM-RG-07,CRM-RG-07-V01,no,Lexical,22ad7d779d341edd60bbeab48de98720ef6eefe6b4ec989d14f151c3572cd889,"For active contacts, what is the split between inbound and outbound interactions?"
+CRM-RG-08,CRM-T3-03-13,yes,Rephrase,4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8,How many contacts with the title Business Analyst have no recorded interactions?
+CRM-RG-08,CRM-RG-08-V01,no,Rephrase,4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8,"Of the contacts titled Business Analyst, how many have we never interacted with?"
+CRM-RG-09,CRM-T2-01-01,yes,Rephrase,6566230e3a3ce3774c1bbc7c18b590ae0f457bbcd511e90e3e7dca2a02e7addc,How many support cases belong to Central-region accounts?
+CRM-RG-09,CRM-RG-09-V01,no,Rephrase,6566230e3a3ce3774c1bbc7c18b590ae0f457bbcd511e90e3e7dca2a02e7addc,How many support cases were opened by accounts located in the Central region?
+CRM-RG-10,CRM-T2-03-10,yes,Lexical,0b918943df0962bc7a1824c0555a389347b4febdc7cf9d1254406d80ce44e3f9,How many contacts do we have across accounts in education?
+CRM-RG-10,CRM-RG-10-V01,no,Lexical,0b918943df0962bc7a1824c0555a389347b4febdc7cf9d1254406d80ce44e3f9,"Across our education-sector accounts, how many contacts do we hold?"
+CRM-RG-11,CRM-T1-03-11,yes,Lexical,108c995b953c8a35561103e2014cf828eb654a99e310f87fab94c2f4b7d2a04f,How many support cases are logged at critical priority?
+CRM-RG-11,CRM-RG-11-V01,no,Lexical,108c995b953c8a35561103e2014cf828eb654a99e310f87fab94c2f4b7d2a04f,How many support tickets are marked critical?
+CRM-RG-12,CRM-T2-08-35,yes,Rephrase,178286a6eeca3a17779f390540b94a46aa2127ac7a9cc9672eda8aa5be3f568f,What percentage of support cases for accounts in education were resolved within their SLA deadline?
+CRM-RG-12,CRM-RG-12-V01,no,Rephrase,178286a6eeca3a17779f390540b94a46aa2127ac7a9cc9672eda8aa5be3f568f,"For education-industry accounts, what share of support cases met the SLA deadline?"
+CRM-RG-13,CRM-T4-01-01,yes,Rephrase,399073271da018aa191e3c2b17548145adae7b561b1153b008ea5cfa23de334b,"For Central-region accounts, how does engagement break down by interaction channel?"
+CRM-RG-13,CRM-RG-13-V01,no,Rephrase,399073271da018aa191e3c2b17548145adae7b561b1153b008ea5cfa23de334b,"For Central-region accounts, give the engagement total for each interaction channel."
+CRM-RG-14,CRM-T5-03-12,yes,Rephrase,16e210ef5a87fa82ef2dc145db2eb22621b57bf2c45bffa9f7536de19b2a7c41,Which accounts in education look at risk from an open support backlog and no recent engagement?
+CRM-RG-14,CRM-RG-14-V01,no,Rephrase,16e210ef5a87fa82ef2dc145db2eb22621b57bf2c45bffa9f7536de19b2a7c41,"Among education-industry accounts, which ones have a large unresolved case backlog and no engagement in the last 60 days?"
+CRM-RG-15,CRM-T1-05-19,yes,Lexical,7ed8f0f3b707956d9fb1e889e11153e0aa0a854983081d262fbe5eede32da7ca,How many interactions are email open events?
+CRM-RG-15,CRM-RG-15-V01,no,Lexical,7ed8f0f3b707956d9fb1e889e11153e0aa0a854983081d262fbe5eede32da7ca,How many interactions are email opens?
+CRM-RG-16,CRM-T4-04-16,yes,Rephrase,4623169002d38a0295b9e3fd28124313d43a8e4fc858f33ca931b087d1b84fc8,"For awareness campaigns, which contact titles carry the most multi-touch attribution weight?"
+CRM-RG-16,CRM-RG-16-V01,no,Rephrase,4623169002d38a0295b9e3fd28124313d43a8e4fc858f33ca931b087d1b84fc8,"For awareness campaigns, rank contact titles by their total multi-touch attribution weight."

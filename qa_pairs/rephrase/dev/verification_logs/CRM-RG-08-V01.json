@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-08-V01",
+  "domain": "crm",
+  "tier": "T3",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(*) AS contact_count\nFROM contacts c LEFT JOIN interactions i ON c.contact_id = i.contact_id\nWHERE c.title = 'Business Analyst' AND i.interaction_id IS NULL;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8",
+  "generated_expected_answer": "11",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-08",
+  "base_question_id": "CRM-T3-03-13"
+}

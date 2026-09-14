@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-15-V01",
+  "domain": "crm",
+  "tier": "T1",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(*) AS interaction_count\nFROM interactions\nWHERE engagement_type = 'EmailOpen';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "7ed8f0f3b707956d9fb1e889e11153e0aa0a854983081d262fbe5eede32da7ca",
+  "generated_expected_answer": "158",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-15",
+  "base_question_id": "CRM-T1-05-19"
+}

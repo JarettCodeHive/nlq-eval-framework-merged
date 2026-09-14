@@ -3,5 +3,5 @@ FROM campaigns ca
 INNER JOIN interactions i ON ca.campaign_id = i.campaign_id
 INNER JOIN contacts c ON i.contact_id = c.contact_id
 INNER JOIN accounts a ON c.account_id = a.account_id
-WHERE a.region = '{{ region }}'
+WHERE a.region = {{ region | sqlstr }}
 GROUP BY ca.campaign_type ORDER BY metric DESC, entity ASC LIMIT 3;

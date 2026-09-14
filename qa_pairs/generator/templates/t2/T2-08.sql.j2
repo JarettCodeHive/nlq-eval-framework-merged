@@ -1,0 +1,5 @@
+SELECT ROUND(
+  COUNT(*) FILTER (WHERE s.resolved_at IS NOT NULL AND s.resolved_at <= s.sla_due_at)
+  * 100.0 / COUNT(*), 2) AS sla_compliance_pct
+FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id
+WHERE a.industry = {{ industry | sqlstr }};

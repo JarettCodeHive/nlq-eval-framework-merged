@@ -1,3 +1,3 @@
-SELECT COUNT(*) AS result
+SELECT COUNT(*) AS interaction_count
 FROM interactions
-WHERE engagement_type = '{{ engagement_type }}';
+WHERE engagement_type = {{ engagement_type | sqlstr }};

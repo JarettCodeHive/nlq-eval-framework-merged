@@ -1,4 +1,4 @@
 SELECT a.account_name AS entity, COUNT(i.interaction_id) AS metric
 FROM accounts a INNER JOIN interactions i ON a.account_id = i.account_id
-WHERE i.engagement_type = '{{ engagement_type }}'
+WHERE i.engagement_type = {{ engagement_type | sqlstr }}
 GROUP BY a.account_id, a.account_name ORDER BY metric DESC, entity ASC LIMIT 5;

@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-09-V01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(s.case_id) AS case_count\nFROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id\nWHERE a.region = 'Central';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "6566230e3a3ce3774c1bbc7c18b590ae0f457bbcd511e90e3e7dca2a02e7addc",
+  "generated_expected_answer": "129",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-09",
+  "base_question_id": "CRM-T2-01-01"
+}

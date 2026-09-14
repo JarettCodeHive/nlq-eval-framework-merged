@@ -1,5 +1,9 @@
-SELECT COUNT(i.interaction_id) AS result
-FROM interactions i
-INNER JOIN contacts c ON i.contact_id = c.contact_id
-INNER JOIN accounts a ON c.account_id = a.account_id
-WHERE i.engagement_type = '{{ engagement_type }}' AND a.customer_tier = '{{ customer_tier }}';
+SELECT c.title AS entity,
+       ROUND(SUM(cc.attribution_weight), 4) AS total_attribution_weight
+FROM contacts c
+INNER JOIN contact_campaigns cc ON c.contact_id = cc.contact_id
+INNER JOIN campaigns ca ON cc.campaign_id = ca.campaign_id
+WHERE ca.campaign_type = {{ campaign_type | sqlstr }}
+  AND c.title IS NOT NULL
+GROUP BY c.title
+ORDER BY total_attribution_weight DESC, entity ASC;

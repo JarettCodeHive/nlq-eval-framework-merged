@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-06-V01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "WITH by_region AS (\n  SELECT a.region,\n    SUM(CASE WHEN i.interaction_at >= DATE '2026-01-01' AND i.interaction_at < DATE '2026-04-01' THEN i.engagement_points ELSE 0 END) AS prev_q,\n    SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS this_q\n  FROM accounts a\n  INNER JOIN contacts c ON a.account_id = c.account_id\n  INNER JOIN interactions i ON c.contact_id = i.contact_id\n  WHERE a.region IS NOT NULL AND a.customer_tier = 'Preferred'\n  GROUP BY a.region\n)\nSELECT region AS entity, prev_q AS prev_quarter_points, this_q AS this_quarter_points,\n  ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change\nFROM by_region ORDER BY pct_change DESC NULLS LAST, region ASC LIMIT 1;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "32671dbd2c26434b05b02c3469f89b211ae9ab059aa2cc25592d1433c248b3b0",
+  "generated_expected_answer": "West | 25 | 18 | -28.00",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-06",
+  "base_question_id": "CRM-T5-05-22"
+}

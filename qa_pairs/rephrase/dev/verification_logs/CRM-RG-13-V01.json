@@ -1,0 +1,23 @@
+{
+  "question_id": "CRM-RG-13-V01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT i.channel AS entity, SUM(i.engagement_points) AS engagement_points\nFROM accounts a\nINNER JOIN contacts c ON a.account_id = c.account_id\nINNER JOIN interactions i ON c.contact_id = i.contact_id\nWHERE a.region = 'Central'\nGROUP BY i.channel\nORDER BY engagement_points DESC, entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "399073271da018aa191e3c2b17548145adae7b561b1153b008ea5cfa23de334b",
+  "generated_expected_answer": "Web | 500; Phone | 475; Webinar | 245; Event | 152; Email | 36",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "rephrase",
+  "pair_group_id": "CRM-RG-13",
+  "base_question_id": "CRM-T4-01-01"
+}

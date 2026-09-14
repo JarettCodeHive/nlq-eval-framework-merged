@@ -1,29 +1,36 @@
-family_id,tier,join_path_id,parameter,param_count,poc_status,question_shape,description
-T1-01,T1,-,campaign_type,5,scaled(HELD),scalar_money,Total campaign budget for a given campaign type
-T1-02,T1,-,campaign_status,5,scaled(HELD),scalar_int,Count of campaigns in a given status
-T1-03,T1,-,priority,4,scaled(HELD),scalar_int,Count of support cases at a given priority
-T1-04,T1,-,category,6,scaled(HELD),scalar_int,Count of support cases in a given category
-T1-05,T1,-,engagement_type,7,scaled(HELD),scalar_int,Count of interactions of a given engagement type
-T1-06,T1,-,region,5,scaled(HELD),scalar_int,Count of accounts in a given region
-T2-01,T2,JP7,region,5,scaled,scalar_int,Support cases owned by accounts in a given region
-T2-02,T2,JP7,priority,4,scaled,entity_metric,Customer tier with the most cases at a given priority
-T2-03,T2,JP1,industry,7,scaled,scalar_int,Contacts across accounts in a given industry
-T2-04,T2,JP6,campaign_type,5,scaled,scalar_int,Interactions attributed to campaigns of a given type
-T2-05,T2,JP4,is_active,2,scaled,ranked_list,Inbound/outbound interaction split for active vs inactive contacts
-T2-06,T2,JP5,engagement_type,7,scaled,ranked_list,Top 5 accounts by direct interactions of a given engagement type
-T2-07,T2,JP4,channel x title,10,scaled,scalar_int,Interactions on a channel from contacts with a given title
-T3-01,T3,JP1,region,5,scaled(HELD),scalar_int,Accounts in a given region with no contacts
-T3-02,T3,JP1,industry,7,scaled(HELD),scalar_int,Accounts in a given industry with no contacts
-T3-03,T3,JP4,title,7,scaled(HELD),scalar_int,Contacts with a given title and no interactions
-T3-04,T3,JP2,title,7,scaled(HELD),scalar_int,Contacts with a given title not enrolled in any campaign
-T3-05,T3,JP12,campaign_type,5,scaled(HELD),scalar_int,Campaigns of a given type with no attributed interactions
-T3-06,T3,JP12,campaign_status,5,scaled(HELD),scalar_int,Campaigns in a given status with no attributed interactions
-T4-01,T4,JP9,region,5,scaled,scalar_int,Total engagement points via contacts at accounts in a given region
-T4-02,T4,JP9,industry,7,scaled,scalar_int,Total engagement points via contacts at accounts in a given industry
-T4-03,T4,JP10,industry,7,scaled,scalar_int,Support cases raised by contacts at accounts in a given industry
-T4-04,T4,JP4+JP1,engagement_type x customer_tier,21,scaled,scalar_int,Interactions of a type from contacts at accounts in a given tier (capped at quota)
-T5-01,T5,JP11+JP9,region,5,scaled,ranked_list,Top 3 campaign types by engagement among accounts in a given region
-T5-02,T5,JP7,category,6,scaled,ranked_list,Top 5 accounts by open backlog of cases in a given category
-T5-03,T5,JP10+JP5,industry,7,scaled,ranked_list,At-risk accounts in a given industry (open backlog + no recent engagement)
-T5-04,T5,JP5,region,5,scaled,two_value,Engagement last quarter vs this quarter for a given region
-T5-05,T5,JP5,customer_tier,3,scaled,entity_multi,Fastest-growing region vs last quarter among accounts in a given tier
+# GENERATED from generator/families.json - do not hand-edit.
+# Regenerate: python generator/gen_family_matrix.py
+# quota = pairs shipped; scale_pairs.py asserts per-tier sums = 32/40/32/32/24.
+family_id,tier,join_path_id,params,quota,scoring_mode,answer_shape,question_template,tables
+T1-01,T1,-,campaign_type,5,scalar_exact,scalar,What is the total budget of {campaign_type} campaigns?,campaigns
+T1-02,T1,-,campaign_status,5,scalar_exact,scalar,How many campaigns are in the {campaign_status} state?,campaigns
+T1-03,T1,-,priority,4,scalar_exact,scalar,How many support cases are logged at {priority} priority?,support_cases
+T1-04,T1,-,category,4,scalar_exact,scalar,How many support cases fall under {category}?,support_cases
+T1-05,T1,-,engagement_type,6,scalar_exact,scalar,How many interactions are {engagement_type} events?,interactions
+T1-06,T1,-,region,4,scalar_exact,scalar,How many accounts do we have in the {region} region?,accounts
+T1-07,T1,-,priority,4,scalar_exact,scalar,How many {priority}-priority support cases were resolved within their SLA deadline?,support_cases
+T2-01,T2,JP7,region,5,scalar_exact,scalar,How many support cases belong to {region}-region accounts?,"support_cases, accounts"
+T2-02,T2,JP7,priority,4,table_exact,table,Which customer tier has the most {priority}-priority support cases?,"support_cases, accounts"
+T2-03,T2,JP1,industry,7,scalar_exact,scalar,How many contacts do we have across accounts in {industry}?,"contacts, accounts"
+T2-04,T2,JP6,campaign_type,5,scalar_exact,scalar,How many interactions are attributed to {campaign_type} campaigns?,"interactions, campaigns"
+T2-05,T2,JP4,is_active,2,table_exact,table,What is the inbound / outbound interaction breakdown for {is_active} contacts?,"interactions, contacts"
+T2-06,T2,JP5,engagement_type,5,table_exact,ordered_list,Which accounts had the most {engagement_type} interactions recorded directly against them?,"accounts, interactions"
+T2-07,T2,JP4,channel|title,6,scalar_exact,scalar,How many {channel} interactions came from contacts with the title {title}?,"interactions, contacts"
+T2-08,T2,JP7,industry,6,scalar_exact,scalar,What percentage of support cases for accounts in {industry} were resolved within their SLA deadline?,"support_cases, accounts"
+T3-01,T3,JP1,region,5,scalar_exact,scalar,How many {region}-region accounts have no contacts on record?,"accounts, contacts"
+T3-02,T3,JP1,industry,7,scalar_exact,scalar,How many accounts in {industry} have no contacts on record?,"accounts, contacts"
+T3-03,T3,JP4,title,7,scalar_exact,scalar,How many contacts with the title {title} have no recorded interactions?,"contacts, interactions"
+T3-04,T3,JP2,title,5,scalar_exact,scalar,How many contacts with the title {title} are not enrolled in any campaign?,"contacts, contact_campaigns"
+T3-05,T3,JP12,campaign_type,5,scalar_exact,scalar,How many {campaign_type} campaigns have no attributed interactions?,"campaigns, interactions"
+T3-06,T3,JP12,campaign_status,3,scalar_exact,scalar,How many {campaign_status} campaigns have no attributed interactions?,"campaigns, interactions"
+T4-01,T4,JP9,region,5,table_exact,ordered_list,"For {region}-region accounts, how does engagement break down by interaction channel?","accounts, contacts, interactions"
+T4-02,T4,JP10,industry,7,table_exact,ordered_list,"For accounts in {industry}, how do the support cases raised by their contacts break down by priority?","accounts, contacts, support_cases"
+T4-03,T4,JP10,customer_tier,3,table_exact,table,"For {customer_tier}-tier accounts, what is the SLA compliance rate of the support cases raised by their contacts, by category?","accounts, contacts, support_cases"
+T4-04,T4,JP11,campaign_type,5,table_exact,ordered_list,"For {campaign_type} campaigns, which contact titles carry the most multi-touch attribution weight?","contacts, contact_campaigns, campaigns"
+T4-05,T4,JP10,region,5,table_exact,ordered_list,"For {region}-region accounts, how do the support cases raised by their contacts break down by status?","accounts, contacts, support_cases"
+T4-06,T4,JP9,industry,7,table_exact,ordered_list,"For accounts in {industry}, how does engagement break down by interaction type?","accounts, contacts, interactions"
+T5-01,T5,JP11+JP9,region,5,judge_plus_exact,ordered_list,Which three campaign types drove the most engagement among {region}-region accounts?,"campaigns, interactions, contacts, accounts"
+T5-02,T5,JP7,category,6,judge_plus_exact,ordered_list,Which accounts have the largest open backlog of {category} support cases right now?,"accounts, support_cases"
+T5-03,T5,JP10+JP9,industry,6,judge_plus_exact,table,Which accounts in {industry} look at risk from an open support backlog and no recent engagement?,"accounts, support_cases, interactions, contacts"
+T5-04,T5,JP9,region,4,judge_plus_exact,table,How did engagement among {region}-region accounts change from Q1 2026 to Q2 2026?,"interactions, contacts, accounts"
+T5-05,T5,JP9,customer_tier,3,judge_plus_exact,table,Which region had the best engagement trend among {customer_tier}-tier accounts from Q1 2026 to Q2 2026?,"accounts, contacts, interactions"

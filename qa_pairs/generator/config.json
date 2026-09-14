@@ -1,0 +1,20 @@
+{
+  "domain": "crm",
+  "id_prefix": "CRM",
+  "reference_today": "2026-08-01",
+  "tier_quota": {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24},
+  "tables": ["accounts", "contacts", "campaigns", "contact_campaigns", "interactions", "support_cases"],
+  "scoring": {
+    "numeric_tolerance": "0",
+    "judge_rubric_version": "crm-judge-rubric-v0-draft",
+    "judge_prompt_version": "crm-judge-prompt-v0-draft",
+    "scorer_status": "draft",
+    "_note": "scorer_status stays 'draft' until the Platform Owner confirms the judge input format and tolerance=0 (open items a/b in open_items_confirmation_request.md); then it moves to 'approved', and to 'calibrated' after a judge calibration run."
+  },
+  "resolved_open_items": {
+    "OI-1": "T1 stays a single-table tier (Evan Uyehara, 2026-09-08).",
+    "OI-2": "Deterministic evaluator extracts the first number and compares numerically; golden answers are stored as plain numbers, no currency symbol / thousands separator / unit noun (Aichi Lin, 2026-09-08).",
+    "OI-3": "Date-valued answers use exact match, no tolerance (Evan Uyehara, 2026-09-08).",
+    "OI-4": "Empty CSV field ingests as SQL NULL - the T3 assumption is correct (Aichi Lin, 2026-09-08)."
+  }
+}
