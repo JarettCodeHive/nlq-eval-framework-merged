@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from generators.common.integrity import IntegrityCheckResult
+from generators.core.integrity import IntegrityCheckResult
 from generators.crm.config import load_crm_config
 from generators.crm.manifest import CRMManifestGenerator
 from generators.crm.manifest import _csv_metadata

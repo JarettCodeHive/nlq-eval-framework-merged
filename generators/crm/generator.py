@@ -10,10 +10,11 @@ from decimal import Decimal
 import re
 from typing import Any
 
-from generators.common.base import DeterministicGenerator
+from generators.core.base import DeterministicGenerator
+from generators.core.progress import ProgressReporter
 from generators.crm.config import load_crm_config
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import validate_crm_config
 
 
 _CRM_CONFIG = load_crm_config()
@@ -26,7 +27,11 @@ CRM_COLUMN_CONTRACTS = {
 class CRMBaseEntityGenerator:
     """Generate clean, deterministic CRM engagement entities."""
 
-    def __init__(self, generator: DeterministicGenerator) -> None:
+    def __init__(
+        self,
+        generator: DeterministicGenerator,
+        progress: ProgressReporter | None = None,
+    ) -> None:
         if generator.settings.domain != "crm":
             raise ValueError("CRMBaseEntityGenerator only supports the crm domain")
         validate_crm_config()
@@ -34,27 +39,42 @@ class CRMBaseEntityGenerator:
         self.settings = generator.settings
         self.crm_config = load_crm_config()
         self.generation_rules = self.crm_config["generation_rules"]
+        self.progress = progress
 
     @classmethod
-    def for_profile(cls, profile: str) -> "CRMBaseEntityGenerator":
+    def for_profile(
+        cls,
+        profile: str,
+        progress: ProgressReporter | None = None,
+    ) -> "CRMBaseEntityGenerator":
         """Create a validated CRM base generator for a profile."""
 
         settings = settings_for_profile(profile)
-        return cls(DeterministicGenerator(settings))
+        return cls(DeterministicGenerator(settings), progress=progress)
 
     def generate_tables(self) -> dict[str, Any]:
         """Generate all clean CRM tables in dependency order."""
 
-        accounts = self.generate_accounts()
-        contacts = self.generate_contacts(accounts)
-        campaigns = self.generate_campaigns()
-        contact_campaigns = self.generate_contact_campaigns(contacts, campaigns)
-        interactions = self.generate_interactions(
-            contacts,
-            campaigns,
-            contact_campaigns,
+        accounts = self._generate_and_report("accounts", self.generate_accounts)
+        contacts = self._generate_and_report(
+            "contacts", lambda: self.generate_contacts(accounts)
         )
-        support_cases = self.generate_support_cases(accounts, contacts)
+        campaigns = self._generate_and_report("campaigns", self.generate_campaigns)
+        contact_campaigns = self._generate_and_report(
+            "contact_campaigns",
+            lambda: self.generate_contact_campaigns(contacts, campaigns),
+        )
+        interactions = self._generate_and_report(
+            "interactions",
+            lambda: self.generate_interactions(
+                contacts,
+                campaigns,
+                contact_campaigns,
+            ),
+        )
+        support_cases = self._generate_and_report(
+            "support_cases", lambda: self.generate_support_cases(accounts, contacts)
+        )
         tables = {
             "accounts": accounts,
             "contacts": contacts,
@@ -63,11 +83,37 @@ class CRMBaseEntityGenerator:
             "interactions": interactions,
             "support_cases": support_cases,
         }
+        self._report("Validating base CRM tables")
         self._validate_generated_tables(tables)
+        self._report("Base CRM generation complete")
         return tables
 
+    def _generate_and_report(self, table_name: str, generate: Any) -> Any:
+        """Generate one table and report its completed shape when enabled."""
+
+        self._report(f"Generating {table_name}")
+        table = generate()
+        if self.progress is not None:
+            self.progress.report_table(table_name, table)
+        return table
+
+    def _report(self, message: str) -> None:
+        """Report progress when the caller supplied a reporter."""
+
+        if self.progress is not None:
+            self.progress.report(message)
+
     def generate_accounts(self) -> Any:
-        """Generate synthetic customer accounts."""
+        """Generate the base CRM accounts dimension table.
+
+        Each row represents one synthetic customer organization with its size,
+        industry, region, customer tier, active state, and creation timestamp.
+        Accounts are the root customer entities referenced by contacts,
+        interactions, and support cases.
+
+        Returns:
+            A DataFrame matching the configured ``accounts`` column contract.
+        """
 
         pd = _require_pandas()
         count = self.generator.row_count("accounts")
@@ -81,6 +127,7 @@ class CRMBaseEntityGenerator:
         customer_tiers = self.crm_config["domain_values"]["customer_tiers"]
         account_size = rules["account_size"]
         active_probability = float(rules["active_probability"])
+        # Bound creation history by the fixed reference date for reproducible queries.
         created_at = _random_timestamp_strings(
             date_rng,
             count,
@@ -91,6 +138,7 @@ class CRMBaseEntityGenerator:
         return pd.DataFrame(
             {
                 "account_id": self.generator.make_integer_ids(count),
+                # Normalize Faker output while retaining synthetic company-like names.
                 "account_name": [
                     _normalized_company_name(fake.company()) for _ in range(count)
                 ],
@@ -120,7 +168,19 @@ class CRMBaseEntityGenerator:
         )
 
     def generate_contacts(self, accounts: Any) -> Any:
-        """Generate contacts with optional, valid account membership."""
+        """Generate the base CRM contacts dimension table.
+
+        Each row represents one synthetic person who may be associated with an
+        existing account. Populated account references are always valid, while
+        selected contacts remain unassigned to support account-to-contact LEFT
+        JOIN scenarios. Contact creation cannot predate its linked account.
+
+        Args:
+            accounts: Generated accounts used for membership and date validity.
+
+        Returns:
+            A DataFrame matching the configured ``contacts`` column contract.
+        """
 
         pd = _require_pandas()
         count = self.generator.row_count("contacts")
@@ -130,6 +190,7 @@ class CRMBaseEntityGenerator:
         rules = self.generation_rules["contacts"]
         date_windows = self.generation_rules["date_windows"]
         account_ids = [int(value) for value in accounts["account_id"].tolist()]
+        # Restrict membership so some accounts intentionally remain without contacts.
         eligible_accounts = account_ids[
             : max(1, int(len(account_ids) * float(rules["eligible_account_fraction"])))
         ]
@@ -138,6 +199,7 @@ class CRMBaseEntityGenerator:
         )
         selected_accounts: list[int | str] = []
         for _ in range(count):
+            # Empty membership creates valid unassigned contacts for LEFT JOIN tests.
             if float(rng.random()) < float(rules["unassigned_account_probability"]):
                 selected_accounts.append("")
             else:
@@ -149,6 +211,7 @@ class CRMBaseEntityGenerator:
         last_names = [fake.last_name() for _ in range(count)]
         titles = self.crm_config["domain_values"]["contact_titles"]
         reference = _reference_datetime(self.settings.reference_today)
+        # Linked contacts cannot be created before their parent account.
         created_at = [
             _random_timestamp_string(
                 date_rng,
@@ -193,7 +256,17 @@ class CRMBaseEntityGenerator:
         )
 
     def generate_campaigns(self) -> Any:
-        """Generate USD-only campaigns with status-aware date windows."""
+        """Generate the base CRM campaigns dimension table.
+
+        Each row represents one USD campaign with a configured type, primary
+        channel, status, budget, and lifecycle dates. Status-aware rules keep
+        future and historical campaigns in coherent date windows, determine
+        when an end date is required, and preserve both populated and missing
+        budgets for downstream benchmark questions.
+
+        Returns:
+            A DataFrame matching the configured ``campaigns`` column contract.
+        """
 
         pd = _require_pandas()
         count = self.generator.row_count("campaigns")
@@ -224,6 +297,7 @@ class CRMBaseEntityGenerator:
         end_dates: list[str] = []
         created_at: list[str] = []
         for status in statuses:
+            # Campaign status determines whether its lifecycle is future or historical.
             if status in future_start_statuses:
                 start = _random_date(
                     date_rng,
@@ -280,6 +354,7 @@ class CRMBaseEntityGenerator:
             )
             for _ in range(count)
         ]
+        # Guarantee both populated and missing budgets for downstream test cases.
         if count and budgets[0] == "":
             budgets[0] = f"{int(budget_rules['minimum_amount']):.2f}"
         if count > 1:
@@ -308,7 +383,21 @@ class CRMBaseEntityGenerator:
         )
 
     def generate_contact_campaigns(self, contacts: Any, campaigns: Any) -> Any:
-        """Generate unique contact/campaign memberships with attribution."""
+        """Generate the base contact-to-campaign many-to-many bridge table.
+
+        Each row represents one unique campaign membership for a valid contact
+        and campaign. Every parent row is covered at least once, touch dates
+        remain inside the campaign window, and each contact receives one primary
+        attribution with fixed-scale weights that total the configured value.
+
+        Args:
+            contacts: Generated contacts that can participate in campaigns.
+            campaigns: Generated campaigns available for membership.
+
+        Returns:
+            A DataFrame matching the configured ``contact_campaigns`` column
+            contract.
+        """
 
         pd = _require_pandas()
         count = self.generator.row_count("contact_campaigns")
@@ -330,6 +419,7 @@ class CRMBaseEntityGenerator:
         date_rng = self.generator.rng_for("crm:contact_campaigns:dates")
         pairs: list[tuple[int, int]] = []
         pair_set: set[tuple[int, int]] = set()
+        # Seed deterministic coverage before filling the remaining unique pairs.
         for index, contact_id in enumerate(contact_ids):
             _append_pair(
                 pairs,
@@ -387,6 +477,7 @@ class CRMBaseEntityGenerator:
         expected_weight_units = int(
             Decimal(attribution["expected_sum_before_imperfections"]) * multiplier
         )
+        # Divide integer weight units to avoid floating-point attribution drift.
         for contact_id, _ in pairs:
             position = pair_positions.get(contact_id, 0)
             pair_positions[contact_id] = position + 1
@@ -420,7 +511,25 @@ class CRMBaseEntityGenerator:
         campaigns: Any,
         contact_campaigns: Any,
     ) -> Any:
-        """Generate engagement events with valid attribution paths."""
+        """Generate the base CRM interactions fact table.
+
+        Each row represents one engagement event associated with a valid
+        contact. An interaction may reference the contact's account and may be
+        attributed to a campaign, but campaign attribution is allowed only when
+        that contact/campaign membership exists in ``contact_campaigns``.
+
+        Organic interactions have no campaign attribution. Engagement type
+        determines channel and points, and event and creation timestamps remain
+        within the applicable campaign or organic activity window.
+
+        Args:
+            contacts: Generated contacts and their optional account membership.
+            campaigns: Generated campaigns and their valid activity windows.
+            contact_campaigns: Valid memberships used for campaign attribution.
+
+        Returns:
+            A DataFrame matching the configured ``interactions`` column contract.
+        """
 
         pd = _require_pandas()
         count = self.generator.row_count("interactions")
@@ -448,6 +557,7 @@ class CRMBaseEntityGenerator:
             for value in campaigns.iloc[:attributed_campaign_limit]["campaign_id"]
             if campaign_windows[int(value)][0] <= reference
         )
+        # Only real bridge memberships can be used for campaign attribution.
         memberships: dict[int, list[int]] = {}
         for row in contact_campaigns[["contact_id", "campaign_id"]].itertuples(
             index=False
@@ -462,6 +572,7 @@ class CRMBaseEntityGenerator:
                 int(len(eligible_contacts) * float(rules["eligible_contact_fraction"])),
             )
         ]
+        # Limiting the pool deliberately leaves contacts without interactions.
         if not selected_contact_pool:
             raise ValueError("No contacts can support generated interactions")
 
@@ -498,6 +609,7 @@ class CRMBaseEntityGenerator:
             )
             campaign_id: int | str
             if is_organic:
+                # Organic engagement supports the campaign LEFT JOIN unmatched case.
                 campaign_id = ""
                 interaction_at = _datetime_from_fraction(
                     _configured_datetime(date_windows["organic_interaction_start"]),
@@ -525,6 +637,7 @@ class CRMBaseEntityGenerator:
                 else int(contact_account)
             )
             engagement_type = str(selected_engagement_types[index])
+            # The record may lag the event, but cannot be created in the future.
             created = min(
                 interaction_at + timedelta(hours=int(created_hour_offsets[index])),
                 reference,
@@ -546,7 +659,21 @@ class CRMBaseEntityGenerator:
         return pd.DataFrame(rows, columns=CRM_COLUMN_CONTRACTS["interactions"])
 
     def generate_support_cases(self, accounts: Any, contacts: Any) -> Any:
-        """Generate support cases with coherent account, contact, and SLA data."""
+        """Generate the base CRM support-cases fact table.
+
+        Each row represents one customer support case associated with a valid
+        account and, optionally, a contact belonging to that account. Every
+        account receives coverage, priority determines the SLA deadline,
+        resolved statuses receive coherent resolution timestamps, and unresolved
+        statuses remain open for backlog and SLA analysis.
+
+        Args:
+            accounts: Generated accounts to which cases must belong.
+            contacts: Generated contacts eligible for optional case assignment.
+
+        Returns:
+            A DataFrame matching the configured ``support_cases`` column contract.
+        """
 
         pd = _require_pandas()
         count = self.generator.row_count("support_cases")
@@ -561,6 +688,7 @@ class CRMBaseEntityGenerator:
             int(len(contacts) * float(rules["eligible_contact_fraction"])),
         )
         contacts_by_account: dict[int, list[int]] = {}
+        # Restrict eligible contacts so some contacts remain without support cases.
         for row in contacts.iloc[:contact_limit][
             ["contact_id", "account_id"]
         ].itertuples(index=False):
@@ -593,6 +721,7 @@ class CRMBaseEntityGenerator:
         _ensure_required_coverage(statuses, rules["required_status_coverage"])
 
         remaining_account_count = max(0, count - len(account_ids))
+        # Cover every account once before assigning additional cases randomly.
         selected_accounts = (
             account_ids[:count]
             + relationship_rng.choice(
@@ -632,6 +761,7 @@ class CRMBaseEntityGenerator:
 
             status = str(statuses[index])
             priority = str(priorities[index])
+            # Resolved cases need enough historical room for a resolution timestamp.
             if status in resolved_statuses:
                 opened_end = reference - timedelta(
                     days=int(rules["resolved_opened_cutoff_days"])

@@ -9,21 +9,32 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
-from generators.common.base import DeterministicGenerator
-from generators.common.imperfections import count_from_pct
-from generators.common.imperfections import inject_integer_outliers
-from generators.common.imperfections import inject_nulls
+from generators.core.base import DeterministicGenerator
+from generators.core.imperfections import count_from_pct
+from generators.core.imperfections import inject_integer_outliers
+from generators.core.imperfections import inject_nulls
+from generators.core.progress import ProgressReporter
 from generators.crm.config import load_crm_config
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import validate_crm_config
 from generators.crm.distributions import CRMDistributionApplier
 from generators.crm.generator import CRMBaseEntityGenerator
 
 
 class CRMImperfectionInjector:
-    """Inject deterministic defects without violating relational contracts."""
+    """Inject controlled, deterministic imperfections into distributed CRM data.
 
-    def __init__(self, generator: DeterministicGenerator) -> None:
+    The injector adds near-duplicate contacts, missing attribution weights,
+    engagement-point outliers, and boundary support-case timestamps. Each step
+    preserves schemas, keys, foreign-key relationships, and dependent business
+    rules so the resulting defects remain useful for benchmark testing.
+    """
+
+    def __init__(
+        self,
+        generator: DeterministicGenerator,
+        progress: ProgressReporter | None = None,
+    ) -> None:
         if generator.settings.domain != "crm":
             raise ValueError("CRMImperfectionInjector only supports the crm domain")
         validate_crm_config()
@@ -31,24 +42,54 @@ class CRMImperfectionInjector:
         self.settings = generator.settings
         self.config = self.settings.imperfections
         self.crm_config = load_crm_config()
+        self.progress = progress
 
     @classmethod
-    def for_profile(cls, profile: str) -> "CRMImperfectionInjector":
+    def for_profile(
+        cls,
+        profile: str,
+        progress: ProgressReporter | None = None,
+    ) -> "CRMImperfectionInjector":
         """Create a CRM imperfection injector from validated config files."""
 
-        return cls(DeterministicGenerator(settings_for_profile(profile)))
+        return cls(
+            DeterministicGenerator(settings_for_profile(profile)),
+            progress=progress,
+        )
 
     def generate_imperfect_tables(self) -> dict[str, Any]:
-        """Generate distributed CRM tables and inject configured imperfections."""
+        """Generate distributed CRM data and apply all configured imperfections.
+
+        This is the complete imperfection-stage entry point: it creates a fresh
+        deterministic distributed dataset and then injects each controlled
+        defect in sequence.
+
+        Returns:
+            A table-name-to-DataFrame mapping containing imperfect CRM data.
+        """
 
         distributed = CRMDistributionApplier(
-            self.generator
+            self.generator,
+            progress=self.progress,
         ).generate_distributed_tables()
         return self.apply_to_tables(distributed)
 
     def apply_to_tables(self, tables: dict[str, Any]) -> dict[str, Any]:
-        """Return imperfect copies while leaving distributed inputs unchanged."""
+        """Apply controlled imperfections to existing distributed CRM tables.
 
+        The input mapping is validated and deep-copied before modification.
+        Defects are applied independently, with relational and structural guards
+        executed after every stage so a failure is attributed to the mutation
+        that introduced it.
+
+        Args:
+            tables: Valid distributed CRM DataFrames keyed by table name.
+
+        Returns:
+            A new table mapping containing the imperfect DataFrames.
+        """
+
+        self._report("Injecting controlled CRM imperfections")
         CRMBaseEntityGenerator(self.generator)._validate_generated_tables(tables)
         imperfect = {
             table_name: table.copy(deep=True) for table_name, table in tables.items()
@@ -58,9 +99,11 @@ class CRMImperfectionInjector:
             float(self.config["duplicate_pct"]),
         )
 
+        # Validate after each mutation to identify the defect that broke a contract.
         imperfect["contacts"] = self._inject_near_duplicate_contacts(
             imperfect["contacts"]
         )
+        self._report("Injected near-duplicate contacts")
         self._validate_core_invariants(imperfect, expected_contact_rows)
 
         imperfect["contact_campaigns"] = inject_nulls(
@@ -71,6 +114,7 @@ class CRMImperfectionInjector:
             ),
             float(self.config["null_pct"]),
         )
+        self._report("Injected attribution-weight NULLs")
         self._validate_core_invariants(imperfect, expected_contact_rows)
 
         outlier_target = self.crm_config["imperfection_targets"][
@@ -86,14 +130,31 @@ class CRMImperfectionInjector:
             min_outlier=int(outlier_target["minimum_value"]),
             max_outlier=int(outlier_target["maximum_value"]),
         )
+        self._report("Injected engagement-point outliers")
         self._validate_core_invariants(imperfect, expected_contact_rows)
 
         self._inject_support_case_boundary_timestamps(imperfect["support_cases"])
+        self._report("Injected support-case boundary timestamps")
+        self._report("Validating imperfect CRM tables")
         self._validate_core_invariants(imperfect, expected_contact_rows)
         self._validate_target_rates(imperfect, tables)
+        self._report("CRM imperfection injection complete")
         return imperfect
 
+    def _report(self, message: str) -> None:
+        """Report progress when the caller supplied a reporter."""
+
+        if self.progress is not None:
+            self.progress.report(message)
+
     def _inject_near_duplicate_contacts(self, contacts: Any) -> Any:
+        """Append deterministic near-duplicates without copying primary keys.
+
+        Selected contacts retain their account and profile data but receive new
+        contact IDs plus small first-name and email transpositions. The returned
+        DataFrame contains the original rows followed by the duplicate rows.
+        """
+
         duplicate_count = count_from_pct(
             len(contacts), float(self.config["duplicate_pct"])
         )
@@ -110,6 +171,7 @@ class CRMImperfectionInjector:
         duplicates = (
             contacts.loc[sampled_positions].copy(deep=True).reset_index(drop=True)
         )
+        # New IDs preserve PK uniqueness while the altered fields remain near-matches.
         start_id = int(contacts["contact_id"].max()) + 1
         duplicates["contact_id"] = list(range(start_id, start_id + duplicate_count))
         duplicates["first_name"] = [
@@ -123,7 +185,13 @@ class CRMImperfectionInjector:
         return pd.concat([result, duplicates], ignore_index=True)
 
     def _inject_support_case_boundary_timestamps(self, support_cases: Any) -> None:
-        """Inject each boundary opening and rederive dependent case timestamps."""
+        """Inject boundary case openings and rederive dependent timestamps.
+
+        Each configured boundary replaces one ``opened_at`` value. SLA deadlines
+        are recalculated from priority, while the original creation and resolution
+        durations are carried forward so case chronology and status rules remain
+        valid.
+        """
 
         boundaries = [
             datetime.combine(date.fromisoformat(str(value)), time.min)
@@ -138,6 +206,7 @@ class CRMImperfectionInjector:
         sla_hours = self.crm_config["business_mappings"]["sla_calendar_hours"]
         for position, boundary in enumerate(boundaries):
             row = support_cases.loc[position]
+            # Preserve relative event durations when moving the opening timestamp.
             original_opened = _parse_timestamp(row["opened_at"])
             creation_delta = _parse_timestamp(row["created_at"]) - original_opened
             resolution_delta = None
@@ -164,6 +233,19 @@ class CRMImperfectionInjector:
         tables: dict[str, Any],
         expected_contact_rows: int,
     ) -> None:
+        """Fail when an imperfection violates a core CRM data contract.
+
+        The guard checks table shape, expected row counts, key constraints,
+        required fields, foreign keys, attribution rules, campaign windows,
+        interaction semantics, support-case SLA chronology, and USD-only campaign
+        values. It allows only the defects explicitly introduced by this module.
+
+        Args:
+            tables: CRM tables at the current imperfection stage.
+            expected_contact_rows: Base contacts plus configured duplicates.
+        """
+
+        # Structural checks allow only the configured increase in contact rows.
         if tuple(tables) != self.settings.table_order:
             raise ValueError("Imperfect CRM table order differs from config")
         for table_name in self.settings.table_order:
@@ -250,6 +332,7 @@ class CRMImperfectionInjector:
             weight_values = contact_memberships["attribution_weight"].astype(str)
             has_missing_weight = weight_values.eq("").any()
             known_total = sum(Decimal(value) for value in weight_values if value != "")
+            # Missing attribution permits a partial sum; complete weights must total.
             if has_missing_weight and not minimum_weight <= known_total < expected_sum:
                 raise ValueError(
                     "Incomplete contact attribution has an invalid known sum"
@@ -305,6 +388,7 @@ class CRMImperfectionInjector:
                 raise ValueError("Interaction account does not match its contact")
             if int(row.engagement_points) < 0:
                 raise ValueError("Interaction engagement points cannot be negative")
+            # Values above the threshold are intentional; ordinary values must map.
             if (
                 int(row.engagement_points) < outlier_minimum
                 and int(row.engagement_points) != normal_points[row.engagement_type]
@@ -348,6 +432,13 @@ class CRMImperfectionInjector:
         tables: dict[str, Any],
         source_tables: dict[str, Any],
     ) -> None:
+        """Verify every imperfection appears at its exact configured count.
+
+        The method compares imperfect tables with their distributed sources and
+        validates duplicate contacts, attribution NULLs, engagement outliers,
+        and the complete configured set of support-case boundary timestamps.
+        """
+
         duplicate_count = count_from_pct(
             len(source_tables["contacts"]), float(self.config["duplicate_pct"])
         )
@@ -390,6 +481,8 @@ class CRMImperfectionInjector:
 
 
 def _near_duplicate_first_name(value: object) -> str:
+    """Return a deterministic typographical variation of a first name."""
+
     text = str(value).strip()
     if not text:
         return "Duplicate"
@@ -427,6 +520,8 @@ def _adjacent_transposition(text: str, preserve_title_case: bool = False) -> str
 
 
 def _assert_fk(values: Any, parent_ids: set[Any], label: str) -> None:
+    """Raise when a populated child value is absent from the parent ID set."""
+
     invalid = {
         value
         for value in values.tolist()
@@ -441,6 +536,13 @@ def _campaign_windows(
     reference_today: date,
     future_open_window_days: int,
 ) -> dict[int, tuple[datetime, datetime]]:
+    """Return inclusive activity windows keyed by campaign ID.
+
+    Explicit end dates are honored. Open historical campaigns extend through
+    the reference date, while open future campaigns receive the configured
+    forward-looking window.
+    """
+
     windows: dict[int, tuple[datetime, datetime]] = {}
     for row in campaigns[["campaign_id", "start_date", "end_date"]].itertuples(
         index=False
@@ -460,18 +562,26 @@ def _campaign_windows(
 
 
 def _blank_count(values: Any) -> int:
+    """Count values represented as empty CSV fields."""
+
     return int(values.astype(str).eq("").sum())
 
 
 def _parse_timestamp(value: Any) -> datetime:
+    """Parse an ISO timestamp value into a datetime."""
+
     return datetime.fromisoformat(str(value))
 
 
 def _format_timestamp(value: datetime) -> str:
+    """Format a datetime as an ISO timestamp without fractional seconds."""
+
     return value.replace(microsecond=0).isoformat()
 
 
 def _require_pandas() -> Any:
+    """Import pandas lazily and provide a domain-specific dependency error."""
+
     try:
         import pandas as pd
     except ImportError as exc:

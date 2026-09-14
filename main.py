@@ -8,22 +8,24 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from generators.core.progress import ProgressReporter
+
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import validate_crm_config
 from generators.crm.data_dictionary import CRMDataDictionaryGenerator
 from generators.crm.distributions import CRMDistributionApplier
 from generators.crm.export import CRMCSVExporter
-from generators.crm.fk_integrity import CRMDuckDBFKValidator
 from generators.crm.generator import CRMBaseEntityGenerator
 from generators.crm.hashes import CRMHashComputer
-from generators.crm.imperfection_rates import CRMImperfectionRateValidator
 from generators.crm.imperfections import CRMImperfectionInjector
-from generators.crm.integrity import CRMRelationalValidator
-from generators.crm.join_paths import CRMJoinPathValidator
 from generators.crm.manifest import CRMManifestGenerator
-from generators.crm.reproducibility import CRMReproducibilityValidator
-from generators.crm.row_caps import CRMRowCapValidator
 from generators.crm.schema_sql import CRMSchemaSQLGenerator
+from generators.crm.validators.fk_integrity import CRMDuckDBFKValidator
+from generators.crm.validators.imperfection_rates import CRMImperfectionRateValidator
+from generators.crm.validators.join_paths import CRMJoinPathValidator
+from generators.crm.validators.relational import CRMRelationalValidator
+from generators.crm.validators.reproducibility import CRMReproducibilityValidator
+from generators.crm.validators.row_caps import CRMRowCapValidator
 
 # from judge.cli import build_argparser as build_judge_argparser
 # from judge.cli import run_from_args as run_judge_from_args
@@ -66,8 +68,10 @@ def run_generate_base(args: argparse.Namespace) -> None:
     """Generate clean CRM base tables and print a validation summary."""
 
     _ensure_crm(args.domain)
+    progress = ProgressReporter()
+    progress.report("Validating CRM configuration and schema")
     validate_crm_config()
-    generator = CRMBaseEntityGenerator.for_profile(args.profile)
+    generator = CRMBaseEntityGenerator.for_profile(args.profile, progress=progress)
     tables = generator.generate_tables()
 
     print("Generated clean CRM base entities")
@@ -88,8 +92,10 @@ def run_apply_distributions(args: argparse.Namespace) -> None:
     """Generate CRM base tables, apply distributions, and print checks."""
 
     _ensure_crm(args.domain)
+    progress = ProgressReporter()
+    progress.report("Validating CRM configuration and schema")
     validate_crm_config()
-    applier = CRMDistributionApplier.for_profile(args.profile)
+    applier = CRMDistributionApplier.for_profile(args.profile, progress=progress)
     tables = applier.generate_distributed_tables()
 
     print("Applied CRM statistical distributions")
@@ -111,8 +117,10 @@ def run_apply_imperfections(args: argparse.Namespace) -> None:
     """Generate CRM distributed tables, inject imperfections, and print checks."""
 
     _ensure_crm(args.domain)
+    progress = ProgressReporter()
+    progress.report("Validating CRM configuration and schema")
     validate_crm_config()
-    injector = CRMImperfectionInjector.for_profile(args.profile)
+    injector = CRMImperfectionInjector.for_profile(args.profile, progress=progress)
     tables = injector.generate_imperfect_tables()
 
     print("Injected CRM controlled imperfections")
@@ -157,8 +165,10 @@ def run_export_csvs(args: argparse.Namespace) -> None:
     """Export full-profile CRM release CSVs."""
 
     _ensure_crm(args.domain)
+    progress = ProgressReporter()
+    progress.report("Validating CRM configuration and schema")
     validate_crm_config()
-    exporter = CRMCSVExporter.for_profile(args.profile)
+    exporter = CRMCSVExporter.for_profile(args.profile, progress=progress)
     results = exporter.export_full_profile_csvs()
 
     print("Exported CRM full-profile CSVs")

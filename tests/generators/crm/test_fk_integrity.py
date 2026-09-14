@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from generators.common.csv_export import CSVExporter
-from generators.crm.fk_integrity import CRMDuckDBFKValidator
-from generators.crm.fk_integrity import MANUAL_FK_CHECKS
-from generators.crm.fk_integrity import SEMANTIC_RELATIONSHIP_CHECKS
+from generators.core.csv_export import CSVExporter
+from generators.crm.validators.fk_integrity import CRMDuckDBFKValidator
+from generators.crm.validators.fk_integrity import MANUAL_FK_CHECKS
+from generators.crm.validators.fk_integrity import SEMANTIC_RELATIONSHIP_CHECKS
 from generators.crm.imperfections import CRMImperfectionInjector
 
 

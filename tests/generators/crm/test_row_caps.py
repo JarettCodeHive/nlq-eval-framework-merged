@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from generators.crm.row_caps import CRMRowCapValidator
-from generators.crm.row_caps import _csv_row_count
+from generators.crm.validators.row_caps import CRMRowCapValidator
+from generators.crm.validators.row_caps import _csv_row_count
 from main import build_parser
 
 

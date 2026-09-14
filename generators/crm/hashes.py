@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from generators.common.base import DeterministicGenerator
-from generators.common.manifest import FileHash
-from generators.common.manifest import compute_file_hashes
+from generators.core.base import DeterministicGenerator
+from generators.core.manifest import FileHash
+from generators.core.manifest import compute_file_hashes
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import validate_crm_config
 
 
 class CRMHashComputer:

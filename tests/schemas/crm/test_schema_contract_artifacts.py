@@ -3,9 +3,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from generators.crm.config import _configured_sql_type
 from generators.crm.config import load_crm_config
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import _configured_sql_type
+from generators.crm.validators.config import validate_crm_config
 
 
 SCHEMA_DIR = Path("schemas/crm")

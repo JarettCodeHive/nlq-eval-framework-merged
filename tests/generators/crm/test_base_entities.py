@@ -7,7 +7,7 @@ import importlib.util
 
 import pytest
 
-from generators.common.base import DeterministicGenerator
+from generators.core.base import DeterministicGenerator
 from generators.crm.config import load_crm_config
 from generators.crm.config import settings_for_profile
 from generators.crm.generator import CRMBaseEntityGenerator

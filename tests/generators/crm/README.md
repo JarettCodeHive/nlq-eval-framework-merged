@@ -16,7 +16,7 @@ This suite verifies the engagement-focused CRM dataset contract across:
 Run the CRM suite from the repository root:
 
 ```bash
-python -m pytest tests/generators/common tests/generators/crm tests/schemas/crm
+python -m pytest tests/generators/core tests/generators/crm tests/schemas/crm
 ```
 
 The full-profile manifest command is intentionally excluded because it seals

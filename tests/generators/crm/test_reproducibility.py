@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from generators.common.manifest import FileHash
-from generators.crm.reproducibility import CRMReproducibilityValidator
+from generators.core.manifest import FileHash
+from generators.crm.validators.reproducibility import CRMReproducibilityValidator
 
 
 def _dependencies_available() -> bool:

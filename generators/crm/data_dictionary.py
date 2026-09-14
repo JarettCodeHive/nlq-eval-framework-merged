@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from generators.common.base import DeterministicGenerator
-from generators.common.manifest import build_distribution_metadata
+from generators.core.base import DeterministicGenerator
+from generators.core.manifest import build_distribution_metadata
 from generators.crm.config import load_crm_config
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import validate_crm_config
 
 
 TABLE_DESCRIPTIONS = {
@@ -353,6 +353,7 @@ class CRMDataDictionaryGenerator:
                 "Shared presets in `config/generation/base.json` are reusable "
                 "defaults, not mandatory values for every domain. CRM selects a "
                 "preset and may override its parameters in "
+                "`config/generation/crm/generation.json`, assembled through "
                 "`config/generation/crm.json`."
             ),
             "",

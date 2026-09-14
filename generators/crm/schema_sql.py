@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from generators.common.base import DeterministicGenerator
+from generators.core.base import DeterministicGenerator
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import validate_crm_config
 
 
 class CRMSchemaSQLGenerator:

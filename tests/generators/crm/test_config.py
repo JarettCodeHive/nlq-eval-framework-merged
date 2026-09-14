@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 import inspect
+import subprocess
+import sys
 
 import pytest
 
@@ -9,9 +11,10 @@ import generators.crm.config as config_module
 import generators.crm.distributions as distributions_module
 import generators.crm.generator as generator_module
 import generators.crm.imperfections as imperfections_module
+import generators.crm.validators.config as validation_module
 from generators.crm.config import load_crm_config
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
+from generators.crm.validators.config import validate_crm_config
 from generators.crm.generator import CRM_COLUMN_CONTRACTS
 
 
@@ -92,6 +95,26 @@ def test_crm_config_validates_against_schema() -> None:
     validate_crm_config()
 
 
+def test_crm_loader_uses_shared_domain_config_entry_point(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = {"domain": "crm"}
+    captured: dict[str, object] = {}
+
+    def load(config_path: object, config_root: object) -> dict[str, str]:
+        captured["config_path"] = config_path
+        captured["config_root"] = config_root
+        return expected
+
+    monkeypatch.setattr(config_module, "load_domain_config", load)
+
+    assert config_module.load_crm_config() is expected
+    assert captured == {
+        "config_path": config_module.CRM_CONFIG_PATH,
+        "config_root": config_module.DEFAULT_CONFIG_ROOT,
+    }
+
+
 def test_config_validator_does_not_mirror_json_contract_values() -> None:
     source = inspect.getsource(config_module)
 
@@ -120,7 +143,7 @@ def test_schema_alignment_still_rejects_field_drift() -> None:
     crm_config["tables"]["accounts"]["fields"].pop()
 
     with pytest.raises(ValueError, match="accounts fields differ"):
-        config_module._validate_schema_alignment(crm_config)
+        validation_module._validate_schema_alignment(crm_config)
 
 
 def test_generation_target_still_rejects_unknown_fields() -> None:
@@ -129,7 +152,72 @@ def test_generation_target_still_rejects_unknown_fields() -> None:
     crm_config["distribution_targets"]["campaign_budget"]["field"] = "missing"
 
     with pytest.raises(ValueError, match="references unknown field"):
-        config_module._validate_generation_targets(base_config, crm_config)
+        validation_module._validate_generation_targets(base_config, crm_config)
+
+
+def test_dotted_reference_resolves_shared_base_value() -> None:
+    base_config = config_module.load_base_config()
+    crm_config = load_crm_config()
+
+    value = validation_module._resolve_config_reference(
+        "config/generation/base.json:imperfections.null_pct",
+        base_config,
+        crm_config,
+        "test",
+    )
+
+    assert value == base_config["imperfections"]["null_pct"]
+
+
+def test_dotted_reference_resolves_assembled_crm_namespace() -> None:
+    base_config = config_module.load_base_config()
+    crm_config = load_crm_config()
+
+    qualified = validation_module._resolve_config_reference(
+        "config/generation/crm.json:business_mappings.sla_calendar_hours",
+        base_config,
+        crm_config,
+        "test",
+    )
+    unqualified = validation_module._resolve_config_reference(
+        "business_mappings.sla_calendar_hours",
+        base_config,
+        crm_config,
+        "test",
+    )
+
+    assert qualified == crm_config["business_mappings"]["sla_calendar_hours"]
+    assert unqualified == qualified
+
+
+def test_dotted_reference_rejects_physical_component_filename() -> None:
+    base_config = config_module.load_base_config()
+    crm_config = load_crm_config()
+
+    with pytest.raises(ValueError, match="references unsupported config"):
+        validation_module._resolve_config_reference(
+            "config/generation/crm/generation.json:business_mappings.currency_code",
+            base_config,
+            crm_config,
+            "test",
+        )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "config/generation/crm.json:business_mappings.missing",
+        "missing.section",
+    ],
+)
+def test_dotted_reference_rejects_missing_value(reference: str) -> None:
+    with pytest.raises(ValueError, match="references missing config value"):
+        validation_module._resolve_config_reference(
+            reference,
+            config_module.load_base_config(),
+            load_crm_config(),
+            "test",
+        )
 
 
 def test_crm_settings_use_engagement_table_order() -> None:
@@ -258,6 +346,22 @@ def test_crm_config_has_no_sales_pipeline_tables() -> None:
         "contact_opportunities",
         "activities",
     }.intersection(crm_config["tables"])
+
+
+def test_config_and_validator_modules_import_without_cycles() -> None:
+    validator_first = (
+        "import generators.crm.validators.config; "
+        "import generators.crm.config; "
+        "generators.crm.validators.config.validate_crm_config()"
+    )
+    config_first = (
+        "import generators.crm.config; "
+        "import generators.crm.validators.config; "
+        "generators.crm.validators.config.validate_crm_config()"
+    )
+
+    subprocess.run([sys.executable, "-c", validator_first], check=True)
+    subprocess.run([sys.executable, "-c", config_first], check=True)
 
 
 def test_generation_uses_no_wall_clock_or_external_dataset_inputs() -> None:

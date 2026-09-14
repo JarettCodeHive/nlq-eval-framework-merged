@@ -7,7 +7,7 @@ import pytest
 from generators.crm.config import load_crm_config
 from generators.crm.generator import CRM_COLUMN_CONTRACTS
 from generators.crm.imperfections import CRMImperfectionInjector
-from generators.crm.integrity import CRMRelationalValidator
+from generators.crm.validators.relational import CRMRelationalValidator
 
 
 def _dependencies_available() -> bool:

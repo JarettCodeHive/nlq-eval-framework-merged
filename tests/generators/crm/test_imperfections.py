@@ -6,7 +6,7 @@ import importlib.util
 
 import pytest
 
-from generators.common.imperfections import count_from_pct
+from generators.core.imperfections import count_from_pct
 from generators.crm.distributions import CRMDistributionApplier
 from generators.crm.generator import CRM_COLUMN_CONTRACTS
 from generators.crm.imperfections import CRMImperfectionInjector

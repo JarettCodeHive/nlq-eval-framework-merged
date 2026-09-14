@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from generators.crm.imperfection_rates import CRMImperfectionRateValidator
-from generators.crm.imperfection_rates import NULL_RATE_TARGETS
-from generators.crm.imperfection_rates import _is_valid_near_duplicate
+from generators.crm.validators.imperfection_rates import CRMImperfectionRateValidator
+from generators.crm.validators.imperfection_rates import NULL_RATE_TARGETS
+from generators.crm.validators.imperfection_rates import _is_valid_near_duplicate
 
 
 def _dependencies_available() -> bool:

@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 
 from generators.crm.config import load_crm_config
-from generators.crm.config import validate_crm_config
-from generators.crm.join_paths import MANY_TO_MANY_CARDINALITY_SQL
-from generators.crm.join_paths import THREE_TABLE_JOIN_SQL
-from generators.crm.join_paths import CRMJoinPathValidator
-from generators.crm.join_paths import _join_count_sql
+from generators.crm.validators.config import validate_crm_config
+from generators.crm.validators.join_paths import MANY_TO_MANY_CARDINALITY_SQL
+from generators.crm.validators.join_paths import THREE_TABLE_JOIN_SQL
+from generators.crm.validators.join_paths import CRMJoinPathValidator
+from generators.crm.validators.join_paths import _join_count_sql
 
 
 EXPECTED_JOIN_PATH_IDS = [f"crm_jp_{number:03d}" for number in range(1, 10)]

@@ -8,8 +8,8 @@ import importlib.util
 
 import pytest
 
-from generators.common.base import DeterministicGenerator
-from generators.common.base import GenerationSettings
+from generators.core.base import DeterministicGenerator
+from generators.core.base import GenerationSettings
 from generators.crm.config import load_base_config
 from generators.crm.config import load_crm_config
 from generators.crm.distributions import CRMDistributionApplier

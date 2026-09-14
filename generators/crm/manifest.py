@@ -8,19 +8,19 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-from generators.common.base import PROJECT_ROOT
-from generators.common.base import DeterministicGenerator
-from generators.common.integrity import IntegrityCheckResult
-from generators.common.manifest import FileHash
-from generators.common.manifest import build_distribution_metadata
-from generators.common.manifest import write_manifest
+from generators.core.base import PROJECT_ROOT
+from generators.core.base import DeterministicGenerator
+from generators.core.integrity import IntegrityCheckResult
+from generators.core.manifest import FileHash
+from generators.core.manifest import build_distribution_metadata
+from generators.core.manifest import write_manifest
 from generators.crm.config import load_crm_config
 from generators.crm.config import settings_for_profile
-from generators.crm.config import validate_crm_config
-from generators.crm.fk_integrity import CRMDuckDBFKValidator
+from generators.crm.validators.config import validate_crm_config
 from generators.crm.hashes import CRMHashComputer
-from generators.crm.imperfection_rates import CRMImperfectionRateValidator
-from generators.crm.join_paths import CRMJoinPathValidator
+from generators.crm.validators.fk_integrity import CRMDuckDBFKValidator
+from generators.crm.validators.imperfection_rates import CRMImperfectionRateValidator
+from generators.crm.validators.join_paths import CRMJoinPathValidator
 
 
 class CRMManifestGenerator:
