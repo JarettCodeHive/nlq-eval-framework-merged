@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T5-03-SEED-01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "WITH open_cases AS (SELECT account_id, COUNT(*) AS open_case_count FROM support_cases WHERE status IN ('New', 'InProgress', 'PendingCustomer') GROUP BY account_id), recent_engagement AS (SELECT c.account_id, COUNT(*) AS recent_interaction_count FROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id WHERE i.interaction_at >= DATE '2026-06-02' AND c.account_id IS NOT NULL GROUP BY c.account_id) SELECT a.account_name, COALESCE(oc.open_case_count, 0) AS open_case_count, COALESCE(re.recent_interaction_count, 0) AS recent_interaction_count FROM accounts a LEFT JOIN open_cases oc ON a.account_id = oc.account_id LEFT JOIN recent_engagement re ON a.account_id = re.account_id WHERE COALESCE(oc.open_case_count, 0) >= 5 AND COALESCE(re.recent_interaction_count, 0) = 0 ORDER BY open_case_count DESC, a.account_name ASC LIMIT 5;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "68850685292881740195c482217d670bc342e8c90b02ea5e9fd9dc5211ee64a0",
+  "generated_expected_answer": "Davis Baxter and Patterson | 8 | 0; Hill Collins | 8 | 0; Long Chapman | 8 | 0; Reynolds and Sons | 8 | 0; Clark Bailey | 7 | 0",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T5-03"
+}

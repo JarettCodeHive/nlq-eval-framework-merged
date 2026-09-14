@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T4-01-SEED-01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT i.channel AS entity, SUM(i.engagement_points) AS engagement_points FROM accounts a INNER JOIN contacts c ON a.account_id = c.account_id INNER JOIN interactions i ON c.contact_id = i.contact_id WHERE a.region = 'West' GROUP BY i.channel ORDER BY engagement_points DESC, entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "dbd785a713baf1c17bab63ca95b42adcabe3e29942d923a975c2b018af54e13d",
+  "generated_expected_answer": "Phone | 310; Web | 270; Webinar | 175; Event | 160; Email | 20",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T4-01"
+}

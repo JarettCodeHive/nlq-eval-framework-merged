@@ -13,7 +13,7 @@ The NLQ Evaluation Framework has five tracks (scope doc §5):
 
 | Track | Component | Relationship to this POC |
 |---|---|---|
-| A | Golden synthetic datasets | **Input** — delivered as `crm_dataset_v2` |
+| A | Golden synthetic datasets | **Input** — generator dev preview or frozen full release |
 | **B** | **Q&A evaluation pair sets** | **This POC** — produces the answer key |
 | C | LLM-as-Judge module | Consumes `judge_reference` + `expected_answer` |
 | D | Regression scorecard | Consumes `expected_answer` for exact-match scoring |
@@ -39,11 +39,8 @@ audit trail.
 ## 2. Component map
 
 ```
-qa_pairs_poc/
-├── data/crm_dataset_v2/        INPUT. The frozen Track-A deliverable. Read-only.
-│                               6 CSVs per profile + crm_ddl.sql + crm.json + base.json.
-│
-├── schema/                     CONTRACT. ddl.sql (column names pairs bind to) +
+qa_pairs/
+├── schema/                     LOCAL REFERENCE. ddl.sql +
 │                               er.dbml (the diagram, version-controlled as text).
 │
 ├── taxonomy/                   DESIGN. What questions exist, before any code:
@@ -62,12 +59,11 @@ qa_pairs_poc/
 │   └── labels.py               generic label lookup (CRM map: generator/labels.json)
 │
 ├── generator/                  CRM SPECIFICS - data files + thin drivers:
-│   ├── base.json               seed, reference_today, imperfection rates (from the bundle)
-│   ├── config.json             domain / id prefix / tier quotas / resolved-OI record
+│   ├── config.json             dataset sources, output paths, Q&A version, domain, quotas
 │   ├── catalog.json            param name -> SQL listing its allowed values
 │   ├── families.json           32 question families - DECLARATIVE, the source of truth
 │   ├── labels.json             CRM enum token -> business phrase (applied to question text only)
-│   ├── generate_crm.py         Step 1 - stage the bundle into a TYPED working dataset
+│   ├── generate_crm.py         Step 1 - stage generator output into a TYPED dataset
 │   ├── validate_crm.py         Step 2 - integrity gate on the staged dataset
 │   ├── scale_pairs.py          Step 3 - 160 pairs from families.json + templates
 │   ├── author_qa_pairs.py      Step 3b - seed FIXTURES (review only, not the 160)
@@ -82,11 +78,6 @@ qa_pairs_poc/
 ├── dataset/                    GENERATED (git-ignored except manifests). Step 1 output:
 │   └── <profile>/*.csv , crm_<profile>.duckdb , manifest_<profile>.json
 │
-├── qa_pairs/<profile>/         GENERATED (tracked). Step 3 output - THE RELEASE:
-│   ├── crm_qa_pairs.csv               7-field contract, all 160
-│   ├── crm_qa_pairs_companion.csv     question_id / tier / family / join_path / scoring_mode / answer_schema / hash
-│   └── verification_logs/<question_id>.json   one per question (160)
-│
 └── fixtures/<profile>/         GENERATED (tracked). Step 3b - review only, NOT the 160:
     └── crm_seed_fixtures.csv , crm_seed_fixtures_companion.csv , verification_logs/
 ```
@@ -99,7 +90,8 @@ scale). **Only `full` output is deliverable** (scope doc §7.3).
 ## 3. Data flow
 
 ```
- data/crm_dataset_v2/<profile>/*.csv          (frozen golden dataset)
+ tmp/generated/crm/dev/imperfect/*.csv        (dev)
+ release/crm/<dataset_version>/*.csv          (full)
         │
         │  ── generate_crm.py ──────────────────────────────────────────────
         │     • copy the 6 CSVs into dataset/<profile>/
@@ -136,7 +128,10 @@ scale). **Only `full` output is deliverable** (scope doc §7.3).
         │     │   • non-zero exit if any tier misses its quota               │
         │     └──────────────────────────────────────────────────────────────┘
         ▼
- qa_pairs/<profile>/crm_qa_pairs.csv (+_companion)  +  verification_logs/*.json
+ dev:  tmp/generated/crm/dev/qa_pairs/
+ full: release/crm/qa-pairs-v<qa_version>/
+       crm_qa_pairs.csv (+_companion) + verification_logs/*.json
+       rephrase/*.csv + rephrase/verification_logs/*.json
  fixtures/<profile>/crm_seed_fixtures.csv (+_companion)  +  verification_logs/*.json
         │
         │  ── pytest tests/ ───────────────────────────────────────────────
@@ -215,8 +210,8 @@ the DuckDB's `_build_stamp` table and the manifest: a **deterministic
 per-table content digest** (every row, fully ordered) plus the DDL/DBML
 hashes and CSV hashes, folded into one `build_fingerprint`.
 `require_fresh_db()` re-derives the digests from the open connection and
-re-hashes the **authoritative** `data/crm_dataset_v2/` bundle (DDL, DBML,
-CSVs) as well as the staged mirrors — so a stale DB, a hand-edited table,
+re-hashes the configured generator CSV source and canonical CRM DDL/DBML,
+as well as the staged mirrors — so a stale DB, a hand-edited table,
 or a changed source file all abort the run. `generate_crm.py` itself
 builds into `crm_<profile>.duckdb.tmp` and `os.replace()`s it in only
 after integrity passes; the previous DB survives a failed rebuild.
@@ -264,7 +259,7 @@ self-sign).
 | Guarantee | How it is enforced |
 |---|---|
 | **Answers are never hand-typed** | Only the verify-and-log function writes `expected_answer`; it only ever writes a query result. |
-| **Answers match the data as delivered** | SQL runs against `dataset/<profile>/*.csv`, which `generate_crm.py` copied verbatim from the bundle — imperfections (near-duplicates, NULLs, outliers, boundary dates) included. |
+| **Answers match generated data** | SQL runs against `dataset/<profile>/*.csv`, copied verbatim from the configured imperfect dev output or frozen full release. |
 | **Reproducible** | `generate_crm.py` does no RNG, no wall-clock, no network. `manifest_<profile>.json` records the sha256 of every CSV; a clean re-run regenerates identical hashes. `reference_today` is a constant (`2026-08-01`), never `now()`. |
 | **Auditable** | One `verification_logs/<id>.json` per question with the exact SQL, execution status, row count, `result_hash`, and the answer produced. A reviewer re-runs the SQL and checks the hash. |
 | **No shortcut answers** | T2–T5 templates and seeds only use join paths declared in `crm_allowed_join_paths.csv`; no family relies on a denormalized column that would let one table answer a multi-hop question. |
@@ -314,7 +309,7 @@ with a normalized-text hash across all domains' CSVs.
 - Cross-corpus duplicate-question hash check across all five domains (§9.4)
 - A **named** independent reviewer — CI now runs the full gate (`ruff`,
   `black`, `sqlfluff`, `QA_RELEASE=1 pytest` including the clean-room
-  re-execution from `data/crm_dataset_v2/`, and a second-build determinism
+  re-execution from the configured full generator release, and a second-build determinism
   diff — `.github/workflows/qa-pairs-poc.yml`), but §15 still requires a
   person other than the author to sign
   `../taxonomy/crm_taxonomy_review_checklist.md`.

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T4-04-SEED-01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT cc.member_status, ROUND(SUM(cc.attribution_weight), 4) AS total_attribution_weight FROM contacts c INNER JOIN contact_campaigns cc ON c.contact_id = cc.contact_id INNER JOIN campaigns ca ON cc.campaign_id = ca.campaign_id WHERE ca.campaign_type = 'Retention' GROUP BY cc.member_status ORDER BY total_attribution_weight DESC, cc.member_status ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 6,
+  "result_hash": "e059999e82f667346b981f9439e5bf66b0e848663ce0065045b11bc48171cb27",
+  "generated_expected_answer": "Responded | 11.4095; OptedOut | 9.6501; Engaged | 8.8501; Targeted | 8.1835; Converted | 8.1262; Sent | 7.3666",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T4-04"
+}

@@ -35,7 +35,7 @@ Q&A evaluation pairs, judge scoring, and regression scorecards.
 ```text
 nlq-eval-framework/
   config/        Per-domain generation, schema, and judge configs.
-  generators/    Seeded data generation modules, one domain at a time.
+  generators/    Seeded generation, transformation, export, and validation modules.
   schemas/       DDL, ER diagram sources, and CSV header specs.
   qa_pairs/      Q&A authoring templates, SQL templates, and verification.
   judge/         LLM-as-Judge prompts, calibration anchors, and scoring code.
@@ -45,6 +45,23 @@ nlq-eval-framework/
   release/       Versioned generated outputs and manifests.
   docs/          Data dictionaries, rubric, audit reports, and handover docs.
 ```
+
+### Generation Configuration
+
+`config/generation/base.json` contains shared deterministic defaults. CRM uses
+`config/generation/crm.json` as its stable entry point; that small descriptor
+assembles four focused files:
+
+- `config/generation/crm/release.json`: dataset identity, fixed values, output
+  paths, table order, and release rules.
+- `config/generation/crm/schema.json`: tables, fields, row targets, keys, and
+  relationships.
+- `config/generation/crm/generation.json`: domain values, generation rules,
+  business mappings, distributions, and imperfection targets.
+- `config/generation/crm/validation.json`: join-path and consistency rules.
+
+Generator code reads the assembled configuration through `load_crm_config()`;
+component files are not consumed independently.
 
 ## Python Environment
 
@@ -193,6 +210,57 @@ python main.py generate-manifest --profile full
 
 The manifest seals the release directory. No CSV, documentation, schema, or
 other release-writing command should run afterward.
+
+### Q&A Pair Workflow
+
+The root CLI also runs the CRM Q&A authoring pipeline. Each Q&A command consumes
+the selected profile's generated dataset; it does not regenerate the golden
+dataset itself.
+
+#### Development Q&A Profile
+
+First generate the imperfect dev CSVs, then run the Q&A stages in order:
+
+```bash
+python main.py apply-imperfections --profile dev --write-preview
+python main.py qa-stage-dataset --profile dev
+python main.py qa-validate-dataset --profile dev
+python main.py qa-author-fixtures --profile dev
+python main.py qa-generate-pairs --profile dev
+python main.py qa-generate-rephrases --profile dev
+```
+
+The 160 final dev pairs, companion CSV, verification logs, and rephrase
+artifacts are written under:
+
+```text
+tmp/generated/crm/dev/qa_pairs/
+```
+
+#### Full Q&A Profile
+
+The full Q&A pipeline reads the frozen CRM dataset from
+`release/crm/dataset-v1.0.0`. Generate and validate that dataset first, then run:
+
+```bash
+python main.py qa-stage-dataset --profile full
+python main.py qa-validate-dataset --profile full
+python main.py qa-author-fixtures --profile full
+python main.py qa-generate-pairs --profile full
+python main.py qa-generate-rephrases --profile full
+```
+
+The final full pair package is written to the independently versioned Q&A
+release directory configured in `qa_pairs/generator/config.json`:
+
+```text
+release/crm/qa-pairs-v0.3.0/
+```
+
+`qa-author-fixtures` writes review-only seed fixtures under
+`qa_pairs/fixtures/<profile>/`; these fixtures are not part of the 160-pair
+release. The original scripts under `qa_pairs/generator/` remain available for
+backward compatibility, but `main.py` is the preferred project entry point.
 
 ## First Build Track
 

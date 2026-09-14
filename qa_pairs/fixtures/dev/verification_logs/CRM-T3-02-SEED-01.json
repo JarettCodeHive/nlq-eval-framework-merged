@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T3-02-SEED-01",
+  "domain": "crm",
+  "tier": "T3",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(*) AS accounts_without_interactions FROM accounts a LEFT JOIN interactions i ON a.account_id = i.account_id WHERE i.interaction_id IS NULL;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
+  "generated_expected_answer": "18",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T3-02"
+}

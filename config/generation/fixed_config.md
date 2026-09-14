@@ -22,13 +22,15 @@ Source: `config/generation/base.json`
 | `dev` | Fast local validation. | No |
 | `full` | Delivery-scale output. | Yes |
 
-CRM uses explicit per-table row targets in `config/generation/crm.json`.
+CRM uses explicit per-table row targets in
+`config/generation/crm/schema.json`.
 The shared `dev` scale expresses the project intent, but does not override
 CRM's explicit dev counts.
 
 ## CRM Fixed Values
 
-Source: `config/generation/crm.json`
+Source: `config/generation/crm/release.json`, assembled through
+`config/generation/crm.json`
 
 | Setting | Value |
 |---|---|

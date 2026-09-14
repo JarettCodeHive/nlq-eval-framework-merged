@@ -1,0 +1,176 @@
+{
+  "join_path_requirements": [
+    {
+      "id": "crm_jp_001",
+      "name": "accounts_to_contacts",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "accounts",
+        "contacts"
+      ],
+      "join_condition": "accounts.account_id = contacts.account_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "contacts.account_id IS NULL",
+      "purpose": "Supports accounts without contacts and optional account membership."
+    },
+    {
+      "id": "crm_jp_002",
+      "name": "contacts_to_interactions",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "contacts",
+        "interactions"
+      ],
+      "join_condition": "contacts.contact_id = interactions.contact_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "interactions.contact_id IS NULL",
+      "purpose": "Supports engagement scoring and contacts without engagement."
+    },
+    {
+      "id": "crm_jp_003",
+      "name": "accounts_to_contacts_to_interactions",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "accounts",
+        "contacts",
+        "interactions"
+      ],
+      "join_condition": "contacts.account_id = accounts.account_id AND interactions.contact_id = contacts.contact_id",
+      "required_result": "non_empty",
+      "purpose": "Supports account engagement aggregation through contacts."
+    },
+    {
+      "id": "crm_jp_004",
+      "name": "contacts_to_contact_campaigns_to_campaigns",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "contacts",
+        "contact_campaigns",
+        "campaigns"
+      ],
+      "join_condition": "contact_campaigns.contact_id = contacts.contact_id AND contact_campaigns.campaign_id = campaigns.campaign_id",
+      "required_result": "non_empty",
+      "purpose": "Supports explicit many-to-many campaign participation and attribution."
+    },
+    {
+      "id": "crm_jp_005",
+      "name": "campaigns_to_interactions",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "campaigns",
+        "interactions"
+      ],
+      "join_condition": "campaigns.campaign_id = interactions.campaign_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "interactions.campaign_id IS NULL",
+      "purpose": "Supports campaigns without attributed interactions."
+    },
+    {
+      "id": "crm_jp_006",
+      "name": "interactions_to_campaigns",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "interactions",
+        "campaigns"
+      ],
+      "join_condition": "interactions.campaign_id = campaigns.campaign_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "campaigns.campaign_id IS NULL",
+      "purpose": "Supports organic or unattributed interactions."
+    },
+    {
+      "id": "crm_jp_007",
+      "name": "accounts_to_support_cases",
+      "tier_support": [
+        "T2",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "accounts",
+        "support_cases"
+      ],
+      "join_condition": "support_cases.account_id = accounts.account_id",
+      "required_result": "non_empty",
+      "purpose": "Supports account-level case volume, backlog, and SLA metrics."
+    },
+    {
+      "id": "crm_jp_008",
+      "name": "contacts_to_support_cases",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "contacts",
+        "support_cases"
+      ],
+      "join_condition": "contacts.contact_id = support_cases.contact_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "support_cases.contact_id IS NULL",
+      "purpose": "Supports contacts without support cases and account-level cases."
+    },
+    {
+      "id": "crm_jp_009",
+      "name": "accounts_to_support_cases_to_contacts",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "accounts",
+        "support_cases",
+        "contacts"
+      ],
+      "join_condition": "support_cases.account_id = accounts.account_id AND support_cases.contact_id = contacts.contact_id",
+      "required_result": "non_empty",
+      "purpose": "Supports three-table account, case, and requester analysis."
+    }
+  ],
+  "consistency_rules": [
+    "contact_campaigns must contain unique contact_id and campaign_id pairs.",
+    "The generated bridge must include contacts in multiple campaigns and campaigns with multiple contacts.",
+    "Each contact may have at most one primary campaign attribution.",
+    "Before imperfection injection, attribution weights for each contact must sum to 1.0000.",
+    "When interactions.account_id is populated, it must equal the referenced contact account_id.",
+    "When interactions.campaign_id is populated, the same contact_id and campaign_id pair must exist in contact_campaigns.",
+    "Campaign end_date must be null or on or after start_date.",
+    "Campaign touches must be ordered and remain within the applicable campaign window.",
+    "Support-case contacts must belong to the same account as the case when contact_id is populated.",
+    "Support-case SLA deadlines are derived from opened_at and priority using calendar hours.",
+    "Resolved and Closed cases require resolved_at; unresolved statuses require resolved_at to be null.",
+    "All campaign currency_code values must equal USD."
+  ]
+}

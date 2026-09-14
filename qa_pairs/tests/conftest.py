@@ -9,14 +9,15 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))  # utils/
 sys.path.insert(0, str(BASE / "generator"))  # scale_pairs, gen_family_matrix
 
+from utils.dataset_source import resolve_dataset_source  # noqa: E402
+from utils.output_paths import resolve_qa_output_dir  # noqa: E402
+
 PROFILE = "full"
-QA_DIR = BASE / "qa_pairs" / PROFILE
+QA_DIR = resolve_qa_output_dir(BASE, PROFILE)
 DB = BASE / "dataset" / f"crm_{PROFILE}.duckdb"
 
-# Authoritative source bundle (Track A delivery) - the clean-room tests
-# rebuild from this, never from the generated dataset/.
-SOURCE = BASE / "data" / "crm_dataset_v2"
-AUTH_DDL = SOURCE / "crm_ddl.sql"
+SOURCE = resolve_dataset_source(BASE, PROFILE)
+AUTH_DDL = SOURCE.ddl_path
 LOAD_ORDER = [
     "accounts",
     "campaigns",
@@ -73,25 +74,20 @@ def con():
 
 @pytest.fixture(scope="session")
 def authoritative_con():
-    """A fresh in-memory DuckDB built directly from the authoritative
-    `data/crm_dataset_v2/` DDL + full-profile CSVs. Ground-truth tests run
-    against this so they cannot be fooled by a stale or edited
-    `dataset/crm_full.duckdb`."""
+    """Build an in-memory DuckDB from the configured full generator output."""
     import duckdb
 
-    for name in LOAD_ORDER + ["crm_ddl.sql"]:
-        p = (
-            SOURCE
-            / ("full" if name in LOAD_ORDER else "")
-            / (f"{name}.csv" if name in LOAD_ORDER else name)
-        )
+    for name in LOAD_ORDER:
+        p = SOURCE.csv_dir / f"{name}.csv"
         if not p.exists():
             pytest.skip(f"authoritative source missing: {p}")
+    if not AUTH_DDL.exists():
+        pytest.skip(f"authoritative source missing: {AUTH_DDL}")
 
     c = duckdb.connect(":memory:")
     c.execute(AUTH_DDL.read_text(encoding="utf-8"))
     for name in LOAD_ORDER:
-        csv_path = (SOURCE / "full" / f"{name}.csv").as_posix()
+        csv_path = (SOURCE.csv_dir / f"{name}.csv").as_posix()
         c.execute(f"COPY {name} FROM '{csv_path}' {COPY_OPTS};")
     yield c
     c.close()

@@ -1,9 +1,9 @@
 """
 Step 1 of the CRM Q&A POC pipeline.
 
-The CRM golden dataset is generated upstream (Track A) and delivered as
-the frozen `crm_dataset_v2` bundle. This script does NOT regenerate that
-data - it stages the exported CSVs into `dataset/<profile>/`, builds an
+The CRM golden dataset is generated upstream (Track A). This script does
+NOT regenerate that data - it stages the configured generator output into
+`dataset/<profile>/`, builds an
 on-disk DuckDB file for DBeaver, and writes a manifest with SHA-256
 hashes so the rest of the pipeline has a single, reproducible source of
 ground truth.
@@ -30,12 +30,11 @@ import duckdb
 
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))
-from utils import build_stamp
-from utils.verify import library_versions
+from utils import build_stamp  # noqa: E402
+from utils.dataset_source import resolve_dataset_source  # noqa: E402
+from utils.verify import library_versions  # noqa: E402
 
-SOURCE = BASE / "data" / "crm_dataset_v2"
 DATASET = BASE / "dataset"
-DDL = BASE / "schema" / "ddl.sql"
 
 # parent-before-child so FK constraints hold on COPY
 LOAD_ORDER = [
@@ -57,15 +56,10 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-DBML = BASE / "schema" / "er.dbml"
-AUTH_DDL = SOURCE / "crm_ddl.sql"
-AUTH_DBML = SOURCE / "crm_er.dbml"
-
-
-def load_duckdb(con, csv_dir: Path) -> list[dict]:
+def load_duckdb(con, csv_dir: Path, ddl_path: Path) -> list[dict]:
     """Create the schema from the DDL and COPY every source CSV in FK order.
     Returns the manifest `files` list. Shared with the clean-room test."""
-    con.execute(DDL.read_text(encoding="utf-8"))
+    con.execute(ddl_path.read_text(encoding="utf-8"))
     files = []
     for name in LOAD_ORDER:
         csv_path = csv_dir / f"{name}.csv"
@@ -79,15 +73,15 @@ def load_duckdb(con, csv_dir: Path) -> list[dict]:
 
 
 def build(profile: str) -> None:
-    src_dir = SOURCE / profile
+    source = resolve_dataset_source(BASE, profile)
+    src_dir = source.csv_dir
     if not src_dir.is_dir():
-        raise SystemExit(f"source CSVs not found: {src_dir}")
-
-    # the authoritative DDL/DBML must be byte-identical to the repo copies -
-    # every hash downstream assumes this.
-    for label, a, b in (("crm_ddl.sql", AUTH_DDL, DDL), ("crm_er.dbml", AUTH_DBML, DBML)):
-        if a.read_bytes() != b.read_bytes():
-            raise SystemExit(f"{label}: authoritative bundle != schema/ - reconcile first")
+        raise SystemExit(
+            f"source CSVs not found for profile '{profile}': {src_dir}"
+        )
+    for label, path in (("CRM DDL", source.ddl_path), ("CRM DBML", source.dbml_path)):
+        if not path.is_file():
+            raise SystemExit(f"{label} not found: {path}")
 
     out_dir = DATASET / profile
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -95,22 +89,23 @@ def build(profile: str) -> None:
     tmp_path = DATASET / f"crm_{profile}.duckdb.tmp"
     tmp_path.unlink(missing_ok=True)
 
-    base_cfg = json.loads((BASE / "generator" / "base.json").read_text())
-    bundle_cfg = json.loads((SOURCE / "crm.json").read_text())
+    base_cfg = json.loads(source.base_config_path.read_text(encoding="utf-8"))
+    release_cfg = json.loads(source.release_config_path.read_text(encoding="utf-8"))
 
     # Build into a temp DB + temp staging dir; the previous release is left
     # untouched until everything below has passed.
     con = duckdb.connect(str(tmp_path))
     try:
-        files = load_duckdb(con, src_dir)
+        files = load_duckdb(con, src_dir, source.ddl_path)
         for f in files:
             print(f"  {f['name']:<22} {f['rows']:>8,} rows  sha256={f['sha256'][:12]}")
         integrity = _integrity(con)
         _assert_integrity(integrity)  # raises before anything is published
         digests = build_stamp.table_digests(con, LOAD_ORDER)
-        ddl_sha, dbml_sha = sha256(DDL), sha256(DBML)
+        ddl_sha = sha256(source.ddl_path)
+        dbml_sha = sha256(source.dbml_path)
         core = {
-            "dataset_version": bundle_cfg["dataset_version"],
+            "dataset_version": source.dataset_version,
             "schema_ddl_sha256": ddl_sha,
             "schema_dbml_sha256": dbml_sha,
             "files": files,
@@ -121,8 +116,8 @@ def build(profile: str) -> None:
             con,
             fp,
             digests,
-            bundle_cfg["dataset_version"],
-            bundle_cfg["fixed_values"]["manifest_generated_at"],
+            source.dataset_version,
+            release_cfg["fixed_values"]["manifest_generated_at"],
         )
     except BaseException:
         con.close()
@@ -132,14 +127,13 @@ def build(profile: str) -> None:
 
     manifest = {
         "domain": "crm",
-        # canonical tag from the delivered bundle - preserved for traceability
-        "dataset_version": bundle_cfg["dataset_version"],
+        "dataset_version": source.dataset_version,
         "build_fingerprint": fp,
-        "source_bundle": "crm_dataset_v2",
+        "source_path": source.source_label,
         "profile": profile,
         # fixed per dataset version (scope doc Section 7.7) so a clean-room
         # re-run regenerates a byte-identical manifest
-        "generated_at": bundle_cfg["fixed_values"]["manifest_generated_at"],
+        "generated_at": release_cfg["fixed_values"]["manifest_generated_at"],
         "seed": base_cfg["seed"],
         "reference_today": base_cfg["reference_today"],
         "row_cap_per_table": base_cfg["max_rows_per_table"],

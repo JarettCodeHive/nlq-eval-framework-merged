@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T1-04-SEED-01",
+  "domain": "crm",
+  "tier": "T1",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(*) AS billing_cases FROM support_cases WHERE category = 'Billing';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "28dae7c8bde2f3ca608f86d0e16a214dee74c74bee011cdfdd46bc04b655bc14",
+  "generated_expected_answer": "115",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T1-04"
+}

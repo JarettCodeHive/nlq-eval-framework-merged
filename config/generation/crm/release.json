@@ -1,0 +1,39 @@
+{
+  "domain": "crm",
+  "dataset_version": "dataset-v1.0.0",
+  "schema_source": "schemas/crm/crm_ddl.sql",
+  "fixed_values": {
+    "seed_source": "config/generation/base.json:seed",
+    "reference_today_source": "config/generation/base.json:reference_today",
+    "manifest_generated_at": "2026-09-04T00:00:00"
+  },
+  "output_paths": {
+    "dev": "tmp/generated/crm/dev",
+    "full": "release/crm/dataset-v1.0.0"
+  },
+  "release_rules": {
+    "release_profile": "full",
+    "refuse_release_export_for_profiles": [
+      "dev"
+    ],
+    "immutable_after_manifest": true,
+    "correction_policy": "Create a new dataset version rather than editing an immutable release."
+  },
+  "table_order": [
+    "accounts",
+    "contacts",
+    "campaigns",
+    "contact_campaigns",
+    "interactions",
+    "support_cases"
+  ],
+  "generation_notes": {
+    "row_target_policy": "Use explicit per-table row_targets. Dev is intentionally small and is not required to equal exactly 1% of full.",
+    "release_profile": "full",
+    "release_directory": "release/crm/dataset-v1.0.0",
+    "row_cap_source": "config/generation/base.json:max_rows_per_table",
+    "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version to preserve byte-identical regeneration.",
+    "domain_boundary": "CRM covers account and contact engagement, campaign attribution, and support-case SLA analysis.",
+    "currency_policy": "CRM is USD-only."
+  }
+}

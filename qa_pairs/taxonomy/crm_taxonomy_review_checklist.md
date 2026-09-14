@@ -4,7 +4,7 @@ To be completed by an **independent reviewer** (not the taxonomy author,
 per scope doc Section 9.4) before this taxonomy is frozen and full-scale
 Q&A authoring proceeds.
 
-Dataset in scope: `crm_dataset_v2` (`accounts`, `contacts`, `campaigns`,
+Dataset in scope: `dataset-v1.0.0` (`accounts`, `contacts`, `campaigns`,
 `contact_campaigns`, `interactions`, `support_cases`).
 
 ## Design conformance
@@ -42,10 +42,12 @@ Dataset in scope: `crm_dataset_v2` (`accounts`, `contacts`, `campaigns`,
       taxonomy exists yet; re-check when it does, per the CRM/Sales
       boundary open item).
 
-## Ground-truth conformance (per delivered `qa_pairs/full/`)
+## Ground-truth conformance
+
+Applies to the delivered `release/crm/qa-pairs-v<qa_version>/` package.
 
 - [ ] Independent reviewer re-executed every `reference_sql` on a clean
-      DuckDB built only from the released `data/crm_dataset_v2/full` CSVs.
+      DuckDB built only from `release/crm/dataset-v1.0.0` CSVs.
 - [ ] Every re-execution's `result_hash` matches the committed
       `verification_logs/<question_id>.json`.
 - [ ] No shipped CSV row has `execution_status` other than `ok` in its

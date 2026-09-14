@@ -17,7 +17,7 @@ status — that lives in `../README.md` and `../docs/ARCHITECTURE.md`.
 
 | Version | Change |
 |---|---|
-| v1.0 | Initial spec against the `crm_dataset_v2` schema: 6 tables (`accounts`, `contacts`, `campaigns`, `contact_campaigns`, `interactions`, `support_cases`), join paths JP1–JP12, 160 pairs across 32 families (T1 32 / T2 40 / T3 32 / T4 32 / T5 24). CRM covers customer engagement, campaign attribution, and support-case / SLA behaviour; sales pipeline and revenue are excluded (Sales domain). USD only. `reference_today` = `2026-08-01`. |
+| v1.0 | Initial spec against the `dataset-v1.0.0` CRM schema: 6 tables (`accounts`, `contacts`, `campaigns`, `contact_campaigns`, `interactions`, `support_cases`), join paths JP1–JP12, 160 pairs across 32 families (T1 32 / T2 40 / T3 32 / T4 32 / T5 24). CRM covers customer engagement, campaign attribution, and support-case / SLA behaviour; sales pipeline and revenue are excluded (Sales domain). USD only. `reference_today` = `2026-08-01`. |
 
 ## 1. What this document is
 

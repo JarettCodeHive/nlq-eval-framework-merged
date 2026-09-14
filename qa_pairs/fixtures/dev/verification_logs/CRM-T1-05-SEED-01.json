@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T1-05-SEED-01",
+  "domain": "crm",
+  "tier": "T1",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(*) AS meeting_interactions FROM interactions WHERE engagement_type = 'Meeting';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "5ec1a0c99d428601ce42b407ae9c675e0836a8ba591c8ca6e2a2cf5563d97ff0",
+  "generated_expected_answer": "144",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T1-05"
+}

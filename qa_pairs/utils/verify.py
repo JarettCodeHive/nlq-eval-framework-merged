@@ -18,8 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .serialization import SerializationError, serialize
+from .output_paths import qa_version
 
-QA_VERSION = "0.3.0"
+QA_VERSION = qa_version(Path(__file__).resolve().parent.parent)
 
 
 @dataclass

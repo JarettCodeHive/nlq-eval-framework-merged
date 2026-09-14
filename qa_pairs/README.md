@@ -11,10 +11,10 @@ review and are *not* part of the 160. **16 rephrase groups** (~10% of the
 160) each pair a base release question with 1–2 reworded variants that
 share one `result_hash`. See [Status](#status).
 
-This POC uses the **`crm_dataset_v2`** bundle (six tables: `accounts`,
-`contacts`, `campaigns`, `contact_campaigns`, `interactions`,
-`support_cases` — engagement / campaign / support, no sales pipeline).
-`reference_today = 2026-08-01`.
+This POC consumes the CRM generator outputs directly (six tables:
+`accounts`, `contacts`, `campaigns`, `contact_campaigns`, `interactions`,
+and `support_cases`). The configured dataset version is `dataset-v1.0.0`,
+and `reference_today = 2026-08-01`.
 
 **Docs:** `docs/ARCHITECTURE.md` (how it works — data flow, guarantees,
 extension guide) · `docs/REMEDIATION.md` (review findings + what is / is
@@ -24,10 +24,9 @@ not fixed) · `taxonomy/crm_qa_design_spec.md` (milestone deliverable) ·
 ## Folder layout
 
 ```
-qa_pairs_poc/
+qa_pairs/
 ├── README.md
-├── data/crm_dataset_v2/          <- the delivered golden dataset (input, read-only)
-├── schema/  ddl.sql , er.dbml    <- CRM DDL + ER diagram source (from the bundle)
+├── schema/  ddl.sql , er.dbml    <- local Q&A schema reference copies
 ├── docs/    ARCHITECTURE.md , REMEDIATION.md
 ├── .sqlfluff                    <- lint config (house style for reference SQL)
 ├── taxonomy/                     <- the Q&A design + governance
@@ -47,12 +46,11 @@ qa_pairs_poc/
 │   ├── duckdb_io.py             <-   typed-DuckDB connect + distinct()
 │   └── labels.py                <-   generic label lookup (CRM map lives in generator/labels.json)
 ├── generator/                    <- CRM specifics: data files + thin drivers
-│   ├── config.json             <-   domain, id prefix, tier quotas, resolved-OI record
+│   ├── config.json             <-   domain, dataset/output paths, Q&A version, quotas, resolved OIs
 │   ├── catalog.json            <-   param name -> SQL listing its allowed values
 │   ├── families.json           <-   32 question families (the source of truth)
 │   ├── labels.json             <-   CRM enum token -> business phrase (question text only)
-│   ├── base.json               <-   seed, reference_today, imperfection rates (from bundle)
-│   ├── generate_crm.py         <-   Step 1: stage bundle -> dataset/ + typed DuckDB + manifest
+│   ├── generate_crm.py         <-   Step 1: stage generator output -> DuckDB + manifest
 │   ├── validate_crm.py         <-   Step 2: FK / join-path / imperfection gate
 │   ├── scale_pairs.py          <-   Step 3: 160 pairs from config+catalog+families+templates
 │   ├── author_qa_pairs.py      <-   Step 3b: 32 seed FIXTURES (review only)
@@ -62,10 +60,6 @@ qa_pairs_poc/
 ├── tests/                       <- pytest: contract / templates / ground-truth / scoring / rephrase / sqlfluff
 ├── dataset/                     <- generated (git-ignored except manifests)
 │   └── <profile>/*.csv , crm_<profile>.duckdb , manifest_<profile>.json
-├── qa_pairs/<profile>/          <- the RELEASE (generated, tracked)
-│   ├── crm_qa_pairs.csv             7-field contract, all 160 (OI-1/OI-4 resolved)
-│   ├── crm_qa_pairs_companion.csv   question_id / tier / family / join_path / scoring_mode / schema / hash
-│   └── verification_logs/*.json     one per question (160)
 └── fixtures/<profile>/          <- 32 seed fixtures (one per family), NOT part of the 160
     ├── crm_seed_fixtures.csv , crm_seed_fixtures_companion.csv
     └── verification_logs/*.json
@@ -74,9 +68,11 @@ qa_pairs_poc/
 ## The flow
 
 ```
-data/crm_dataset_v2/<profile>/*.csv        (frozen golden dataset - the ONLY data source)
+../tmp/generated/crm/dev/imperfect/*.csv   (dev source)
+../release/crm/<dataset_version>/*.csv     (full source)
         |
-        v   generator/generate_crm.py      stage CSVs; CREATE the DDL in a fresh
+        v   generator/generate_crm.py      resolve source from config; stage CSVs;
+        |                                   CREATE the canonical DDL in a fresh
         |                                   crm_<profile>.duckdb and COPY the CSVs into
         |                                   TYPED tables; write manifest (hashes, toolchain)
         v
@@ -94,7 +90,10 @@ generator/scale_pairs.py                    for each family:
         |    - survivors numbered CRM-T{n}-{family}-{seq} AFTER verification
         |    - non-zero exit if any tier misses quota
         v
-qa_pairs/<profile>/crm_qa_pairs.csv (+_companion)  +  verification_logs/*.json
+dev:  ../tmp/generated/crm/dev/qa_pairs/
+full: ../release/crm/qa-pairs-v<qa_version>/
+       crm_qa_pairs.csv (+_companion) + verification_logs/*.json
+       rephrase/*.csv + rephrase/verification_logs/*.json
         |
         v   pytest tests/                   7-field contract; tier counts == 32/40/32/32/24;
         |                                   normalized-text uniqueness; every template var
@@ -107,10 +106,9 @@ qa_pairs/<profile>/crm_qa_pairs.csv (+_companion)  +  verification_logs/*.json
 ## Reproduce it
 
 ```bash
-cd qa_pairs_poc
+cd qa_pairs
 python3 -m pip install -r requirements.txt          # duckdb==0.10.3, jinja2, pytest, sqlfluff (pinned)
 
-rm -rf dataset qa_pairs fixtures rephrase
 for p in dev full; do
   python3 generator/generate_crm.py    --profile $p
   python3 generator/validate_crm.py    --profile $p
@@ -124,6 +122,20 @@ python3 -m pytest tests/ -q
 
 Each script puts the repo root on `sys.path` itself, so no `PYTHONPATH`
 is needed. Requires DuckDB 0.10.3 (the mandated version, §7.1).
+
+Before running the Q&A pipeline, create the requested generator source from
+the repository root:
+
+```bash
+python main.py apply-imperfections --profile dev --write-preview
+python main.py export-csvs --profile full
+```
+
+`generator/config.json` controls both profile source templates. The full source
+path interpolates the dataset version from `config/generation/crm/release.json`.
+It also controls the Q&A version and final profile output paths. Dev output is
+written to `tmp/generated/crm/dev/qa_pairs`; full output is written to the
+independently versioned `release/crm/qa-pairs-v<qa_version>` package.
 
 `dev` = 1%-scale (fast iteration). **Only `full` is deliverable** (§7.3);
 `dev` and `full` answers differ because the datasets hold different data.
@@ -209,7 +221,7 @@ Post-review remediation rounds 1 and 2 are done (`docs/REMEDIATION.md`).
 | T4 (6 families) | 32 | Verified. **All GROUP BY** over a real dimension; every family joins 3 tables that each do work. T4-04 groups by `contacts.title` and exercises the `attribution_weight` NULL imperfection. |
 | T5 (5 families) | 24 | Verified. Account engagement always via `accounts→contacts→interactions`. T5-04/05 compare Q1 vs Q2 2026 and do **not** assume a growth direction. |
 
-`rephrase/<profile>/` — **16 groups**, 16 base pairs (all in the 160,
+`<resolved Q&A package>/rephrase/` — **16 groups**, 16 base pairs (all in the 160,
 ~10%) + 19 reworded variants; every group shares one `result_hash`.
 
 **Still open:**

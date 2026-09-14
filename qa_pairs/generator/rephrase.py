@@ -7,7 +7,7 @@ This script looks that pair up in the delivered contract + companion,
 reuses its exact reference_sql / expected_answer / result_hash, and
 attaches reworded variants. ~16 of the 160 are group bases (~10%).
 
-Output (rephrase/<profile>/):
+Output (<resolved Q&A package>/rephrase/):
   crm_rephrase_pairs.csv   7-field contract - the reworded variant rows only
   crm_rephrase_map.csv     pair_group_id -> question_id, is_base, class, hash
   verification_logs/*.json
@@ -28,8 +28,9 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))
-from utils import build_stamp, verify
-from utils.duckdb_io import connect_typed
+from utils import build_stamp, verify  # noqa: E402
+from utils.duckdb_io import connect_typed  # noqa: E402
+from utils.output_paths import resolve_qa_output_dir  # noqa: E402
 
 ID_PREFIX = json.loads((BASE / "generator" / "config.json").read_text())["id_prefix"]
 
@@ -193,14 +194,13 @@ def _read(path: Path) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
-    profile = ap.parse_args().profile
+def generate_rephrases(profile: str) -> None:
+    """Generate verified rephrase variants for an existing Q&A release."""
+
     _mf = json.loads((BASE / "dataset" / f"manifest_{profile}.json").read_text())
     dv, domain = _mf["dataset_version"], _mf["domain"]
 
-    qa = BASE / "qa_pairs" / profile
+    qa = resolve_qa_output_dir(BASE, profile)
     companion = _read(qa / "crm_qa_pairs_companion.csv")
     contract = {r["natural_language_question"]: r for r in _read(qa / "crm_qa_pairs.csv")}
     by_family_param = {(r["family"], r["param_values"]): r for r in companion}
@@ -271,7 +271,7 @@ def main() -> None:
     if bad:
         raise SystemExit(f"rephrase hash mismatch (nothing written): {bad}")
 
-    out = BASE / "rephrase" / profile
+    out = qa / "rephrase"
     if out.exists():
         shutil.rmtree(out)
     logs = out / "verification_logs"
@@ -285,6 +285,13 @@ def main() -> None:
         f"[{profile}] rephrase: {bases} base pairs (of 160) + {len(variants)} "
         f"variants across {len(GROUPS)} groups"
     )
+    print(f"[{profile}] rephrase output: {out}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
+    generate_rephrases(ap.parse_args().profile)
 
 
 def _write_plan(path: Path) -> None:

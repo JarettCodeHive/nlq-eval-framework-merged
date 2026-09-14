@@ -13,7 +13,7 @@ per family (it describes the method, not the parameter value). See
 
 Source of truth: `NLQ_Evaluation_Framework_Execution_Scope_updated.pdf`
 Sections 6-9, 23. This spec maps the fixed T1-T5 tiers (Section 9.2) onto
-the `crm_dataset_v2` schema. It does not redefine the tiers.
+the `dataset-v1.0.0` CRM schema. It does not redefine the tiers.
 
 ## 1. Scope
 

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T1-01-SEED-01",
+  "domain": "crm",
+  "tier": "T1",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT ROUND(SUM(budget_amount), 2) AS total_budget FROM campaigns WHERE campaign_type = 'Retention';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "cfbf27d1a11d343beb2aef7eb208cd3e293d09dfc0084c28a7a6424e12fc58bf",
+  "generated_expected_answer": "1640383.44",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T1-01"
+}

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T1-07-SEED-01",
+  "domain": "crm",
+  "tier": "T1",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT COUNT(*) AS resolved_within_sla FROM support_cases WHERE priority = 'Critical' AND resolved_at IS NOT NULL AND resolved_at <= sla_due_at;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278",
+  "generated_expected_answer": "13",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T1-07"
+}

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T2-08-SEED-01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT ROUND(COUNT(*) FILTER (WHERE s.resolved_at IS NOT NULL AND s.resolved_at <= s.sla_due_at) * 100.0 / COUNT(*), 2) AS sla_compliance_pct FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id WHERE a.industry = 'Technology';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "7a37a94a45a159a2cb6ab754b628afaeafa5f9b077b8706aa8faa26842c20ff2",
+  "generated_expected_answer": "18.81",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T2-08"
+}

@@ -28,10 +28,10 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))
-from utils import build_stamp, verify
-from utils.duckdb_io import connect_typed
+from utils import build_stamp, verify  # noqa: E402
+from utils.duckdb_io import connect_typed  # noqa: E402
 
-FIXED_TODAY = "2026-08-01"  # crm_dataset_v2 reference_today
+FIXED_TODAY = "2026-08-01"  # configured CRM dataset reference date
 # The two most recent COMPLETE calendar quarters relative to FIXED_TODAY.
 # Data ends 2026-07-28, so Q3 2026 is incomplete and excluded.
 Q1_START, Q1_END = "2026-01-01", "2026-04-01"  # previous complete quarter
@@ -426,10 +426,8 @@ def write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
             w.writerow({k: r[k] for k in fields})
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
-    profile = ap.parse_args().profile
+def generate_seed_fixtures(profile: str) -> None:
+    """Generate the manually reviewable seed Q&A fixtures for a profile."""
 
     manifest = json.loads((BASE / "dataset" / f"manifest_{profile}.json").read_text())
     dataset_version = manifest["dataset_version"]
@@ -489,6 +487,12 @@ def main() -> None:
     write_csv(out_dir / "crm_seed_fixtures.csv", CONTRACT_FIELDS, fixtures)
     write_csv(out_dir / "crm_seed_fixtures_companion.csv", COMPANION_FIELDS, companion)
     print(f"[{profile}] {len(fixtures)} seed fixtures (review only, NOT part of the 160)")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
+    generate_seed_fixtures(ap.parse_args().profile)
 
 
 if __name__ == "__main__":

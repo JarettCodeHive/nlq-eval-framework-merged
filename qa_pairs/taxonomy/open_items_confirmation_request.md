@@ -1,7 +1,7 @@
 # CRM Open Items — status
 
 Source: `NLQ_Evaluation_Framework_Execution_Scope_updated.pdf`, Section 23.
-Dataset in scope: `crm_dataset_v2` — `accounts`, `contacts`, `campaigns`,
+Dataset in scope: `dataset-v1.0.0` — `accounts`, `contacts`, `campaigns`,
 `contact_campaigns`, `interactions`, `support_cases`.
 `reference_today` = `2026-08-01`.
 
@@ -52,12 +52,13 @@ downstream scoring configuration is pending.
 
 ## 3. Interim handling in the POC
 
-- All 160 pairs are generated to full quota and written to
-  `qa_pairs/<profile>/crm_qa_pairs.csv`. The earlier held-file split for
+- All 160 pairs are generated to full quota and written to the configured
+  profile output (`tmp/generated/crm/dev/qa_pairs` for dev and the versioned
+  `release/crm/qa-pairs-v<qa_version>` package for full). The earlier held-file split for
   T1/T3 was removed once OI-1 and OI-4 were resolved.
 - `generator/config.json` `resolved_open_items` records each ruling with
   attribution and date.
-- `qa_pairs/<profile>/crm_qa_pairs_companion.csv` carries `scoring_mode`
+- The generated `crm_qa_pairs_companion.csv` carries `scoring_mode`
   (`scalar_exact` | `table_exact` | `judge_plus_exact`, one per tier per
   Section 9.2) plus `answer_schema`, `numeric_components`, and
   `scorer_status`, so the downstream evaluator scores each pair without

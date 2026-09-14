@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T5-02-SEED-01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT a.account_name, COUNT(s.case_id) AS open_cases FROM accounts a INNER JOIN support_cases s ON a.account_id = s.account_id WHERE s.status IN ('New', 'InProgress', 'PendingCustomer') GROUP BY a.account_id, a.account_name ORDER BY open_cases DESC, a.account_name ASC LIMIT 5;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "74c4f1267987f2e25902eaca8bdf233987622aab0b09fb60a11cdfc379889056",
+  "generated_expected_answer": "Davis Baxter and Patterson | 8; Hill Collins | 8; Johnson Inc | 8; Long Chapman | 8; Reynolds and Sons | 8",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T5-02"
+}

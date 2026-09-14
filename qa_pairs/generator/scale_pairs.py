@@ -24,12 +24,13 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))
 
-from utils import build_stamp, verify
-from utils.duckdb_io import connect_typed, distinct
-from utils.labels import label
-from utils.labels import load as load_labels
-from utils.sampling import combos, even_sample
-from utils.sql import jinja_env
+from utils import build_stamp, verify  # noqa: E402
+from utils.duckdb_io import connect_typed, distinct  # noqa: E402
+from utils.labels import label  # noqa: E402
+from utils.labels import load as load_labels  # noqa: E402
+from utils.output_paths import resolve_qa_output_dir  # noqa: E402
+from utils.sampling import combos, even_sample  # noqa: E402
+from utils.sql import jinja_env  # noqa: E402
 
 GEN = BASE / "generator"
 CONFIG = json.loads((GEN / "config.json").read_text())
@@ -109,10 +110,8 @@ def check_template_vars(fam: dict) -> None:
         raise SystemExit(f"{fam['family']} {fam['template']}: unbound vars {sorted(missing)}")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
-    profile = ap.parse_args().profile
+def generate_pairs(profile: str) -> None:
+    """Generate and verify the complete Q&A pair release for a profile."""
 
     quota, prefix = CONFIG["tier_quota"], CONFIG["id_prefix"]
     for tier, want in quota.items():
@@ -122,7 +121,7 @@ def main() -> None:
 
     manifest = json.loads((BASE / "dataset" / f"manifest_{profile}.json").read_text())
     dv = manifest["dataset_version"]
-    out = BASE / "qa_pairs" / profile
+    out = resolve_qa_output_dir(BASE, profile)
     con = connect_typed(BASE / "dataset" / f"crm_{profile}.duckdb")
     build_stamp.require_fresh_db(con, manifest, BASE, profile)
     catalog = build_catalog(con)
@@ -228,6 +227,13 @@ def main() -> None:
         out / "crm_qa_pairs_companion.csv", COMPANION, sorted(comp, key=lambda r: r["question_id"])
     )
     print(f"[{profile}] {len(pairs)} pairs / {sum(quota.values())}")
+    print(f"[{profile}] Q&A output: {out}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
+    generate_pairs(ap.parse_args().profile)
 
 
 def _write(path: Path, fields: list[str], rows: list[dict]) -> None:

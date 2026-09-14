@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T4-06-SEED-01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT i.engagement_type AS entity, SUM(i.engagement_points) AS engagement_points FROM accounts a INNER JOIN contacts c ON a.account_id = c.account_id INNER JOIN interactions i ON c.contact_id = i.contact_id WHERE a.industry = 'Healthcare' GROUP BY i.engagement_type ORDER BY engagement_points DESC, entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 7,
+  "result_hash": "fce79bbe7ab52cf95118957ea4565ef8c7d5818b1cc5fd9e24fa300817a46372",
+  "generated_expected_answer": "FormSubmission | 184; Meeting | 150; PhoneCall | 147; EventAttendance | 120; LinkClick | 119; WebinarAttendance | 105; EmailOpen | 29",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T4-06"
+}

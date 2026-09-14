@@ -7,8 +7,10 @@ import json
 from pathlib import Path
 
 from utils.serialization import serialize
+from utils.output_paths import resolve_qa_output_dir
 
-LOG_DIR = Path(__file__).resolve().parent.parent / "qa_pairs" / "full" / "verification_logs"
+QA_ROOT = Path(__file__).resolve().parent.parent
+LOG_DIR = resolve_qa_output_dir(QA_ROOT, "full") / "verification_logs"
 
 
 def _rows(con, r):
@@ -48,8 +50,7 @@ def test_no_shipped_pair_returns_zero_or_null(con, pairs):
 def test_reference_sql_reproduces_expected_answer_from_authoritative_source(
     pairs, companion, authoritative_con
 ):
-    """Clean-room: rebuild the DB from data/crm_dataset_v2/ and re-verify every
-    pair, so a stale or tampered dataset/crm_full.duckdb cannot pass this."""
+    """Rebuild from the configured full release and re-verify every pair."""
     comp = {c["natural_language_question"]: c for c in companion}
     for r in pairs:
         result, cols = _rows(authoritative_con, r)

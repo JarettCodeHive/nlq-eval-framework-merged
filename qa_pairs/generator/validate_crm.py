@@ -98,10 +98,9 @@ def connect(profile: str):
     return connect_typed(BASE / "dataset" / f"crm_{profile}.duckdb")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
-    profile = ap.parse_args().profile
+def validate(profile: str) -> None:
+    """Validate the staged CRM dataset used for Q&A generation."""
+
     con = connect(profile)
     failures = 0
 
@@ -148,7 +147,19 @@ def main() -> None:
     print(f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}")
 
     print(f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}")
-    sys.exit(1 if failures else 0)
+    con.close()
+    if failures:
+        raise ValueError(f"{failures} Q&A dataset validation check(s) failed")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--profile", choices=["dev", "full"], default="dev")
+    try:
+        validate(ap.parse_args().profile)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T4-05-SEED-01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "dev",
+  "reference_sql": "SELECT s.status AS entity, COUNT(s.case_id) AS case_count FROM accounts a INNER JOIN contacts c ON a.account_id = c.account_id INNER JOIN support_cases s ON c.contact_id = s.contact_id WHERE a.region = 'West' GROUP BY s.status ORDER BY case_count DESC, entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "9c5e78b0b4762237000d50c706d1ed071e57f668430171114799a0542f9e3e4c",
+  "generated_expected_answer": "Resolved | 28; InProgress | 21; Closed | 16; PendingCustomer | 12; New | 10",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.15",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.6"
+  },
+  "kind": "seed_fixture",
+  "family": "T4-05"
+}

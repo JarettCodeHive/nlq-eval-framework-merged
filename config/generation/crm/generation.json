@@ -1,0 +1,343 @@
+{
+  "domain_values": {
+    "industries": [
+      "Technology",
+      "Healthcare",
+      "FinancialServices",
+      "Retail",
+      "Manufacturing",
+      "Education",
+      "Energy"
+    ],
+    "regions": [
+      "North",
+      "South",
+      "East",
+      "West",
+      "Central"
+    ],
+    "customer_tiers": [
+      "Standard",
+      "Preferred",
+      "Strategic"
+    ],
+    "contact_titles": [
+      "Customer Success Manager",
+      "Operations Director",
+      "Procurement Manager",
+      "IT Director",
+      "Business Analyst",
+      "Service Delivery Manager",
+      "Program Manager"
+    ],
+    "campaign_types": [
+      "Awareness",
+      "Nurture",
+      "Retention",
+      "Reengagement",
+      "CustomerEducation"
+    ],
+    "campaign_channels": [
+      "Email",
+      "Phone",
+      "Web",
+      "Webinar",
+      "Event",
+      "Social"
+    ],
+    "campaign_statuses": [
+      "Draft",
+      "Scheduled",
+      "Active",
+      "Completed",
+      "Cancelled"
+    ],
+    "campaign_member_statuses": [
+      "Targeted",
+      "Sent",
+      "Engaged",
+      "Responded",
+      "Converted",
+      "OptedOut"
+    ],
+    "engagement_types": [
+      "EmailOpen",
+      "LinkClick",
+      "FormSubmission",
+      "PhoneCall",
+      "Meeting",
+      "WebinarAttendance",
+      "EventAttendance"
+    ],
+    "interaction_directions": [
+      "Inbound",
+      "Outbound"
+    ],
+    "support_case_categories": [
+      "ProductIssue",
+      "Billing",
+      "Access",
+      "Integration",
+      "ServiceRequest",
+      "GeneralInquiry"
+    ],
+    "support_case_priorities": [
+      "Low",
+      "Medium",
+      "High",
+      "Critical"
+    ],
+    "support_case_statuses": [
+      "New",
+      "InProgress",
+      "PendingCustomer",
+      "Resolved",
+      "Closed"
+    ]
+  },
+  "generation_rules": {
+    "date_windows": {
+      "account_created_start": "2022-01-01",
+      "unlinked_contact_created_start": "2022-01-01",
+      "entity_distribution_start": "2023-01-01",
+      "campaign_historical_start": "2023-01-01",
+      "organic_interaction_start": "2023-01-01",
+      "support_case_opened_start": "2023-01-01"
+    },
+    "accounts": {
+      "account_size": {
+        "minimum": 10,
+        "maximum": 5000
+      },
+      "customer_tier_weights": {
+        "Standard": 0.62,
+        "Preferred": 0.28,
+        "Strategic": 0.1
+      },
+      "active_probability": 0.88
+    },
+    "contacts": {
+      "eligible_account_fraction": 0.9,
+      "unassigned_account_probability": 0.05,
+      "active_probability": 0.9
+    },
+    "campaigns": {
+      "status_weights": {
+        "Draft": 0.1,
+        "Scheduled": 0.12,
+        "Active": 0.24,
+        "Completed": 0.44,
+        "Cancelled": 0.1
+      },
+      "required_status_coverage": [
+        "Completed",
+        "Active",
+        "Scheduled"
+      ],
+      "future_start_offset_days": {
+        "minimum": 1,
+        "maximum": 180
+      },
+      "historical_end_duration_days": {
+        "minimum": 7,
+        "maximum": 120
+      },
+      "future_end_duration_days": {
+        "minimum": 30,
+        "maximum": 120
+      },
+      "creation_lead_days": {
+        "minimum": 1,
+        "maximum": 120
+      },
+      "future_open_window_days": 90,
+      "budget": {
+        "minimum_amount": 5000,
+        "maximum_amount": 250000,
+        "null_probability": 0.1
+      }
+    },
+    "interactions": {
+      "attributed_campaign_fraction": 0.8,
+      "eligible_contact_fraction": 0.85,
+      "organic_probability": 0.3,
+      "account_null_probability": 0.1,
+      "created_lag_hours": {
+        "minimum": 0,
+        "maximum": 48
+      }
+    },
+    "support_cases": {
+      "eligible_contact_fraction": 0.7,
+      "contact_assignment_probability": 0.75,
+      "status_weights": {
+        "New": 0.16,
+        "InProgress": 0.24,
+        "PendingCustomer": 0.14,
+        "Resolved": 0.3,
+        "Closed": 0.16
+      },
+      "priority_weights": {
+        "Low": 0.28,
+        "Medium": 0.42,
+        "High": 0.23,
+        "Critical": 0.07
+      },
+      "required_status_coverage": [
+        "Resolved",
+        "New"
+      ],
+      "resolved_opened_cutoff_days": 7,
+      "minimum_resolution_hours": 1,
+      "resolution_sla_multiplier": 2,
+      "created_lag_hours": {
+        "minimum": 0,
+        "maximum": 2
+      }
+    }
+  },
+  "business_mappings": {
+    "engagement_points": {
+      "EmailOpen": 1,
+      "LinkClick": 3,
+      "PhoneCall": 5,
+      "WebinarAttendance": 7,
+      "FormSubmission": 8,
+      "EventAttendance": 8,
+      "Meeting": 10
+    },
+    "engagement_channels": {
+      "EmailOpen": "Email",
+      "LinkClick": "Web",
+      "FormSubmission": "Web",
+      "PhoneCall": "Phone",
+      "Meeting": "Phone",
+      "WebinarAttendance": "Webinar",
+      "EventAttendance": "Event"
+    },
+    "sla_calendar_hours": {
+      "Low": 72,
+      "Medium": 48,
+      "High": 24,
+      "Critical": 4
+    },
+    "support_case_subject_by_category": {
+      "ProductIssue": "Product behavior requires investigation",
+      "Billing": "Billing statement requires review",
+      "Access": "User access requires assistance",
+      "Integration": "Integration connection requires support",
+      "ServiceRequest": "Customer service request",
+      "GeneralInquiry": "General customer inquiry"
+    },
+    "campaign_status_rules": {
+      "future_start": [
+        "Draft",
+        "Scheduled"
+      ],
+      "requires_end_date": [
+        "Scheduled",
+        "Completed",
+        "Cancelled"
+      ]
+    },
+    "resolved_case_statuses": [
+      "Resolved",
+      "Closed"
+    ],
+    "unresolved_case_statuses": [
+      "New",
+      "InProgress",
+      "PendingCustomer"
+    ],
+    "currency_code": "USD",
+    "attribution": {
+      "minimum_weight": "0.0000",
+      "maximum_weight": "1.0000",
+      "weight_scale": 4,
+      "sum_scope": "contact",
+      "expected_sum_before_imperfections": "1.0000",
+      "maximum_primary_campaigns_per_contact": 1
+    }
+  },
+  "distributions": {
+    "campaign_budget": {
+      "preset": "pareto_amount"
+    },
+    "interaction_frequency": {
+      "preset": "poisson_frequency"
+    },
+    "date_clustering": {
+      "preset": "gaussian_mixture_dates"
+    }
+  },
+  "distribution_targets": {
+    "campaign_budget": {
+      "table": "campaigns",
+      "field": "budget_amount",
+      "distribution": "pareto",
+      "settings_key": "campaign_budget",
+      "currency": "USD"
+    },
+    "interaction_frequency": {
+      "table": "interactions",
+      "group_by": "contact_id",
+      "distribution": "poisson",
+      "settings_key": "interaction_frequency"
+    },
+    "date_clustering": {
+      "distribution": "gaussian_mixture",
+      "settings_key": "date_clustering",
+      "targets": [
+        "accounts.created_at",
+        "contacts.created_at",
+        "campaigns.start_date",
+        "campaigns.created_at",
+        "contact_campaigns.first_touch_at",
+        "contact_campaigns.last_touch_at",
+        "interactions.interaction_at",
+        "interactions.created_at",
+        "support_cases.opened_at"
+      ]
+    },
+    "support_case_duration": {
+      "table": "support_cases",
+      "anchor_field": "opened_at",
+      "derived_fields": [
+        "sla_due_at",
+        "resolved_at"
+      ],
+      "sla_source": "business_mappings.sla_calendar_hours"
+    }
+  },
+  "imperfection_targets": {
+    "near_duplicate_contacts": {
+      "table": "contacts",
+      "fields": [
+        "first_name",
+        "email"
+      ],
+      "rate_source": "config/generation/base.json:imperfections.duplicate_pct"
+    },
+    "missing_attribution_weights": {
+      "table": "contact_campaigns",
+      "field": "attribution_weight",
+      "rate_source": "config/generation/base.json:imperfections.null_pct"
+    },
+    "engagement_point_outliers": {
+      "table": "interactions",
+      "field": "engagement_points",
+      "rate_source": "config/generation/base.json:imperfections.outlier_pct",
+      "minimum_value": 50,
+      "maximum_value": 100
+    },
+    "support_case_boundary_timestamps": {
+      "table": "support_cases",
+      "anchor_field": "opened_at",
+      "derived_fields": [
+        "sla_due_at",
+        "resolved_at"
+      ],
+      "values_source": "config/generation/base.json:imperfections.boundary_dates"
+    }
+  }
+}

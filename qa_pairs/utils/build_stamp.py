@@ -24,6 +24,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from utils.dataset_source import resolve_dataset_source
+
 STAMP_TABLE = "_build_stamp"
 _RS = b"\x1e"  # ASCII record separator between serialized rows
 
@@ -135,16 +137,13 @@ def require_fresh_db(con, manifest: dict, base_dir: Path, profile: str) -> None:
     if json.loads(db_digests_json) != manifest["table_digests"]:
         die("_build_stamp digests disagree with the manifest")
 
-    # 2. authoritative source bundle (not just the staged mirror).
-    src = base_dir / "data" / "crm_dataset_v2"
-    auth_ddl, auth_dbml = src / "crm_ddl.sql", src / "crm_er.dbml"
-    repo_ddl = base_dir / "schema" / "ddl.sql"
-    repo_dbml = base_dir / "schema" / "er.dbml"
+    # 2. generator-owned source and canonical schema files.
+    source = resolve_dataset_source(base_dir, profile)
+    if manifest["dataset_version"] != source.dataset_version:
+        die("manifest dataset version differs from the configured source")
     for label, path, want_sha in (
-        ("schema/ddl.sql", repo_ddl, manifest["schema_ddl_sha256"]),
-        ("schema/er.dbml", repo_dbml, manifest["schema_dbml_sha256"]),
-        ("authoritative crm_ddl.sql", auth_ddl, manifest["schema_ddl_sha256"]),
-        ("authoritative crm_er.dbml", auth_dbml, manifest["schema_dbml_sha256"]),
+        ("canonical CRM DDL", source.ddl_path, manifest["schema_ddl_sha256"]),
+        ("canonical CRM DBML", source.dbml_path, manifest["schema_dbml_sha256"]),
     ):
         if not path.exists():
             die(f"{label} missing")
@@ -155,7 +154,7 @@ def require_fresh_db(con, manifest: dict, base_dir: Path, profile: str) -> None:
     staged = base_dir / "dataset" / profile
     for f in manifest["files"]:
         for label, csv_path in (
-            (f"source {f['name']}", src / profile / f["name"]),
+            (f"source {f['name']}", source.csv_dir / f["name"]),
             (f"staged {f['name']}", staged / f["name"]),
         ):
             if not csv_path.exists():

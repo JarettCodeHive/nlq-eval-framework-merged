@@ -26,6 +26,11 @@ from generators.crm.validators.join_paths import CRMJoinPathValidator
 from generators.crm.validators.relational import CRMRelationalValidator
 from generators.crm.validators.reproducibility import CRMReproducibilityValidator
 from generators.crm.validators.row_caps import CRMRowCapValidator
+from qa_pairs.generator.author_qa_pairs import generate_seed_fixtures
+from qa_pairs.generator.generate_crm import build as stage_qa_dataset
+from qa_pairs.generator.rephrase import generate_rephrases
+from qa_pairs.generator.scale_pairs import generate_pairs
+from qa_pairs.generator.validate_crm import validate as validate_qa_dataset
 
 # from judge.cli import build_argparser as build_judge_argparser
 # from judge.cli import run_from_args as run_judge_from_args
@@ -385,6 +390,41 @@ def run_validate_reproducibility(args: argparse.Namespace) -> None:
         print(f"  PASS {result.check_name}: {result.message}")
 
 
+def run_qa_stage_dataset(args: argparse.Namespace) -> None:
+    """Stage generated CRM CSVs in DuckDB for Q&A authoring."""
+
+    _ensure_crm(args.domain)
+    stage_qa_dataset(args.profile)
+
+
+def run_qa_validate_dataset(args: argparse.Namespace) -> None:
+    """Validate the staged CRM dataset and required Q&A join behavior."""
+
+    _ensure_crm(args.domain)
+    validate_qa_dataset(args.profile)
+
+
+def run_qa_author_fixtures(args: argparse.Namespace) -> None:
+    """Generate the review-only CRM seed Q&A fixtures."""
+
+    _ensure_crm(args.domain)
+    generate_seed_fixtures(args.profile)
+
+
+def run_qa_generate_pairs(args: argparse.Namespace) -> None:
+    """Generate the complete verified CRM Q&A pair set."""
+
+    _ensure_crm(args.domain)
+    generate_pairs(args.profile)
+
+
+def run_qa_generate_rephrases(args: argparse.Namespace) -> None:
+    """Generate verified rephrase groups for the CRM Q&A pair set."""
+
+    _ensure_crm(args.domain)
+    generate_rephrases(args.profile)
+
+
 def _write_preview_tables(profile: str, tables: dict[str, Any], stage: str) -> None:
     if profile == "full":
         raise ValueError("--write-preview is only allowed for non-release profiles")
@@ -592,6 +632,11 @@ COMMANDS: dict[str, CommandHandler] = {
     "generate-data-dictionary": run_generate_data_dictionary,
     "generate-manifest": run_generate_manifest,
     "generate-schema-sql": run_generate_schema_sql,
+    "qa-author-fixtures": run_qa_author_fixtures,
+    "qa-generate-pairs": run_qa_generate_pairs,
+    "qa-generate-rephrases": run_qa_generate_rephrases,
+    "qa-stage-dataset": run_qa_stage_dataset,
+    "qa-validate-dataset": run_qa_validate_dataset,
     "validate-fk": run_validate_fk,
     "validate-imperfection-rates": run_validate_imperfection_rates,
     "validate-join-paths": run_validate_join_paths,
