@@ -1,11 +1,11 @@
-"""Calibration protocol — §10.3.
+"""Calibration protocol — §10.2.
 
 The full loop is Wk 5 work (needs Platform Owner joint session for CRM anchors).
 This module ships:
   1. Anchor loader
-  2. Acceptance test (§10.3: within ±1 of human on ≥90% of anchors per dimension,
+  2. Acceptance test (§10.2: within ±1 of human on ≥90% of anchors per dimension,
      never a directional flip)
-  3. A tiny marker-file API used by the CLI to enforce §10.3 last line —
+  3. A tiny marker-file API used by the CLI to enforce §10.2 last line —
      "Uncalibrated scores never enter the scorecard."
 
 Anchor file shape (per domain, e.g. anchors/crm.json):
@@ -47,9 +47,9 @@ MODULE_ROOT = Path(__file__).resolve().parent
 ANCHORS_DIR = MODULE_ROOT / "anchors"
 CALIBRATION_DIR = MODULE_ROOT / ".calibration"
 
-ACCEPTANCE_MIN_ANCHORS = 10  # §10.3 "≥10 anchors per domain"
-ACCEPTANCE_AGREEMENT_PCT = 90.0  # §10.3 "within ±1 on ≥90% of anchors"
-DIRECTIONAL_FLIP_ALLOWED = False  # §10.3 "never disagrees on direction"
+ACCEPTANCE_MIN_ANCHORS = 10  # §10.2 "≥10 anchors per domain"
+ACCEPTANCE_AGREEMENT_PCT = 90.0  # §10.2 "within ±1 on ≥90% of anchors"
+DIRECTIONAL_FLIP_ALLOWED = False  # §10.2 "never disagrees on direction"
 
 
 @dataclass(frozen=True)
@@ -97,14 +97,17 @@ class CalibrationResult:
 
 
 def _is_directional_flip(human: int, judge: int) -> bool:
-    """Human 5 → judge 1/2 (or reverse) is a directional flip.
+    """A directional disagreement, exactly as §10.2 defines it:
 
-    A 5 that the judge says is a 2 is a categorically different judgment than
-    a 5 that the judge says is a 4, even though numerically both are two off.
+        "never disagrees on direction (a human 5 scored as a 1 or 2, or the
+         reverse) on any anchor"
+
+    So: human 5 → judge 1 or 2, and human 1 or 2 → judge 5. Nothing wider —
+    a human 4 scored 2 is caught by the ±1 agreement rule, not by this one, and
+    treating it as a flip would make calibration harder to pass than the
+    contract requires.
     """
-    high = {4, 5}
-    low = {1, 2}
-    return (human in high and judge in low) or (human in low and judge in high)
+    return (human == 5 and judge in {1, 2}) or (human in {1, 2} and judge == 5)
 
 
 def load_anchors(domain: str, anchors_dir: Path | None = None) -> list[dict]:
@@ -112,7 +115,7 @@ def load_anchors(domain: str, anchors_dir: Path | None = None) -> list[dict]:
     if not path.is_file():
         raise FileNotFoundError(
             f"No calibration anchors for domain={domain!r} at {path}.\n"
-            "Populate this file from the human calibration session (§10.3)."
+            "Populate this file from the human calibration session (§10.2)."
         )
     anchors = json.loads(path.read_text(encoding="utf-8"))
     for a in anchors:
@@ -134,7 +137,7 @@ def evaluate(
     """
     if len(anchors) < ACCEPTANCE_MIN_ANCHORS:
         raise ValueError(
-            f"§10.3 requires ≥{ACCEPTANCE_MIN_ANCHORS} anchors per domain; got {len(anchors)}."
+            f"§10.2 requires ≥{ACCEPTANCE_MIN_ANCHORS} anchors per domain; got {len(anchors)}."
         )
     per_dim: dict[str, DimensionResult] = {}
     for d in DIMENSIONS:
@@ -170,7 +173,7 @@ def _marker_path(domain: str, calibration_dir: Path | None = None) -> Path:
 
 
 def is_calibrated(domain: str, calibration_dir: Path | None = None) -> bool:
-    """§10.3 last line — 'uncalibrated scores never enter the scorecard.'"""
+    """§10.2 last line — 'uncalibrated scores never enter the scorecard.'"""
     return _marker_path(domain, calibration_dir).is_file()
 
 

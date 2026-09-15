@@ -64,6 +64,13 @@ class JudgeVerdict(BaseModel):
     # True when this verdict was served from cache rather than the provider.
     cached: bool = False
 
+    # False when the provider rejected temperature=0 and the run was allowed to
+    # continue on the model default + fixed seed. Stamped on the VERDICT rather
+    # than read off the judge afterwards, so it survives the cache — a
+    # cache-served run still reports the determinism basis its scores were
+    # actually produced under.
+    temperature_enforced: bool = True
+
     # Full prompts and raw responses are retained in the content-addressed
     # cache so a cache hit can still emit a complete per-run audit trace.
     audit_trace: list[dict[str, object]] = Field(default_factory=list, repr=False)

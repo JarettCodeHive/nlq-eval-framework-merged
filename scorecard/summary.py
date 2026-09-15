@@ -29,6 +29,7 @@ SUMMARY_FIELDNAMES: list[str] = [
     "platform_version",
     "dataset_version",
     "scorecard_mode",  # PREVIEW | RELEASE — provenance, not part of the raw §11.1 list
+    "judge_temperature_enforced",  # provenance: determinism basis of the run
     "domain",
     "tier",
     "questions_total",
@@ -75,6 +76,10 @@ class RunContext:
     calibrated: bool = False
     # "off" = certified §HC-3 byte-identical; otherwise the OI-2 relaxation label.
     numeric_normalization: str = "off"
+    # False when the judge model refused temperature 0 and the run continued on
+    # the model default + fixed seed. Determinism then rests on the seed
+    # (§10.1) — a reader of the scorecard has to be able to see that.
+    judge_temperature_enforced: bool = True
 
 
 @dataclass
@@ -163,6 +168,7 @@ def _summary_row(
         "platform_version": ctx.platform_version,
         "dataset_version": ctx.dataset_version,
         "scorecard_mode": ctx.scorecard_mode,
+        "judge_temperature_enforced": ctx.judge_temperature_enforced,
         "domain": domain,
         "tier": tier,
         "questions_total": stats.questions_total,

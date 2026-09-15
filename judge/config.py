@@ -117,11 +117,29 @@ def _load_json(path: Path) -> dict:
 
 
 def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfig:
-    """Merge `default.json` with `<domain>.json` override."""
+    """Merge `default.json` with the `<domain>.json` override.
+
+    Model selection precedence (§10.1 requires the per-domain JSON to be able to
+    select the model, but the environment has to stay usable for a shared
+    gateway/deployment):
+
+      1. `model` set in `<domain>.json`  — an explicit per-domain choice wins
+      2. OPENAI_MODEL / LLM_MODEL        — the environment's gateway model
+      3. `model` in `default.json`       — the project-wide default
+
+    On Azure this value is display-only: the SDK routes on the DEPLOYMENT name
+    from `AZURE_OPENAI_DEPLOYMENT`, which is per-engineer and must never come
+    from shared JSON, or everyone with a differently-named deployment gets a
+    404 DeploymentNotFound.
+    """
     root = config_dir or CONFIGS_DIR
     base = _load_json(root / f"{DEFAULT_DOMAIN_CONFIG}.json")
     override = _load_json(root / f"{domain}.json")
     merged = {**base, **override}
+
+    env_model = (os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL") or "").strip()
+    merged["model"] = override.get("model") or env_model or base.get("model")
+
     if "require_temperature_zero" not in merged:
         raw = (os.getenv("JUDGE_REQUIRE_TEMPERATURE_ZERO") or "true").strip().lower()
         merged["require_temperature_zero"] = raw not in ("0", "false", "no", "off")

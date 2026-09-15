@@ -27,7 +27,12 @@ from pathlib import Path
 
 from judge.calibration import is_calibrated
 from judge.client import JudgeClient
-from judge.config import MissingCredentials, load_judge_config, load_llm_settings
+from judge.config import (
+    AzureSettings,
+    MissingCredentials,
+    load_judge_config,
+    load_llm_settings,
+)
 from judge.contracts import DIMENSIONS, JudgeRequest, JudgeVerdict
 from judge.exact_match import ExactMatchResult, NumericNormalization, exact_match
 from judge.input_contract import InputRow, load_input_csv
@@ -70,7 +75,12 @@ def _build_judge(
         )
         # Cache dir keyed on the model_version string so runs against different
         # providers/deployments don't share a cache line.
-        model_version = settings.model
+        # Azure routes on the deployment; elsewhere the resolved config model.
+        model_version = (
+            f"azure/{settings.deployment}"
+            if isinstance(settings, AzureSettings)
+            else cfg.model
+        )
         cache_dir = MODULE_ROOT / ".judge_cache" / model_version.replace("/", "_")
         provenance = {
             **settings.redacted,
@@ -138,7 +148,7 @@ async def _collect_requests(
             judge_reference=pair["judge_reference"],
             platform_answer=answer,
             generated_sql=sql,
-            domain=pair.get("domain", "crm"),
+            domain=pair["domain"],  # resolved in _run, never silently "crm"
             question_id=pair["question_id"],
         )
         return pair, req, err
@@ -182,7 +192,7 @@ def _row_dict(
     """Row shape matches Execution Spec §11.2 (question-level drill-down)."""
     row: dict = {
         "question_id": pair["question_id"],
-        "domain": pair.get("domain", req.domain),
+        "domain": pair["domain"],
         "tier": pair["tier"],
         "natural_language_question": req.question,
         "expected_answer": req.expected_answer,
@@ -263,7 +273,7 @@ def _resolve_scorecard_mode(
     """Decide PREVIEW vs RELEASE. Returns (mode, blocking reasons).
 
     A RELEASE scorecard is the only kind that establishes or is compared to a
-    baseline and that can certify a release (§10.3, §11.3). Everything else is a
+    baseline and that can certify a release (§10.2, §11.3). Everything else is a
     clearly-labelled PREVIEW that never touches the baseline.
     """
     if not getattr(args, "release", False):
@@ -274,7 +284,7 @@ def _resolve_scorecard_mode(
             "a release run requires --judge llm (the mock judge never scores for real)"
         )
     if not calibrated:
-        blockers.append(f"domain {args.domain!r} has no calibration marker (§10.3)")
+        blockers.append(f"domain {args.domain!r} has no calibration marker (§10.2)")
     if not args.platform_version:
         blockers.append("--platform-version is required for a release run (§11.1)")
     if not args.dataset_version:
@@ -314,7 +324,7 @@ def _write_run(
 
 
 async def _run(args: argparse.Namespace) -> int:
-    # §10.3 gate: uncalibrated scores never enter the scorecard. The gate
+    # §10.2 gate: uncalibrated scores never enter the scorecard. The gate
     # applies to LLM judges only — the mock judge is a heuristic, plainly
     # labelled, and never used for real scoring.
     if (
@@ -324,7 +334,7 @@ async def _run(args: argparse.Namespace) -> int:
     ):
         print(
             f"[judge] REFUSING TO RUN: no calibration passed for domain={args.domain!r} "
-            "(§10.3 last line — uncalibrated scores never enter the scorecard).\n"
+            "(§10.2 last line — uncalibrated scores never enter the scorecard).\n"
             "Options: (1) run the calibration protocol against anchors/<domain>.json and "
             "record the pass with calibration.record_passed(); or (2) pass "
             "--allow-uncalibrated for a smoke test (scores will be labelled uncalibrated).",
@@ -372,11 +382,29 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
 
     if args.input_csv:
-        pairs = _rows_from_input(load_input_csv(args.input_csv))
+        # The run's --domain is the fallback, not a hardcoded "crm" — otherwise
+        # a Sales pair set with no `domain` column is silently scored, cached
+        # and reported as CRM.
+        pairs = _rows_from_input(
+            load_input_csv(args.input_csv, default_domain=args.domain)
+        )
     else:
         pairs = load_pairs()
     if args.limit:
         pairs = pairs[: args.limit]
+
+    # Every pair carries an explicit domain from here on.
+    undeclared = 0
+    for pair in pairs:
+        if not (pair.get("domain") or "").strip():
+            pair["domain"] = args.domain
+            undeclared += 1
+    if undeclared:
+        print(
+            f"[judge] NOTE: {undeclared}/{len(pairs)} pairs declared no domain — "
+            f"assigning --domain={args.domain!r}.",
+            file=sys.stderr,
+        )
 
     # Pulse source selection:
     #   good/regressed/bad -> canned fixtures keyed by question_id (CI/dev)
@@ -423,6 +451,13 @@ async def _run(args: argparse.Namespace) -> int:
     else:
         pulse = MockPulse(mode=args.pulse)
         pulse_label = f"{args.pulse} (canned fixture)"
+
+    if args.judge == "mock" and args.mode == "per_dimension":
+        print(
+            "[judge] NOTE: --mode per_dimension has no effect with --judge mock — "
+            "the heuristic never renders a prompt. Use --judge llm to exercise it.",
+            file=sys.stderr,
+        )
 
     provisional_pulse = args.pulse in _STANDIN_PULSE
     calibration_state = "CALIBRATED" if calibrated else "UNCALIBRATED"
@@ -499,7 +534,10 @@ async def _run(args: argparse.Namespace) -> int:
             "the certified §HC-3 comparison; the scorecard is marked accordingly.",
             file=sys.stderr,
         )
-    temp_enforced = getattr(judge, "temperature_enforced", True)
+    # Read off the VERDICTS, not the judge — a cache-served run never talks to
+    # the provider, so the judge object would wrongly report "enforced".
+    scored = [v for _, _, v, _ in results if isinstance(v, JudgeVerdict)]
+    temp_enforced = all(v.temperature_enforced for v in scored) if scored else True
     summary["judge_temperature_enforced"] = temp_enforced
     if not temp_enforced:
         print(
@@ -517,6 +555,7 @@ async def _run(args: argparse.Namespace) -> int:
         scorecard_mode=scorecard_mode,
         calibrated=calibrated,
         numeric_normalization=normalize.label if normalize else "off",
+        judge_temperature_enforced=temp_enforced,
     )
     out_dir = _write_run(
         run_id, args.judge, args.mode, args.pulse, ctx, results, summary
@@ -543,7 +582,7 @@ async def _run(args: argparse.Namespace) -> int:
         )
     if not summary["calibrated"] and args.judge == "llm":
         print(
-            "\n[judge] NOTE: judge is uncalibrated (§10.3). These scores are "
+            "\n[judge] NOTE: judge is uncalibrated (§10.2). These scores are "
             "diagnostic only and are labelled `calibrated=false` in the summary. "
             "They must NOT be fed to a scorecard until calibration passes."
         )
@@ -653,7 +692,7 @@ def _finalise_scorecard(
 
 
 async def _calibrate(domain: str, concurrency: int = 4) -> int:
-    """Run the §10.3 calibration protocol against judge/anchors/<domain>.json.
+    """Run the §10.2 calibration protocol against judge/anchors/<domain>.json.
 
     - Scores every anchor with the live LLM judge (combined mode, cache on).
     - Compares each dimension against the human anchor score.
@@ -670,7 +709,11 @@ async def _calibrate(domain: str, concurrency: int = 4) -> int:
     cfg = load_judge_config(domain).model_copy(
         update={"mode": "per_dimension", "cache_enabled": True}
     )
-    model_version = settings.model
+    model_version = (
+        f"azure/{settings.deployment}"
+        if isinstance(settings, AzureSettings)
+        else cfg.model
+    )
     cache_dir = MODULE_ROOT / ".judge_cache" / model_version.replace("/", "_")
     judge_run_id = (
         f"calibration-{domain}-"
@@ -790,7 +833,7 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
     ap.add_argument(
         "--allow-uncalibrated",
         action="store_true",
-        help="§10.3 override: run the LLM judge without a calibration marker. "
+        help="§10.2 override: run the LLM judge without a calibration marker. "
         "Scores are labelled uncalibrated and MUST NOT feed a scorecard.",
     )
     ap.add_argument(

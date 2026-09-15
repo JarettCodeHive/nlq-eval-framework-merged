@@ -34,7 +34,7 @@ judge/
   mock_judge.py           Heuristic stand-in judge — CI/dev fallback only, NOT semantic
   openai_judge.py         Live Azure/OpenAI backend (async, cached, prompt-logged)
   cache.py                Content-addressed judge cache (sha256 over prompt+model)
-  calibration.py          §10.3 gate: uncalibrated LLM judges refuse to score
+  calibration.py          §10.2 gate: uncalibrated LLM judges refuse to score
   exact_match.py          Deterministic answer comparison — zero-tolerance numeric
   prompts.py              Prompt rendering + prompt_version stamping
   parsing.py              JSON verdict extraction with schema validation
@@ -126,7 +126,7 @@ Every run writes into `judge/runs/<UTC-timestamp>/`:
 - `scorecard.pdf` — stakeholder deliverable (Phase-4 exit-gate item; §11.3)
 - `prompts_log.jsonl` — full prompt/response log (Phase-4 exit-gate item)
 
-### PREVIEW vs RELEASE (§10.3, §11.3)
+### PREVIEW vs RELEASE (§10.2, §11.3)
 
 Every run is a **PREVIEW** unless `--release` is passed. A PREVIEW scorecard is
 clearly labelled and never establishes or updates a baseline.
@@ -139,7 +139,7 @@ read-only). Later RELEASE runs compare against it and set `regression_flag`
 where a domain drops ≥ 5 pp; the CLI then exits `4`. Runs against a Pulse
 stand-in mark the baseline `provisional` until re-run against the live API.
 
-## Calibration gate (§10.3)
+## Calibration gate (§10.2)
 
 An LLM judge run refuses to start against a domain that has no
 `calibration/<domain>.passed.json` marker. Override with

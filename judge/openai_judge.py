@@ -58,18 +58,20 @@ class OpenAIJudge(JudgeClient):
         self._json_mode = config.json_mode
         # Azure: the OpenAI SDK sends `model=` as the DEPLOYMENT name in the
         # request URL path. Deployment is per-engineer (AZURE_OPENAI_DEPLOYMENT
-        # in .env), never a shared per-domain JSON value — otherwise every
-        # user of a differently-named deployment gets 404 DeploymentNotFound.
-        # OpenAI-compatible gateways: the environment-selected model is the
-        # actual deployment/model exposed by that gateway.  Falling back to
-        # the per-domain config here silently ignores OPENAI_MODEL/LLM_MODEL
-        # and commonly produces DeploymentNotFound on Azure v1 gateways.
+        # in .env), never a shared per-domain JSON value — otherwise every user
+        # of a differently-named deployment gets 404 DeploymentNotFound.
+        #
+        # OpenAI direct / compatible gateways: use `config.model`, which
+        # `load_judge_config` has already resolved as
+        #   <domain>.json  →  OPENAI_MODEL/LLM_MODEL  →  default.json
+        # so a domain can select its own model (§10.1) without stopping the
+        # environment from naming the gateway's actual model.
         if isinstance(settings, AzureSettings):
             self._api_model = settings.deployment
             self._model_str = f"azure/{settings.deployment}"
         else:
-            self._api_model = settings.model
-            self._model_str = settings.model
+            self._api_model = config.model
+            self._model_str = config.model
         # gpt-5.x / o1-family deployments renamed `max_tokens` → `max_completion_tokens`
         # and reject `max_tokens`. We start with the modern param and fall back on rejection.
         self._max_tokens_param = "max_completion_tokens"
@@ -338,6 +340,7 @@ class OpenAIJudge(JudgeClient):
             prompt_version=prompt_version(),
             model_version=self._model_str,
             audit_trace=traces,
+            temperature_enforced=self.temperature_enforced,
         )
 
     async def _judge_per_dimension(self, req: JudgeRequest) -> JudgeVerdict:
@@ -370,6 +373,7 @@ class OpenAIJudge(JudgeClient):
             prompt_version=prompt_version(),
             model_version=self._model_str,
             audit_trace=traces,
+            temperature_enforced=self.temperature_enforced,
         )
 
 

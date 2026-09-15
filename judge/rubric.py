@@ -60,9 +60,13 @@ _DIMENSION_TABLE: list[tuple[str, str, str]] = [
 
 def _settings_lines() -> list[str]:
     return [
-        "Temperature is fixed at 0; a fixed seed is sent wherever the provider "
-        "supports it. A temperature-0 rejection fails the run — a "
-        "non-deterministic judge cannot certify determinism (§10.1).",
+        "Temperature is fixed at 0 and a fixed seed is sent wherever the provider "
+        "supports it (§10.1) — a non-deterministic judge cannot certify "
+        "determinism. Some deployments (GPT-5 / o1 family) refuse temperature 0 "
+        "outright; by default that fails the run, and the operator may instead "
+        "opt in to running on the model default plus the fixed seed. A run that "
+        "does so records judge_temperature_enforced=false on its scorecard, so "
+        "the determinism basis of every run is visible on the artefact.",
         "The judge receives the question, the platform response, the "
         "expected_answer and the judge_reference. It never receives the "
         "reference_sql — SQL plausibility is scored on the platform's own "
@@ -75,7 +79,7 @@ def _settings_lines() -> list[str]:
         "Calibration must pass before any production scoring run: within ±1 of "
         "the human anchor score on ≥90% of anchors per dimension, with no "
         "directional disagreement, over ≥10 anchors per domain (§10.2). "
-        "Uncalibrated scores never enter a scorecard (§10.3).",
+        "Uncalibrated scores never enter a scorecard (§10.2).",
     ]
 
 

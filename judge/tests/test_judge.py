@@ -191,6 +191,7 @@ class _StubOpenAIJudge(OpenAIJudge):
         )
         self._model_str = "stub-model"
         self._judge_run_id = "judge-run-stable-001"
+        self.temperature_enforced = True
         self._prompt_log_path = log_path
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text("", encoding="utf-8")
@@ -357,6 +358,19 @@ def test_cache_roundtrip_marks_served_entries(tmp_path):
     assert hit is not None
     assert hit.cached is True
     assert cache.hits == 1
+
+
+def test_degraded_determinism_survives_the_cache(tmp_path):
+    """A cache-served run must still report the determinism basis its scores
+    were produced under — the judge object never negotiates on a cache hit, so
+    the flag has to live on the verdict."""
+    cache = JudgeCache(tmp_path, enabled=True)
+    key = cache_key(REQ, prompt_version="p1", model_version="m1", mode="combined")
+    cache.put(key, _verdict().model_copy(update={"temperature_enforced": False}))
+
+    hit = cache.get(key)
+    assert hit.cached is True
+    assert hit.temperature_enforced is False
 
 
 def test_cache_key_changes_with_mode():
@@ -531,16 +545,72 @@ def test_openai_and_azure_settings_have_uniform_model_accessor():
                 assert "k" not in str(v) or "gpt" in str(v) or "openai" in str(v)
 
 
-def test_openai_judge_preserves_environment_selected_model(tmp_path):
-    """OPENAI_MODEL/LLM_MODEL must override the per-domain config default."""
-    settings = OpenAISettings(api_key="sk-x", model="gateway-deployment")
+def _write_configs(root, default: dict, domain: dict, domain_name="crm"):
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "default.json").write_text(json.dumps(default), encoding="utf-8")
+    (root / f"{domain_name}.json").write_text(json.dumps(domain), encoding="utf-8")
+
+
+_BASE_CFG = {"temperature": 0.0, "seed": 42, "model": "default-model"}
+
+
+def test_model_selection_precedence(tmp_path, monkeypatch):
+    """§10.1 wants the per-domain JSON to be able to select the model, without
+    stopping the environment from naming a shared gateway's actual model.
+
+    Precedence: <domain>.json  →  OPENAI_MODEL/LLM_MODEL  →  default.json
+    """
+    root = tmp_path / "cfg"
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    # 1. nothing set anywhere but the project default
+    _write_configs(root, _BASE_CFG, {})
+    assert load_judge_config("crm", root).model == "default-model"
+
+    # 2. environment names the gateway's model — beats the project default
+    monkeypatch.setenv("OPENAI_MODEL", "gateway-deployment")
+    assert load_judge_config("crm", root).model == "gateway-deployment"
+
+    # 3. an explicit per-domain choice beats the environment
+    _write_configs(root, _BASE_CFG, {"model": "crm-specific-model"})
+    assert load_judge_config("crm", root).model == "crm-specific-model"
+
+
+def test_openai_judge_routes_on_resolved_config_model(tmp_path, monkeypatch):
+    """Non-Azure providers send the resolved config model as `model=`."""
+    monkeypatch.setenv("OPENAI_MODEL", "gateway-deployment")
+    root = tmp_path / "cfg"
+    _write_configs(root, _BASE_CFG, {})
+
     judge = OpenAIJudge(
-        settings,
-        load_judge_config("crm"),
+        OpenAISettings(api_key="sk-x"),
+        load_judge_config("crm", root),
         cache_dir=tmp_path / "cache",
     )
     assert judge._api_model == "gateway-deployment"
     assert judge._model_str == "gateway-deployment"
+
+
+def test_azure_still_routes_on_the_deployment_name(tmp_path, monkeypatch):
+    """Azure routes on AZURE_OPENAI_DEPLOYMENT — never a shared JSON value,
+    or every engineer with a different deployment gets DeploymentNotFound."""
+    monkeypatch.setenv("OPENAI_MODEL", "ignored-for-azure")
+    root = tmp_path / "cfg"
+    _write_configs(root, _BASE_CFG, {"model": "also-ignored-for-azure"})
+
+    judge = OpenAIJudge(
+        AzureSettings(
+            endpoint="https://x.openai.azure.com",
+            api_key="k",
+            api_version="2024-06-01",
+            deployment="my-deploy",
+        ),
+        load_judge_config("crm", root),
+        cache_dir=tmp_path / "cache",
+    )
+    assert judge._api_model == "my-deploy"
+    assert judge._model_str == "azure/my-deploy"
 
 
 # --- prompt template — worked negative examples (§10.2) -------------------
@@ -564,7 +634,7 @@ def test_per_dimension_prompt_also_carries_boundary_examples():
     assert "DO NOT DEDUCT" in prompt
 
 
-# --- calibration acceptance test (§10.3) ----------------------------------
+# --- calibration acceptance test (§10.2) ----------------------------------
 
 
 def _judge_verdict(**scores):
@@ -637,7 +707,7 @@ def test_calibration_passes_when_all_within_pm1_no_flips():
 
 
 def test_calibration_fails_on_directional_flip_even_at_100pct_within_pm1_after_partial_perfect():
-    """A single 5→2 flip must sink the whole dimension per §10.3 (never directional)."""
+    """A single 5→2 flip must sink the whole dimension per §10.2 (never directional)."""
     anchors = _make_anchors(ACCEPTANCE_MIN_ANCHORS)
     verdicts = {a["question_id"]: _judge_verdict() for a in anchors}
     # First anchor: judge scores factual as 2 (human was 5) → directional flip
@@ -661,9 +731,15 @@ def test_calibration_fails_below_90pct_within_pm1():
     )
 
 
-def test_directional_flip_detection():
+def test_directional_flip_matches_the_contract_wording():
+    """§10.2: 'a human 5 scored as a 1 or 2, or the reverse'. Nothing wider."""
+    assert _is_directional_flip(5, 1) is True
     assert _is_directional_flip(5, 2) is True
     assert _is_directional_flip(1, 5) is True
+    assert _is_directional_flip(2, 5) is True
+    # Not flips — these are caught (or not) by the ±1 agreement rule instead.
+    assert _is_directional_flip(4, 2) is False  # human 4, not 5
+    assert _is_directional_flip(2, 4) is False  # judge 4, not 5
     assert _is_directional_flip(5, 4) is False  # both high side
     assert _is_directional_flip(5, 3) is False  # mid, not a flip
     assert _is_directional_flip(3, 5) is False  # mid, not a flip

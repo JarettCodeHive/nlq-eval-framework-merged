@@ -2,8 +2,8 @@
 
 Configuration for LLM-as-Judge scoring.
 
-Expected contents later:
+Expected contents:
 
-- Per-domain judge settings.
-- Model, temperature, max-token, retry, and concurrency settings.
+- Per-domain model, temperature, fixed-seed, max-token, retry/backoff,
+  malformed-output retry, and concurrency settings.
 - Structured-output schema references.

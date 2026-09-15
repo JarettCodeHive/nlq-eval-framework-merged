@@ -52,7 +52,12 @@ def _header_lines(ctx: RunContext, comparisons: dict) -> list[str]:
     if ctx.scorecard_mode != "RELEASE":
         lines.append(
             "_PREVIEW run — not an official evaluation. Does not establish or "
-            "update a baseline and must not certify a release (§10.3, §11.3)._"
+            "update a baseline and must not certify a release (§10.2, §11.3)._"
+        )
+    if not ctx.judge_temperature_enforced:
+        lines.append(
+            "**judge determinism: temperature 0 was NOT enforced** — the model "
+            "refused it; this run rests on the fixed seed (§10.1)"
         )
     if ctx.numeric_normalization != "off":
         lines.append(

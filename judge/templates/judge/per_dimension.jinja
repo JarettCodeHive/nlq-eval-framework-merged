@@ -1,7 +1,7 @@
-{# Renders ONE dimension in isolation (Scope §4.4: "one prompt structure per
-   scoring dimension"). Scoring dimensions separately costs 4x the calls but
-   removes the halo effect, where a poor score on one dimension drags the
-   others down inside a single generation. #}
+{# Renders ONE dimension in isolation. Not required by the Scope — it is our
+   option (--mode per_dimension). Scoring dimensions separately costs 4x the
+   calls but removes the halo effect, where a poor score on one dimension drags
+   the others down inside a single generation. #}
 You are an impartial evaluator for a Natural Language Query (NLQ) platform. You
 are scoring exactly ONE quality dimension. Ignore every other dimension.
 

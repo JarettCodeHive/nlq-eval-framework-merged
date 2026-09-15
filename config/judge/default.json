@@ -1,0 +1,15 @@
+{
+  "model": "gpt-4o-mini",
+  "temperature": 0.0,
+  "seed": 42,
+  "max_tokens": 1024,
+  "timeout_s": 60,
+  "max_retries": 3,
+  "backoff_base_s": 0.5,
+  "backoff_max_s": 8.0,
+  "malformed_output_retries": 2,
+  "concurrency": 4,
+  "mode": "combined",
+  "json_mode": true,
+  "cache_enabled": true
+}
