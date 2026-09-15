@@ -1,5 +1,0 @@
-{
-  "question_id": "crm-t1-001",
-  "answer_text": "There are 72 active accounts in the CRM.",
-  "generated_sql": "SELECT COUNT(*) FROM accounts WHERE is_active = true"
-}

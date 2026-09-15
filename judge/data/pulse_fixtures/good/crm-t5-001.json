@@ -1,5 +1,0 @@
-{
-  "question_id": "crm-t5-001",
-  "answer_text": "The three fastest-growing accounts by opportunity count from Q1 to Q2 2026 were Weiss, Dominguez and Johnson (+140%), Patton, Smith and Anderson (+92%), and Duran-Griffith (+78%). All three sit at the top of the growth ranking by a wide margin — the fourth account grew only 41%, suggesting these three represent a distinct expansion cohort.",
-  "generated_sql": "WITH per_q AS (SELECT account_id, DATE_TRUNC('quarter', close_date) AS q, COUNT(*) AS n FROM opportunities WHERE close_date >= '2026-01-01' AND close_date < '2026-07-01' GROUP BY 1, 2) SELECT a.account_name, ((q2.n - q1.n) * 1.0 / q1.n) AS growth FROM per_q q1 JOIN per_q q2 USING (account_id) JOIN accounts a USING (account_id) WHERE q1.q = '2026-01-01' AND q2.q = '2026-04-01' ORDER BY growth DESC LIMIT 3"
-}

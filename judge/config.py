@@ -1,12 +1,13 @@
-"""Judge configuration — provider-agnostic (OpenAI direct or Azure OpenAI)
-plus per-domain JSON configs.
+"""Judge configuration — provider-agnostic (OpenAI direct, Azure OpenAI, or
+Anthropic via Apple's Floodgate proxy) plus per-domain JSON configs.
 
 Provider selection is auto-detected:
-- If `AZURE_OPENAI_ENDPOINT` is set → use Azure OpenAI (`AsyncAzureOpenAI`).
+- If `LLM_PROVIDER=floodgate`, or a Floodgate credential is present → Floodgate.
+- Else if `AZURE_OPENAI_ENDPOINT` is set → use Azure OpenAI (`AsyncAzureOpenAI`).
 - Else if `OPENAI_API_KEY` is set → use OpenAI direct (`AsyncOpenAI`).
 - Else → `MissingCredentials` with an actionable message.
 
-The `LLM_PROVIDER` env var can force selection: `LLM_PROVIDER=azure` or `openai`.
+The `LLM_PROVIDER` env var can force selection: `azure`, `openai`, or `floodgate`.
 """
 
 from __future__ import annotations
@@ -85,7 +86,88 @@ class AzureSettings(BaseModel):
         }
 
 
-LLMSettings = Union[OpenAISettings, AzureSettings]
+class _FloodgateSettings(BaseModel):
+    """Common half of the two Floodgate credential shapes.
+
+    Floodgate is Apple's mandatory proxy for externally-hosted models: Anthropic
+    traffic goes to floodgate.g.apple.com, never api.anthropic.com. We use its
+    *native* Anthropic interface rather than its OpenAI-compatible one, because
+    the compat layer silently drops prompt caching for Anthropic models and does
+    not accept `response_format`.
+    """
+
+    provider: Literal["floodgate"] = "floodgate"
+    # The Anthropic SDK appends `/v1/messages`, so the base URL stops here.
+    base_url: str = "https://floodgate.g.apple.com/api/anthropic"
+    # Deliberately NOT the frontier pair. Sonnet 5 and Opus 5 use adaptive
+    # thinking and reject `temperature` outright through Floodgate
+    # ("ValidationException: `temperature` is deprecated for this model"), and
+    # Anthropic has no `seed` to fall back on — so they leave a judge with no
+    # determinism control at all. Sonnet 4.6 and Haiku 4.5 accept temperature=0,
+    # which is what §10.1 asks for. Verified against Floodgate on 2026-09-09.
+    model: str = "anthropic.claude-sonnet-4-6"
+    # Floodgate treats User-Agent as mandatory — it is how spend is attributed
+    # per tool in the quota dashboards.
+    user_agent: str = "nlq-judge/1.0"
+    # Spend against a project budget rather than the caller's personal daily
+    # quota. This is the project *token* (a secret), not the project id (a UUID).
+    # A full evaluation run is exactly the non-interactive, high-volume workload
+    # Floodgate projects exist for.
+    project_token: str | None = None
+    # TLS: corp machines TLS-inspect with a private root CA that only the OS
+    # store knows about. Same escape hatches as the Pulse client.
+    verify_tls: bool = True
+    ca_bundle: str | None = None  # path to a CA file; wins over verify_tls
+
+    def httpx_verify(self) -> "str | bool":
+        return self.ca_bundle if self.ca_bundle else self.verify_tls
+
+
+class FloodgateOIDCSettings(_FloodgateSettings):
+    """AppleConnect bearer token. Local Macs with the AppleConnect CLI only."""
+
+    auth: Literal["oidc"] = "oidc"
+    appleconnect_path: str = "/usr/local/bin/appleconnect"
+
+    @property
+    def redacted(self) -> dict[str, str | None]:
+        return {
+            "provider": "floodgate",
+            "auth": "appleconnect-oidc",
+            "base_url": self.base_url,
+            "model": self.model,
+            "user_agent": self.user_agent,
+            "project_token_set": str(bool(self.project_token)),
+        }
+
+
+class FloodgateNarrativeSettings(_FloodgateSettings):
+    """Narrative mTLS certificate for a system account. CI and unattended runs.
+
+    The certificate is the identity, so no bearer token is sent. Paths are
+    platform-specific — `/tls/tls.crt` + `/tls/tls.key` on Kubernetes,
+    `$BOLT_NARRATIVE_DIR/turi/{chain,private}.pem` on Bolt.
+    """
+
+    auth: Literal["narrative"] = "narrative"
+    cert_path: str
+    key_path: str
+
+    @property
+    def redacted(self) -> dict[str, str | None]:
+        return {
+            "provider": "floodgate",
+            "auth": "narrative-mtls",
+            "base_url": self.base_url,
+            "model": self.model,
+            "user_agent": self.user_agent,
+            "cert_path": self.cert_path,
+            "project_token_set": str(bool(self.project_token)),
+        }
+
+
+FloodgateSettings = Union[FloodgateOIDCSettings, FloodgateNarrativeSettings]
+LLMSettings = Union[OpenAISettings, AzureSettings, FloodgateSettings]
 
 
 class JudgeConfig(BaseModel):
@@ -124,20 +206,30 @@ def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfi
     gateway/deployment):
 
       1. `model` set in `<domain>.json`  — an explicit per-domain choice wins
-      2. OPENAI_MODEL / LLM_MODEL        — the environment's gateway model
+      2. FLOODGATE_MODEL / OPENAI_MODEL / LLM_MODEL — the environment's model
       3. `model` in `default.json`       — the project-wide default
 
     On Azure this value is display-only: the SDK routes on the DEPLOYMENT name
     from `AZURE_OPENAI_DEPLOYMENT`, which is per-engineer and must never come
     from shared JSON, or everyone with a differently-named deployment gets a
     404 DeploymentNotFound.
+
+    On Floodgate the model is an Anthropic id with no provider prefix, e.g.
+    `anthropic.claude-sonnet-5`. `FloodgateJudge` rejects anything that isn't,
+    so a `default.json` model leaking into a Floodgate run fails at construction
+    rather than as an opaque 400 from the proxy.
     """
     root = config_dir or CONFIGS_DIR
     base = _load_json(root / f"{DEFAULT_DOMAIN_CONFIG}.json")
     override = _load_json(root / f"{domain}.json")
     merged = {**base, **override}
 
-    env_model = (os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL") or "").strip()
+    env_model = (
+        os.getenv("FLOODGATE_MODEL")
+        or os.getenv("OPENAI_MODEL")
+        or os.getenv("LLM_MODEL")
+        or ""
+    ).strip()
     merged["model"] = override.get("model") or env_model or base.get("model")
 
     if "require_temperature_zero" not in merged:
@@ -169,23 +261,76 @@ def load_env(env_file: Path | None = None) -> None:
     # No candidate file — rely purely on the process environment.
 
 
-def _detect_provider() -> Literal["openai", "azure"]:
+def _detect_provider() -> Literal["openai", "azure", "floodgate"]:
     forced = (os.getenv("LLM_PROVIDER") or "").strip().lower()
-    if forced in ("openai", "azure"):
+    if forced in ("openai", "azure", "floodgate"):
         return forced  # type: ignore[return-value]
+    # A Narrative certificate or a project token is only ever set for Floodgate,
+    # so its presence is unambiguous. An OIDC run has no distinguishing env var
+    # — that one has to be forced with LLM_PROVIDER=floodgate.
+    if os.getenv("FLOODGATE_NARRATIVE_CERT") or os.getenv("FLOODGATE_PROJECT_TOKEN"):
+        return "floodgate"
     if os.getenv("AZURE_OPENAI_ENDPOINT"):
         return "azure"
     return "openai"
 
 
+def _load_floodgate_settings() -> FloodgateSettings:
+    """Build Floodgate settings from the environment.
+
+    A certificate pair means an unattended run (CI, a pod, a Bolt task);
+    otherwise fall back to an AppleConnect token on a developer's Mac.
+    """
+    common: dict[str, object] = {}
+    for key, env in (
+        ("base_url", "FLOODGATE_BASE_URL"),
+        ("model", "FLOODGATE_MODEL"),
+        ("user_agent", "FLOODGATE_USER_AGENT"),
+        ("project_token", "FLOODGATE_PROJECT_TOKEN"),
+        ("ca_bundle", "FLOODGATE_CA_BUNDLE"),
+    ):
+        value = (os.getenv(env) or "").strip()
+        if value:
+            common[key] = value
+    raw_verify = (os.getenv("FLOODGATE_VERIFY_TLS") or "").strip().lower()
+    if raw_verify:
+        common["verify_tls"] = raw_verify not in ("0", "false", "no", "off")
+
+    cert = (os.getenv("FLOODGATE_NARRATIVE_CERT") or "").strip()
+    key = (os.getenv("FLOODGATE_NARRATIVE_KEY") or "").strip()
+    if cert or key:
+        if not (cert and key):
+            raise MissingCredentials(
+                "Floodgate mTLS needs both FLOODGATE_NARRATIVE_CERT and "
+                "FLOODGATE_NARRATIVE_KEY; only one is set. On Kubernetes these are "
+                "/tls/tls.crt and /tls/tls.key."
+            )
+        return FloodgateNarrativeSettings(cert_path=cert, key_path=key, **common)
+
+    appleconnect = (
+        os.getenv("FLOODGATE_APPLECONNECT") or "/usr/local/bin/appleconnect"
+    ).strip()
+    if not Path(appleconnect).is_file():
+        raise MissingCredentials(
+            f"LLM_PROVIDER=floodgate but the AppleConnect CLI is not at {appleconnect!r}.\n"
+            "OIDC auth needs a local Mac with AppleConnect installed. For servers and "
+            "CI, set FLOODGATE_NARRATIVE_CERT and FLOODGATE_NARRATIVE_KEY instead, or "
+            "point FLOODGATE_APPLECONNECT at the binary."
+        )
+    return FloodgateOIDCSettings(appleconnect_path=appleconnect, **common)
+
+
 def load_llm_settings(env_file: Path | None = None) -> LLMSettings:
-    """Read credentials from .env / process env, return OpenAI or Azure settings.
+    """Read credentials from .env / process env, return the provider's settings.
 
     Fails loudly with actionable messages — SDK errors from missing keys are
     404s / 401s on URLs the user can't see, which is miserable to debug.
     """
     load_env(env_file)
     provider = _detect_provider()
+
+    if provider == "floodgate":
+        return _load_floodgate_settings()
 
     if provider == "azure":
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")

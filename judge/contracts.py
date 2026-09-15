@@ -71,6 +71,12 @@ class JudgeVerdict(BaseModel):
     # actually produced under.
     temperature_enforced: bool = True
 
+    # False when a seed WAS configured but never reached the provider — either
+    # the deployment rejected it, or the provider has none (Anthropic). Same
+    # reasoning as `temperature_enforced`: a manifest that claims a determinism
+    # control it never applied is worse than a noisy one.
+    seed_enforced: bool = True
+
     # Full prompts and raw responses are retained in the content-addressed
     # cache so a cache hit can still emit a complete per-run audit trace.
     audit_trace: list[dict[str, object]] = Field(default_factory=list, repr=False)
@@ -117,3 +123,19 @@ class JudgeVerdict(BaseModel):
         20% credit and silently inflates everything above it.
         """
         return (self.overall_score - 1) / 4
+
+
+class PulseResponse(BaseModel):
+    """One platform answer, as the judge consumes it.
+
+    Lives here, not beside the test doubles: this is the contract the LIVE
+    client returns, and the live path must not import from a module named for
+    its stand-ins.
+    """
+
+    question_id: str
+    answer_text: str
+    generated_sql: str | None = None
+    # Other platform-side fields (timing, record_counts, reasoning, dashboard)
+    # are preserved in the run's pulse_raw/ payload rather than here — they are
+    # diagnostics, not scored inputs.

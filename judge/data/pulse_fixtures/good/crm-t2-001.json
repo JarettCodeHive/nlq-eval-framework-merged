@@ -1,5 +1,0 @@
-{
-  "question_id": "crm-t2-001",
-  "answer_text": "Priya Raghavan closed the most Q2 2026 deal value, totaling 4,182,650.00 across won deals in the April–June window.",
-  "generated_sql": "SELECT a.owner_name, SUM(o.deal_amount) AS total FROM opportunities o JOIN accounts a ON o.account_id = a.account_id WHERE o.stage = 'Closed Won' AND o.close_date >= '2026-04-01' AND o.close_date < '2026-07-01' GROUP BY a.owner_name ORDER BY total DESC LIMIT 1"
-}

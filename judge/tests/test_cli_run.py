@@ -6,8 +6,8 @@ import asyncio
 import time
 
 from judge.cli import PlatformError, _collect_requests
-from judge.exact_match import ExactMatchResult
-from judge.mock_pulse import PulseResponse
+from judge.exact_match import ExactMatchOutcome, ExactMatchResult
+from judge.contracts import PulseResponse
 from scorecard.summary import RunContext, aggregate, build_summary_rows
 
 
@@ -101,7 +101,7 @@ def test_scorecard_counts_platform_errors_out_of_band():
                 generated_sql=None,
             ),
             verdict,
-            em,
+            ExactMatchOutcome(em),
         )
 
     results = [
@@ -141,3 +141,71 @@ def _verdict():
         prompt_version="p",
         model_version="m",
     )
+
+
+def test_release_refuses_a_non_live_answer_source():
+    """HC-4: all evaluation goes through the platform.
+
+    A baseline built from --pulse sql would measure our own reference SQL
+    replayed against our own dataset — it would look like an accuracy number
+    and mean nothing about the system under evaluation.
+    """
+    from judge.cli import _resolve_scorecard_mode, build_argparser
+
+    args = build_argparser().parse_args(
+        [
+            "--release",
+            "--judge",
+            "llm",
+            "--pulse",
+            "sql",
+            "--platform-version",
+            "v1",
+            "--dataset-version",
+            "d1",
+        ]
+    )
+    mode, blockers = _resolve_scorecard_mode(args, calibrated=True)
+    assert mode == "RELEASE"
+    assert any("--pulse live" in b and "HC-4" in b for b in blockers)
+
+
+def test_release_accepts_live_when_everything_else_is_satisfied():
+    from judge.cli import _resolve_scorecard_mode, build_argparser
+
+    args = build_argparser().parse_args(
+        [
+            "--release",
+            "--judge",
+            "llm",
+            "--pulse",
+            "live",
+            "--platform-version",
+            "v1",
+            "--dataset-version",
+            "d1",
+        ]
+    )
+    mode, blockers = _resolve_scorecard_mode(args, calibrated=True)
+    assert mode == "RELEASE"
+    assert blockers == []
+
+
+def test_heuristic_judge_is_never_release_eligible():
+    from judge.cli import _resolve_scorecard_mode, build_argparser
+
+    args = build_argparser().parse_args(
+        [
+            "--release",
+            "--judge",
+            "heuristic",
+            "--pulse",
+            "live",
+            "--platform-version",
+            "v1",
+            "--dataset-version",
+            "d1",
+        ]
+    )
+    _, blockers = _resolve_scorecard_mode(args, calibrated=True)
+    assert any("--judge llm" in b for b in blockers)

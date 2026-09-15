@@ -21,10 +21,12 @@ _DISPLAY_COLUMNS: list[str] = [
     "questions_total",
     "exact_match_pass",
     "exact_match_pct",
+    "exact_match_not_applicable",
     *JUDGE_COLUMNS.keys(),
     "judge_overall",
     "judge_errors",
     "platform_errors",
+    "null_handling_fail",
     "baseline_exact_match_pct",
     "delta_pct",
     "regression_flag",
@@ -59,11 +61,19 @@ def _header_lines(ctx: RunContext, comparisons: dict) -> list[str]:
             "**judge determinism: temperature 0 was NOT enforced** — the model "
             "refused it; this run rests on the fixed seed (§10.1)"
         )
-    if ctx.numeric_normalization != "off":
+    if not ctx.judge_seed_enforced:
         lines.append(
-            f"**exact-match numeric normalization: `{ctx.numeric_normalization}`** "
-            "— provisional OI-2 relaxation, not the certified §HC-3 comparison"
+            "**judge determinism: the configured seed never reached the provider** "
+            "— see `judge_seed_enforced` (§10.1 'where supported')"
         )
+    lines.append(f"exact-match comparison: `{ctx.comparison_policy}`")
+    if not ctx.comparison_is_default:
+        lines.append(
+            "**exact-match ran under a NON-DEFAULT comparison** — this run relaxes "
+            "the declared policy and cannot establish a baseline (OI-2 / OI-3)"
+        )
+    for finding in ctx.rephrase_findings:
+        lines.append(f"**⚠ rephrase-group finding (§9.5): {finding}**")
     if flagged:
         lines.append(
             f"**⚠ REGRESSION FLAG: {', '.join(flagged)}** (domain drop ≥ 5 pp vs baseline)"
@@ -96,7 +106,10 @@ def write_scorecard_md(
         "_Exact-match (§HC-3, zero numeric tolerance) and judge scores (1–5) are "
         "reported side by side and never combined into a composite (§11.3). "
         "Baseline comparison and the regression flag are domain-level; tier rows "
-        "are diagnostic._",
+        "are diagnostic. `exact_match_not_applicable` counts pairs with no "
+        "deterministic core — they are outside the percentage, so a rise there is "
+        "not a rise in accuracy (§14.2 condition 4). `null_handling_fail` is the "
+        "§9.2 T3 diagnostic and is never part of either score._",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")

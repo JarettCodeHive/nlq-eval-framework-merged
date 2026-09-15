@@ -130,14 +130,19 @@ def test_query_sends_bearer_and_expected_body():
     assert seen["features"] == "TCOApiV2Feature"
     b = seen["body"]
     assert b["prompt"] == "How many active accounts do we have?"
-    assert b["messages"][0]["role"] == "user"
     assert b["model_name"] == DEFAULT_MODEL_NAME
     assert b["stream"] is False and b["is_quick_prompt"] is False
     assert resp.answer_text == "There are 89 active accounts."
-    assert resp.generated_sql == _CHAT_BODY["analysis_request"][0]["sql"]
+    assert _CHAT_BODY["analysis_request"][0]["sql"] in resp.generated_sql
 
 
-def test_chat_session_id_stable_message_id_not():
+def test_each_question_gets_its_own_chat_session():
+    """Evaluation questions must be independent.
+
+    A shared chat_session_id makes each question a turn in one growing
+    conversation, so a later answer can be coloured by an earlier question —
+    a confound invisible in the scorecard and unreconstructable afterwards.
+    """
     bodies = []
 
     def handler(request):
@@ -147,8 +152,27 @@ def test_chat_session_id_stable_message_id_not():
     c = _client(handler)
     c.query("crm-t1-001")
     c.query("crm-t1-001")
-    assert bodies[0]["chat_session_id"] == bodies[1]["chat_session_id"]
+    assert bodies[0]["chat_session_id"] != bodies[1]["chat_session_id"]
     assert bodies[0]["message_session_id"] != bodies[1]["message_session_id"]
+
+
+def test_question_is_sent_once_not_twice():
+    """`prompt` carries the question; `messages` must not repeat it.
+
+    Duplicating it made every transcript read ["user", "user", "assistant"] —
+    the platform saw each question twice, which is not the input we mean to
+    measure.
+    """
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=_CHAT_BODY)
+
+    _client(handler).query("crm-t1-001")
+    body = bodies[0]
+    assert body["prompt"] == "How many active accounts do we have?"
+    assert body["messages"] == []
 
 
 def test_unknown_question_id_raises_keyerror():
@@ -182,11 +206,38 @@ def test_extract_answer_fallback_paths_still_work():
         _extract_answer({"nope": 1})
 
 
-def test_extract_sql_prefers_primary_entry():
-    assert (
-        _extract_sql(_CHAT_BODY)
-        == "SELECT COUNT(*) AS active_accounts FROM studio.accounts WHERE is_active = 'true'"
-    )
+def test_extract_sql_returns_a_lone_statement_bare():
+    """One statement needs no labelling — keep the SQL clean."""
+    data = {"analysis_request": [{"id": "primary", "sql": "SELECT 1"}]}
+    assert _extract_sql(data) == "SELECT 1"
+
+
+def test_extract_sql_labels_the_multi_statement_case():
+    out = _extract_sql(_CHAT_BODY)
+    assert out.startswith("-- [primary]")
+    assert "SELECT COUNT(*) AS active_accounts" in out
+    assert "GROUP BY industry" in out  # the breakdown is no longer discarded
+
+
+def test_extract_sql_keeps_every_statement_with_primary_first():
+    """The platform is an agent: one question can produce several statements,
+    and the one tagged `primary` is not necessarily the answering query.
+
+    Keeping only `primary` made the judge penalise the platform for omissions
+    that a discarded statement had in fact covered — see _extract_sql's
+    docstring for the case this comes from.
+    """
+    data = {
+        "analysis_request": [
+            {"id": "breakdown", "sql": "SELECT b FROM t GROUP BY b"},
+            {"id": "primary", "sql": "SELECT COUNT(*) FROM t"},
+        ]
+    }
+    out = _extract_sql(data)
+    # primary is labelled and leads, but the breakdown survives.
+    assert out.startswith("-- [primary]\nSELECT COUNT(*) FROM t")
+    assert "SELECT b FROM t GROUP BY b" in out
+    assert out.count("-- [") == 2
 
 
 def test_extract_sql_joins_all_when_no_primary():
@@ -196,7 +247,9 @@ def test_extract_sql_joins_all_when_no_primary():
             {"id": "b", "sql": "SELECT 2"},
         ]
     }
-    assert _extract_sql(data) == "SELECT 1;\nSELECT 2"
+    out = _extract_sql(data)
+    assert "SELECT 1" in out and "SELECT 2" in out
+    assert out.count("-- [") == 2
 
 
 def test_extract_sql_none_when_absent():
@@ -274,3 +327,43 @@ def test_mode_reflects_stream_setting():
         ).mode
         == "live-stream"
     )
+
+
+def test_messages_fallback_returns_the_answer_not_the_raw_blob():
+    """The assistant turn's content is stringified JSON, not prose.
+
+    Returning it raw handed the judge a ~24KB blob carrying `dashboard` and
+    `reasoning` instead of the ~1KB answer — scoring the wrong text and leaking
+    the agent's own reasoning into it.
+    """
+    inner = json.dumps(
+        {
+            "analysis": "There are 6,673 contacts.",
+            "dashboard": {"title": "should not be scored"},
+            "reasoning": "should not leak into the judged answer",
+        }
+    )
+    data = {
+        "error": False,
+        "messages": [
+            {"role": "user", "content": "How many contacts?"},
+            {"role": "assistant", "content": inner},
+        ],
+    }
+    out = _extract_answer(data)
+    assert out == "There are 6,673 contacts."
+    assert "dashboard" not in out
+    assert "reasoning" not in out
+
+
+def test_messages_fallback_never_returns_a_user_turn():
+    """A user turn is the question, not an answer — scoring it would compare
+    the question against itself."""
+    data = {
+        "error": False,
+        "messages": [
+            {"role": "user", "content": "How many contacts?"},
+            {"role": "assistant", "content": json.dumps({"analysis": "6,673."})},
+        ],
+    }
+    assert _extract_answer(data) == "6,673."

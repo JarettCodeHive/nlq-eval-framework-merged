@@ -1,12 +1,16 @@
-"""Deterministic judge — no network, no model, no randomness.
+"""Deterministic test double — no network, no model, no randomness.
 
-For tests, CI, and end-to-end demo before the real provider is wired up.
-MUST stay deterministic: gates rely on it, and a gate that returns different
-scores on different runs is not a gate.
+This exists so the pipeline can be exercised without a model provider: CI has
+no credentials, and every plumbing bug found so far surfaced here first, for
+free, before costing a live call.
 
-Heuristic stand-in, not a semantic evaluator. Never runs in production and its
-scores mean nothing about answer quality — they mean whether the response
-strings overlap enough to be plausibly matching.
+It is NOT a judge. Its scores measure string overlap, not answer quality, and
+they mean nothing about whether the platform was right. Runs using it are
+PREVIEW-only and can never establish a release baseline; ``--release`` refuses
+it outright (see judge/cli.py).
+
+MUST stay deterministic: tests rely on it, and a fixture that returns different
+scores on different runs tests nothing.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ def _tokens(text: str) -> set[str]:
     return set(_WORD.findall(text.lower()))
 
 
-class MockJudge(JudgeClient):
+class HeuristicJudge(JudgeClient):
     """Fixed rules over string overlap. Same inputs → same verdict, always."""
 
     model_version = "mock-judge-v1"

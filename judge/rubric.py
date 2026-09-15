@@ -66,7 +66,10 @@ def _settings_lines() -> list[str]:
         "outright; by default that fails the run, and the operator may instead "
         "opt in to running on the model default plus the fixed seed. A run that "
         "does so records judge_temperature_enforced=false on its scorecard, so "
-        "the determinism basis of every run is visible on the artefact.",
+        "the determinism basis of every run is visible on the artefact. "
+        "Anthropic has no seed parameter at all, so a run on an Anthropic model "
+        "records judge_seed_enforced=false rather than implying a control it "
+        "never applied.",
         "The judge receives the question, the platform response, the "
         "expected_answer and the judge_reference. It never receives the "
         "reference_sql — SQL plausibility is scored on the platform's own "
@@ -79,7 +82,55 @@ def _settings_lines() -> list[str]:
         "Calibration must pass before any production scoring run: within ±1 of "
         "the human anchor score on ≥90% of anchors per dimension, with no "
         "directional disagreement, over ≥10 anchors per domain (§10.2). "
-        "Uncalibrated scores never enter a scorecard (§10.2).",
+        "Uncalibrated scores never enter a scorecard (§10.2). A pass is recorded "
+        "against the judge that earned it — model, prompt revision and scoring "
+        "mode — and a run differing on any of the three is treated as "
+        "uncalibrated.",
+        "Anchor sets are themselves checked: §10.2 asks for anchors "
+        "&quot;spanning the score range — not 10 easy passes&quot;, so a set on "
+        "which a constant score would satisfy the acceptance test is rejected "
+        "before any provider budget is spent on it.",
+    ]
+
+
+def _comparison_lines() -> list[str]:
+    """How the deterministic scorer compares answers.
+
+    Reported beside the judge and never blended with it (§11.3) — but read
+    together at sign-off, because these are the two OPEN ITEMS the delivery team
+    has had to settle in order to produce a usable number.
+    """
+    return [
+        "<b>Numerics compare by value, not by rendering.</b> §HC-3 protects "
+        "phrasing, length and presentation and fails only numeric variance, so a "
+        "thousands separator, a currency prefix and a trailing <font "
+        "face='Courier'>.00</font> are not variance — <font face='Courier'>"
+        "28,731</font> equals <font face='Courier'>28731</font>. A rounded figure "
+        "still fails: <font face='Courier'>4,182,000</font> against <font "
+        "face='Courier'>4,182,650.00</font> is a real loss of value. "
+        "<b>This is Codehive's reading of OI-2</b>, taken so the scorer is usable "
+        "now, and it is one flag to reverse.",
+        "<b>Entity labels are required, and each must be attached to its own "
+        "value.</b> An expected answer of <font face='Courier'>Priya Raghavan — "
+        "4,182,650.00</font> is not satisfied by <font face='Courier'>Bob Smith "
+        "closed 4,182,650.00</font>, nor by a list whose values are each bound to "
+        "the wrong category. Comparing numerics alone passed both.",
+        "<b>Dates compare by day, with no tolerance.</b> Material change C10 "
+        "withdrew the ±1 day tolerance carried in earlier scoring drafts. ISO on "
+        "the ground-truth side; ISO or a month-name rendering on the platform "
+        "side, because the platform writes dates in prose. <b>This is Codehive's "
+        "reading of OI-3.</b>",
+        "<b>Spelled-out numerals are deliberately not recognised by the "
+        "scorer.</b> The judge scores &quot;Five contacts&quot; against an "
+        "expected <font face='Courier'>5</font> as a 5, and should. Teaching the "
+        "deterministic scorer number words would make an expected <font "
+        "face='Courier'>1</font> match any answer containing the word "
+        "&quot;one&quot; — a common false pass traded for a rare false fail. The "
+        "two scores diverging on such an answer is intended, and both are always "
+        "shown (§11.3).",
+        "A run that relaxes any of the above is marked on its scorecard as "
+        "<font face='Courier'>comparison_policy</font> and cannot establish a "
+        "baseline.",
     ]
 
 
@@ -258,12 +309,41 @@ def build_rubric_pdf(out_path: Path) -> Path:
     story.append(Spacer(1, 10 * mm))
     story.append(HRFlowable(width="100%", color=colors.grey))
     story.append(Spacer(1, 4 * mm))
+    story.append(
+        Paragraph("6. Deterministic comparison — decisions requiring sign-off", h2)
+    )
+    story.append(
+        Paragraph(
+            "Exact-match is not part of the judge, and the two are never blended "
+            "(§11.3). It is documented here because OI-2 and OI-3 are still open, "
+            "and the delivery team has settled both in order to produce an "
+            "interpretable accuracy number. <b>These four decisions are the "
+            "second item requiring sign-off on this document.</b>",
+            body,
+        )
+    )
+    story.append(Spacer(1, 2 * mm))
+    story.append(
+        ListFlowable(
+            [
+                ListItem(Paragraph(line, body), leftIndent=6)
+                for line in _comparison_lines()
+            ],
+            bulletType="bullet",
+            start="•",
+        )
+    )
+
+    story.append(Spacer(1, 10 * mm))
+    story.append(HRFlowable(width="100%", color=colors.grey))
+    story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Sign-off", h2))
     story.append(
         Paragraph(
             f"Approved for calibration and production scoring against prompt "
             f"revision <b>{prompt_version()}</b>, including the interpolated "
-            f"score levels 2 and 4.",
+            f"score levels 2 and 4 (section 2) and the deterministic comparison "
+            f"decisions in section 6.",
             body,
         )
     )

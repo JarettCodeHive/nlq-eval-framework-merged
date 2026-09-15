@@ -1,9 +1,13 @@
-"""LLM judge (OpenAI direct OR Azure OpenAI), with content-keyed caching.
+"""LLM judge over an OpenAI-compatible chat completions endpoint (OpenAI or Azure).
 
-The class is provider-agnostic — construct with either `OpenAISettings` or
-`AzureSettings`; the client (AsyncOpenAI / AsyncAzureOpenAI) is selected at
-construction. The `chat.completions.create()` surface is identical across the
-two clients, so nothing downstream branches on provider.
+The class is provider-agnostic within that family — construct with either
+`OpenAISettings` or `AzureSettings`; the client (AsyncOpenAI / AsyncAzureOpenAI)
+is selected at construction. The `chat.completions.create()` surface is
+identical across the two, so nothing downstream branches on provider.
+
+Everything around the call — caching, the audit record, malformed-output
+retries, the two scoring modes — lives in `BaseLLMJudge`. This module owns only
+the OpenAI wire format and its parameter-compatibility quirks.
 
 Determinism (§10.1): temperature 0, fixed seed, JSON-mode. If the deployment
 rejects temperature 0 it fails loudly, unless `JudgeConfig.require_temperature_zero`
@@ -15,9 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import warnings
-from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
 
 from openai import (
     APIConnectionError,
@@ -27,17 +29,12 @@ from openai import (
     AsyncOpenAI,
 )
 
-from judge.cache import JudgeCache, cache_key
-from judge.client import JudgeClient
 from judge.config import AzureSettings, JudgeConfig, LLMSettings, OpenAISettings
-from judge.contracts import DIMENSIONS, JudgeRequest, JudgeVerdict
-from judge.parsing import JudgeOutputError, parse_combined, parse_dimension
-from judge.prompts import prompt_version, render_combined, render_dimension
-
-ParsedT = TypeVar("ParsedT")
+from judge.llm_judge import BaseLLMJudge
+from judge.parsing import JudgeOutputError
 
 
-class OpenAIJudge(JudgeClient):
+class OpenAIJudge(BaseLLMJudge):
     """Judge backed by an OpenAI-compatible chat completions endpoint.
 
     Provider auto-selected from the `settings` type — pass `AzureSettings` for
@@ -68,38 +65,29 @@ class OpenAIJudge(JudgeClient):
         # environment from naming the gateway's actual model.
         if isinstance(settings, AzureSettings):
             self._api_model = settings.deployment
-            self._model_str = f"azure/{settings.deployment}"
+            model_str = f"azure/{settings.deployment}"
         else:
             self._api_model = config.model
-            self._model_str = config.model
+            model_str = config.model
+        super().__init__(
+            config,
+            model_str=model_str,
+            cache_dir=cache_dir,
+            prompt_log_path=prompt_log_path,
+            judge_run_id=judge_run_id,
+        )
+        self._settings = settings
+        self._json_mode = config.json_mode
         # gpt-5.x / o1-family deployments renamed `max_tokens` → `max_completion_tokens`
         # and reject `max_tokens`. We start with the modern param and fall back on rejection.
         self._max_tokens_param = "max_completion_tokens"
         self._send_seed = config.seed is not None
         self._send_temperature = True
         self._require_temp0 = config.require_temperature_zero
-        # Flips to False if the deployment rejects temperature=0 and the run is
-        # allowed to continue on the model default + seed. Surfaced in the run
-        # manifest / scorecard.
-        self.temperature_enforced = True
-        self._cache = JudgeCache(
-            cache_dir or Path(".judge_cache"),
-            enabled=config.cache_enabled and cache_dir is not None,
-        )
         self._request_sem = asyncio.Semaphore(config.concurrency)
         # Serial probe state — see `_complete()` for why this exists.
         self._probed = False
         self._probe_lock = asyncio.Lock()
-        self._prompt_log_path = prompt_log_path
-        self._judge_run_id = judge_run_id
-        if prompt_log_path is not None:
-            if not judge_run_id:
-                raise ValueError(
-                    "judge_run_id is required when prompt logging is enabled"
-                )
-            prompt_log_path.parent.mkdir(parents=True, exist_ok=True)
-            # Truncate at construction so a fresh run doesn't accrete history.
-            prompt_log_path.write_text("", encoding="utf-8")
 
         # Actual model name sent to the API — differs between providers.
         # OpenAI: real model name like `gpt-4o-mini`.
@@ -123,96 +111,10 @@ class OpenAIJudge(JudgeClient):
         else:
             raise TypeError(f"unsupported settings type: {type(settings).__name__}")
 
-    # --- public API -------------------------------------------------------
-
-    async def judge(self, req: JudgeRequest) -> JudgeVerdict:
-        key = cache_key(
-            req,
-            prompt_version=prompt_version(),
-            model_version=self._model_str,
-            mode=self._config.mode,
-        )
-        cached = self._cache.get(key)
-        if cached is not None:
-            for trace in cached.audit_trace:
-                self._write_audit_record(req.question_id, trace, cached=True)
-            return cached
-
-        if self._config.mode == "per_dimension":
-            verdict = await self._judge_per_dimension(req)
-        else:
-            verdict = await self._judge_combined(req)
-
-        self._cache.put(key, verdict)
-        return verdict
-
     async def aclose(self) -> None:
         await self._client.close()
 
-    def cache_stats(self) -> dict[str, int | bool]:
-        return self._cache.stats()
-
     # --- internals --------------------------------------------------------
-
-    def _write_audit_record(
-        self,
-        question_id: str | None,
-        trace: dict[str, object],
-        *,
-        cached: bool,
-    ) -> None:
-        """Write one complete Section 10.1 audit record."""
-        if self._prompt_log_path is None:
-            return
-        import json
-
-        record = {
-            "judge_run_id": self._judge_run_id,
-            "question_id": question_id,
-            "mode": self._config.mode,
-            "prompt_version": prompt_version(),
-            "model_version": self._model_str,
-            "cached": cached,
-            **trace,
-        }
-        with self._prompt_log_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-    async def _score_prompt(
-        self,
-        *,
-        req: JudgeRequest,
-        prompt: str,
-        dimension: str | None,
-        parser: Callable[[str], ParsedT],
-    ) -> tuple[ParsedT, list[dict[str, object]]]:
-        """Call, audit, validate, and retry malformed output before failing."""
-        traces: list[dict[str, object]] = []
-        attempts = self._config.malformed_output_retries + 1
-        for attempt in range(1, attempts + 1):
-            raw = await self._complete(prompt)
-            trace: dict[str, object] = {
-                "dimension": dimension,
-                "attempt": attempt,
-                "prompt": prompt,
-                "raw_response": raw,
-                "parse_error": None,
-            }
-            try:
-                parsed = parser(raw)
-            except JudgeOutputError as exc:
-                trace["parse_error"] = f"{type(exc).__name__}: {exc}"
-                traces.append(trace)
-                self._write_audit_record(req.question_id, trace, cached=False)
-                if attempt == attempts:
-                    raise JudgeOutputError(
-                        f"malformed judge output after {attempts} attempt(s): {exc}"
-                    ) from exc
-                continue
-            traces.append(trace)
-            self._write_audit_record(req.question_id, trace, cached=False)
-            return parsed, traces
-        raise AssertionError("unreachable malformed-output retry state")
 
     async def _complete(self, prompt: str) -> str:
         # Discover parameter incompatibilities (max_tokens rename, temperature
@@ -270,6 +172,7 @@ class OpenAIJudge(JudgeClient):
                     continue
                 if self._send_seed and _is_seed_unsupported(exc):
                     self._send_seed = False
+                    self.seed_enforced = False
                     warnings.warn(
                         f"model {self._model_str!r} does not support a fixed seed; "
                         "continuing under the Section 10.1 'where supported' exception",
@@ -326,55 +229,6 @@ class OpenAIJudge(JudgeClient):
                 )
                 await asyncio.sleep(delay)
         raise AssertionError("unreachable backoff retry state")
-
-    async def _judge_combined(self, req: JudgeRequest) -> JudgeVerdict:
-        prompt = render_combined(req)
-        parsed, traces = await self._score_prompt(
-            req=req,
-            prompt=prompt,
-            dimension=None,
-            parser=parse_combined,
-        )
-        return JudgeVerdict(
-            **parsed,
-            prompt_version=prompt_version(),
-            model_version=self._model_str,
-            audit_trace=traces,
-            temperature_enforced=self.temperature_enforced,
-        )
-
-    async def _judge_per_dimension(self, req: JudgeRequest) -> JudgeVerdict:
-        """Four independent calls — no halo effect between dimensions."""
-        prompts = {d: render_dimension(req, d) for d in DIMENSIONS}
-
-        async def score_dimension(dimension: str):
-            return await self._score_prompt(
-                req=req,
-                prompt=prompts[dimension],
-                dimension=dimension,
-                parser=lambda raw: parse_dimension(raw, dimension),
-            )
-
-        parsed_dimensions = await asyncio.gather(
-            *(score_dimension(dimension) for dimension in DIMENSIONS)
-        )
-        scores: dict[str, int] = {}
-        rationales: dict[str, str] = {}
-        traces: list[dict[str, object]] = []
-        for dimension, ((score, rationale), dimension_traces) in zip(
-            DIMENSIONS, parsed_dimensions, strict=True
-        ):
-            scores[dimension] = score
-            rationales[dimension] = rationale
-            traces.extend(dimension_traces)
-        return JudgeVerdict(
-            dimension_rationales=rationales,
-            **scores,
-            prompt_version=prompt_version(),
-            model_version=self._model_str,
-            audit_trace=traces,
-            temperature_enforced=self.temperature_enforced,
-        )
 
 
 def _error_body_contains(exc: APIStatusError, *needles: str) -> bool:

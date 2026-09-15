@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from judge.input_contract import REQUIRED_FIELDS, load_input_csv
-from judge.exact_match import ExactMatchResult
+from judge.exact_match import ExactMatchOutcome, ExactMatchResult
 from judge.contracts import JudgeVerdict
 from scorecard.summary import RunContext, write_scorecard_summary_csv
 
@@ -54,7 +54,7 @@ def test_write_scorecard_summary_csv_groups_by_domain_and_tier(tmp_path):
             },
             req,
             verdict,
-            ExactMatchResult.PASS,
+            ExactMatchOutcome(ExactMatchResult.PASS),
         )
     ]
     ctx = RunContext(

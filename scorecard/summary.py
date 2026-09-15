@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from judge.contracts import DIMENSIONS, JudgeVerdict
-from judge.exact_match import ExactMatchResult
+from judge.exact_match import ExactMatchOutcome, ExactMatchResult
 from scorecard.baseline import RegressionComparison, compare_to_baseline
 
 # §11.1 dimension column names (short forms) mapped to the JudgeVerdict fields.
@@ -21,7 +21,7 @@ JUDGE_COLUMNS: dict[str, str] = {
 
 DOMAIN_TIER_LABEL = "ALL"  # the per-domain roll-up row's `tier` value
 
-Result = tuple[dict, object, "JudgeVerdict | Exception", ExactMatchResult]
+Result = tuple[dict, object, "JudgeVerdict | Exception", ExactMatchOutcome]
 
 SUMMARY_FIELDNAMES: list[str] = [
     "run_id",
@@ -29,13 +29,22 @@ SUMMARY_FIELDNAMES: list[str] = [
     "platform_version",
     "dataset_version",
     "scorecard_mode",  # PREVIEW | RELEASE — provenance, not part of the raw §11.1 list
+    "comparison_policy",  # provenance: HOW exact-match compared (OI-2 / OI-3)
     "judge_temperature_enforced",  # provenance: determinism basis of the run
+    "judge_seed_enforced",
     "domain",
     "tier",
     "questions_total",
     "exact_match_pass",
     "exact_match_eligible",
     "exact_match_pct",
+    # Named, not derived: an exclusion that quietly raises exact_match_pct is
+    # exactly the failure §14.2 condition 4 warns about.
+    "exact_match_not_applicable",
+    "expected_answer_off_contract",
+    # §9.2 T3 diagnostic — reported beside the scores, never inside them.
+    "null_handling_applicable",
+    "null_handling_fail",
     *JUDGE_COLUMNS.keys(),
     "judge_overall",
     "judge_errors",
@@ -54,6 +63,10 @@ QUESTION_FIELDNAMES: list[str] = [
     "expected_answer",
     "actual_answer",
     "exact_match_result",
+    "exact_match_detail",
+    "expected_answer_off_contract",
+    "null_handling",
+    "null_handling_detail",
     "platform_generated_sql",
     *JUDGE_COLUMNS.keys(),
     "judge_overall",
@@ -74,12 +87,19 @@ class RunContext:
     dataset_version: str
     scorecard_mode: str = "PREVIEW"  # PREVIEW | RELEASE
     calibrated: bool = False
-    # "off" = certified §HC-3 byte-identical; otherwise the OI-2 relaxation label.
-    numeric_normalization: str = "off"
+    # How exact-match compared answers this run (`ComparisonPolicy.label`). The
+    # OI-2 / OI-3 decisions are visible on every artefact rather than implied.
+    comparison_policy: str = "numeric=value labels=required proximity=120"
+    # False when the run relaxed that policy — such a run cannot be a baseline.
+    comparison_is_default: bool = True
     # False when the judge model refused temperature 0 and the run continued on
-    # the model default + fixed seed. Determinism then rests on the seed
+    # the model default. Determinism then rests on the seed where one applies
     # (§10.1) — a reader of the scorecard has to be able to see that.
     judge_temperature_enforced: bool = True
+    # False when a configured seed never reached the provider.
+    judge_seed_enforced: bool = True
+    # §9.5 rephrase-group findings, rendered in the human-readable scorecard.
+    rephrase_findings: tuple[str, ...] | list[str] = ()
 
 
 @dataclass
@@ -89,6 +109,10 @@ class GroupStats:
     questions_total: int = 0
     exact_match_pass: int = 0
     exact_match_eligible: int = 0
+    exact_match_not_applicable: int = 0
+    expected_answer_off_contract: int = 0
+    null_handling_applicable: int = 0
+    null_handling_fail: int = 0
     judge_errors: int = 0
     platform_errors: int = 0
     _dim_sums: dict[str, float] = field(
@@ -96,18 +120,27 @@ class GroupStats:
     )
     _judged: int = 0
 
-    def add(self, verdict: object, em: ExactMatchResult) -> None:
+    def add(self, verdict: object, em: ExactMatchOutcome, pair: dict) -> None:
         self.questions_total += 1
-        if em == ExactMatchResult.ERROR:
+        if em.off_contract:
+            self.expected_answer_off_contract += 1
+        null_status = pair.get("null_handling") or "not_applicable"
+        if null_status != "not_applicable":
+            self.null_handling_applicable += 1
+            if null_status == "fail":
+                self.null_handling_fail += 1
+        if em.result == ExactMatchResult.ERROR:
             # Platform never answered — infra, not accuracy. Not judged, not in
             # the exact-match denominator.
             self.platform_errors += 1
             return
-        if em == ExactMatchResult.PASS:
+        if em.result == ExactMatchResult.PASS:
             self.exact_match_pass += 1
             self.exact_match_eligible += 1
-        elif em == ExactMatchResult.FAIL:
+        elif em.result == ExactMatchResult.FAIL:
             self.exact_match_eligible += 1
+        elif em.result == ExactMatchResult.NOT_APPLICABLE:
+            self.exact_match_not_applicable += 1
         if isinstance(verdict, JudgeVerdict):
             self._judged += 1
             for dim in DIMENSIONS:
@@ -150,8 +183,8 @@ def aggregate(results: list[Result]) -> dict[str, DomainStats]:
         domain = str(pair.get("domain") or "unknown")
         tier = str(pair.get("tier") or "unknown")
         ds = out[domain]
-        ds.overall.add(verdict, em)
-        ds.tiers.setdefault(tier, GroupStats()).add(verdict, em)
+        ds.overall.add(verdict, em, pair)
+        ds.tiers.setdefault(tier, GroupStats()).add(verdict, em, pair)
     return dict(out)
 
 
@@ -168,13 +201,19 @@ def _summary_row(
         "platform_version": ctx.platform_version,
         "dataset_version": ctx.dataset_version,
         "scorecard_mode": ctx.scorecard_mode,
+        "comparison_policy": ctx.comparison_policy,
         "judge_temperature_enforced": ctx.judge_temperature_enforced,
+        "judge_seed_enforced": ctx.judge_seed_enforced,
         "domain": domain,
         "tier": tier,
         "questions_total": stats.questions_total,
         "exact_match_pass": stats.exact_match_pass,
         "exact_match_eligible": stats.exact_match_eligible,
         "exact_match_pct": stats.exact_match_pct,
+        "exact_match_not_applicable": stats.exact_match_not_applicable,
+        "expected_answer_off_contract": stats.expected_answer_off_contract,
+        "null_handling_applicable": stats.null_handling_applicable,
+        "null_handling_fail": stats.null_handling_fail,
         "judge_overall": stats.judge_overall,
         "judge_errors": stats.judge_errors,
         "platform_errors": stats.platform_errors,
@@ -242,7 +281,7 @@ def write_scorecard_summary_csv(
 
 
 def _question_row(
-    ctx: RunContext, pair: dict, req: object, verdict: object, em: ExactMatchResult
+    ctx: RunContext, pair: dict, req: object, verdict: object, em: ExactMatchOutcome
 ) -> dict[str, object]:
     row: dict[str, object] = {
         "run_id": ctx.run_id,
@@ -253,7 +292,11 @@ def _question_row(
         or getattr(req, "question", None),
         "expected_answer": getattr(req, "expected_answer", pair.get("expected_answer")),
         "actual_answer": getattr(req, "platform_answer", None),
-        "exact_match_result": em.value,
+        "exact_match_result": em.result.value,
+        "exact_match_detail": em.detail,
+        "expected_answer_off_contract": em.off_contract,
+        "null_handling": pair.get("null_handling"),
+        "null_handling_detail": pair.get("null_handling_detail"),
         # §11.2 — logged for EVERY question, mandatory on failure.
         "platform_generated_sql": getattr(req, "generated_sql", None),
         "rephrase_group_id": pair.get("rephrase_group_id"),
@@ -269,7 +312,7 @@ def _question_row(
             row[col] = getattr(verdict, dim)
         row["judge_overall"] = round(verdict.overall_score, 4)
         row["judge_rationale"] = verdict.rationale
-    elif em == ExactMatchResult.ERROR:
+    elif em.result == ExactMatchResult.ERROR:
         row["platform_error"] = str(verdict) if verdict is not None else "no answer"
     elif isinstance(verdict, Exception):
         row["judge_error"] = f"{type(verdict).__name__}: {verdict}"

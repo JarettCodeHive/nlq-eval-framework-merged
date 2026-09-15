@@ -14,15 +14,21 @@ JUDGE REFERENCE (the ideal full response a good Platform would return)
 PLATFORM ANSWER (the response under evaluation)
 {{ platform_answer }}
 
-PLATFORM GENERATED SQL
+PLATFORM GENERATED SQL (every statement the Platform issued for this question)
 {% if generated_sql %}{{ generated_sql }}{% else %}(none — the Platform returned no SQL){% endif %}
 
 ANCHORING RULES
 - Judge FACTUAL CORRECTNESS against the EXPECTED ANSWER.
 - Judge COMPLETENESS and FORMAT ADHERENCE against the JUDGE REFERENCE.
-- Judge SQL PLAUSIBILITY from whether PLATFORM GENERATED SQL is syntactically
-  valid and logically coherent for the QUESTION. The ground-truth reference
-  SQL is deliberately unavailable to prevent answer leakage.
+- Judge SQL PLAUSIBILITY from whether PLATFORM GENERATED SQL, TAKEN TOGETHER,
+  is syntactically valid and could produce the answer to the QUESTION. The
+  Platform often issues several statements for one question: one headline
+  metric plus supporting breakdowns. They are labelled, and the one labelled
+  `primary` is NOT necessarily the one that answers the question. Judge the
+  set as a whole — if any statement answers the QUESTION, the SQL is
+  plausible; do not penalise the set because one member is narrower than the
+  question. The ground-truth reference SQL is deliberately unavailable to
+  prevent answer leakage.
   If the Platform returned no SQL, score SQL PLAUSIBILITY 1.
 - Do not reward length. A short answer that is correct and complete scores as
   highly as a long one. Do not penalise wording that differs from the reference

@@ -20,9 +20,8 @@ from judge.calibration import (
 )
 from judge.config import AzureSettings, OpenAISettings, load_judge_config
 from judge.contracts import JudgeRequest, JudgeVerdict
-from judge.mock_judge import MockJudge
+from judge.heuristic_judge import HeuristicJudge
 from judge.exact_match import ExactMatchResult, exact_match, extract_numerics
-from judge.mock_pulse import MockPulse, load_pairs
 from judge.openai_judge import OpenAIJudge
 from judge.parsing import JudgeOutputError, parse_combined, parse_dimension
 from judge.prompts import prompt_version, render_combined, render_dimension
@@ -192,6 +191,7 @@ class _StubOpenAIJudge(OpenAIJudge):
         self._model_str = "stub-model"
         self._judge_run_id = "judge-run-stable-001"
         self.temperature_enforced = True
+        self.seed_enforced = True
         self._prompt_log_path = log_path
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text("", encoding="utf-8")
@@ -401,20 +401,22 @@ def test_corrupt_cache_entry_is_a_miss_not_a_crash(tmp_path):
 # --- mock judge -----------------------------------------------------------
 
 
-async def test_mock_judge_is_deterministic():
+async def test_heuristic_judge_is_deterministic():
     """CI gate — a gate that varies is not a gate."""
-    a = await MockJudge().judge(REQ)
-    b = await MockJudge().judge(REQ)
+    a = await HeuristicJudge().judge(REQ)
+    b = await HeuristicJudge().judge(REQ)
     assert a.model_dump() == b.model_dump()
 
 
 async def test_missing_sql_scores_plausibility_one():
-    verdict = await MockJudge().judge(REQ.model_copy(update={"generated_sql": None}))
+    verdict = await HeuristicJudge().judge(
+        REQ.model_copy(update={"generated_sql": None})
+    )
     assert verdict.sql_plausibility == 1
 
 
 async def test_judge_many_returns_exceptions_per_row():
-    class Boom(MockJudge):
+    class Boom(HeuristicJudge):
         async def judge(self, req):
             raise RuntimeError("simulated failure")
 
@@ -424,23 +426,6 @@ async def test_judge_many_returns_exceptions_per_row():
 
 
 # --- mock pulse -----------------------------------------------------------
-
-
-def test_mock_pulse_loads_good_and_regressed_fixtures():
-    good = MockPulse(mode="good")
-    regressed = MockPulse(mode="regressed")
-    ids = load_pairs()
-    for pair in ids:
-        g = good.query(pair["question_id"])
-        r = regressed.query(pair["question_id"])
-        assert g.question_id == pair["question_id"]
-        assert r.question_id == pair["question_id"]
-
-
-def test_mock_pulse_missing_fixture_raises():
-    pulse = MockPulse(mode="good")
-    with pytest.raises(KeyError, match="no fixture"):
-        pulse.query("crm-does-not-exist")
 
 
 # --- exact-match (§HC-3 zero tolerance) -----------------------------------
@@ -454,14 +439,116 @@ def test_exact_match_fail_on_wrong_numeric():
     assert exact_match("72", "There are 68 active accounts.") == ExactMatchResult.FAIL
 
 
-def test_exact_match_zero_tolerance_on_decimal_and_thousands():
-    # §HC-3 is byte-identical: '72' vs '72.0' fails; '1000' vs '1,000' fails.
-    assert exact_match("72", "72.0") == ExactMatchResult.FAIL
-    assert exact_match("1000", "1,000 rows") == ExactMatchResult.FAIL
+def test_exact_match_compares_numerics_by_value_not_rendering():
+    """OI-2, decided: §HC-3 protects rendering and fails only numeric variance.
+
+    A thousands separator, a currency prefix and a trailing `.00` change how a
+    number is written, not what it is. Rounding still fails, because that is a
+    real loss of value.
+    """
+    assert exact_match("1000", "1,000 rows") == ExactMatchResult.PASS
+    assert exact_match("72", "72.0") == ExactMatchResult.PASS
+    assert exact_match("438632.65", "$438,632.65 (USD)") == ExactMatchResult.PASS
+    assert (
+        exact_match("28731", "A total of 28,731 support cases.")
+        == ExactMatchResult.PASS
+    )
+    # not a rendering difference — a different number
+    assert exact_match("4182650.00", "4,182,000") == ExactMatchResult.FAIL
+    assert exact_match("34", "25 contacts") == ExactMatchResult.FAIL
+
+
+def test_string_form_restores_the_pre_oi2_reading():
+    """If the Platform Owner rules that "identical" means the rendering, it is
+    one flag — not a rewrite."""
+    from judge.exact_match import STRICT_STRING_POLICY
+
+    assert (
+        exact_match("28731", "28,731 cases", policy=STRICT_STRING_POLICY)
+        == ExactMatchResult.FAIL
+    )
+    assert (
+        exact_match("28,731", "28,731 cases", policy=STRICT_STRING_POLICY)
+        == ExactMatchResult.PASS
+    )
+
+
+def test_exact_match_requires_the_right_entity_not_just_the_right_number():
+    """The headline false-pass: every number right, every label wrong.
+
+    This is the shape of the Appendix A worked example and of most T4/T5 pairs,
+    so a numerics-only comparison inflates the §14.2 accuracy gate.
+    """
+    expected = "Priya Raghavan — 4,182,650.00"
+    assert (
+        exact_match(expected, "Priya Raghavan closed 4,182,650.00 last quarter.")
+        == ExactMatchResult.PASS
+    )
+    assert (
+        exact_match(expected, "Bob Smith closed 4,182,650.00 last quarter.")
+        == ExactMatchResult.FAIL
+    )
+    # the entity is required, not merely nice to have
+    assert (
+        exact_match(expected, "The top rep closed 4,182,650.00.")
+        == ExactMatchResult.FAIL
+    )
+
+
+def test_exact_match_rejects_a_permuted_list():
+    """Right values, each bound to the wrong label — a multiset check misses it."""
+    expected = "Awareness | 35726; Retention | 34685; CustomerEducation | 33992"
+    assert (
+        exact_match(
+            expected, "Awareness | 35726; Retention | 34685; CustomerEducation | 33992"
+        )
+        == ExactMatchResult.PASS
+    )
+    assert (
+        exact_match(
+            expected, "Retention | 35726; CustomerEducation | 34685; Awareness | 33992"
+        )
+        == ExactMatchResult.FAIL
+    )
+
+
+def test_exact_match_accepts_prose_that_keeps_each_label_with_its_value():
+    """§HC-3: phrasing is never a deduction, so prose must still pass."""
+    expected = "Awareness | 35726; Retention | 34685; CustomerEducation | 33992"
+    actual = (
+        "Awareness led with 35,726, then Retention at 34,685 and "
+        "Customer Education at 33,992."
+    )
+    assert exact_match(expected, actual) == ExactMatchResult.PASS
+
+
+def test_exact_match_label_may_follow_its_value():
+    assert exact_match("Standard | 6229", "6,229 cases fall under Standard.") == (
+        ExactMatchResult.PASS
+    )
+
+
+def test_ignore_entity_labels_is_diagnostic_only():
+    from judge.exact_match import ComparisonPolicy
+
+    relaxed = ComparisonPolicy(require_labels=False)
+    assert (
+        exact_match("Priya Raghavan — 4,182,650.00", "Bob Smith closed 4,182,650.00")
+        == ExactMatchResult.FAIL
+    )
+    assert (
+        exact_match(
+            "Priya Raghavan — 4,182,650.00",
+            "Bob Smith closed 4,182,650.00",
+            policy=relaxed,
+        )
+        == ExactMatchResult.PASS
+    )
+    assert relaxed.is_certified_default is False
 
 
 def test_exact_match_multi_value():
-    expected = "Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00"
+    expected = "Technology | 8240100.00; Finance | 6102750.00; Healthcare | 4988300.00"
     actual = (
         "H1 total by industry: Technology 8,240,100.00, Finance 6,102,750.00, "
         "Healthcare 4,988,300.00 lead."
@@ -470,12 +557,12 @@ def test_exact_match_multi_value():
 
 
 def test_exact_match_multi_value_one_missing_is_fail():
-    expected = "Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00"
+    expected = "Technology | 8240100.00; Finance | 6102750.00; Healthcare | 4988300.00"
     actual = "Technology 8,240,100.00; Finance 6,102,750.00"
     assert exact_match(expected, actual) == ExactMatchResult.FAIL
 
 
-def test_exact_match_not_applicable_when_no_numeric():
+def test_exact_match_not_applicable_when_no_deterministic_core():
     # T5 reasoning wrappers with no numeric core — judge-only pair.
     assert (
         exact_match("The pipeline is healthier than six months ago.", "...")
@@ -483,37 +570,55 @@ def test_exact_match_not_applicable_when_no_numeric():
     )
 
 
-def test_extract_numerics_preserves_formatting():
+def test_iso_date_is_one_value_not_three_numbers():
+    """OI-3. The old tokeniser read `2026-04-01` as ['2026', '-04', '-01'] —
+    the hyphens became signs — so no date answer could ever be compared."""
+    from judge.exact_match import parse_expected, FieldKind
+
+    fields = parse_expected("2026-04-01")[0]
+    assert len(fields) == 1 and fields[0].kind is FieldKind.DATE
+    assert exact_match("2026-04-01", "The earliest close date is 2026-04-01.") == (
+        ExactMatchResult.PASS
+    )
+    # the platform writes dates in prose; a month name is unambiguous
+    assert exact_match("2026-04-01", "The earliest close date is April 1, 2026.") == (
+        ExactMatchResult.PASS
+    )
+    assert exact_match("2026-04-01", "The earliest close date is 1 April 2026.") == (
+        ExactMatchResult.PASS
+    )
+    # C10 / OI-3: no +-1 day tolerance is carried forward
+    assert (
+        exact_match("2026-04-01", "Closed on April 2, 2026.") == ExactMatchResult.FAIL
+    )
+
+
+def test_off_contract_expected_answer_is_flagged_not_silently_relaxed():
+    """A prose expected_answer violates §9.3 (machine-generated from SQL). We
+    hold it to its numbers rather than its wording, and say so on the row."""
+    from judge.exact_match import evaluate_answer
+
+    outcome = evaluate_answer("There are 72 active accounts.", "72 accounts")
+    assert outcome.result is ExactMatchResult.PASS
+    assert outcome.off_contract is True
+
+    contract_shaped = evaluate_answer("72", "72 accounts")
+    assert contract_shaped.off_contract is False
+
+
+def test_failure_detail_names_the_unmet_requirement():
+    from judge.exact_match import evaluate_answer
+
+    outcome = evaluate_answer("Standard | 6229", "The Premium tier has 6,229 cases.")
+    assert outcome.result is ExactMatchResult.FAIL
+    assert "Standard" in outcome.detail
+    assert outcome.satisfied == ("value:6229",)
+    assert outcome.unsatisfied == ("label:Standard",)
+
+
+def test_extract_numerics_excludes_date_digits():
     assert extract_numerics("Priya — 4,182,650.00 in 2026") == ["4,182,650.00", "2026"]
-
-
-def test_numeric_normalization_relaxes_oi2_cases():
-    from judge.exact_match import NumericNormalization
-
-    norm = NumericNormalization()
-    # the cases the live QA run failed on
-    assert (
-        exact_match("438632.65", "$438,632.65 (USD)", normalize=norm)
-        == ExactMatchResult.PASS
-    )
-    assert exact_match("72", "72.0", normalize=norm) == ExactMatchResult.PASS
-    assert (
-        exact_match("7735084.39", "$7,735,084.39", normalize=norm)
-        == ExactMatchResult.PASS
-    )
-    # still catches a genuinely wrong number
-    assert exact_match("34", "25 contacts", normalize=norm) == ExactMatchResult.FAIL
-    # default (normalize=None) stays strict
-    assert exact_match("438632.65", "438,632.65") == ExactMatchResult.FAIL
-
-
-def test_numeric_normalization_can_disable_each_relaxation():
-    from judge.exact_match import NumericNormalization
-
-    only_sep = NumericNormalization(trailing_decimal_zeros=False)
-    assert exact_match("1000", "1,000", normalize=only_sep) == ExactMatchResult.PASS
-    assert exact_match("72", "72.0", normalize=only_sep) == ExactMatchResult.FAIL
-    assert only_sep.label == "thousands-sep"
+    assert extract_numerics("closed 2026-04-01") == []
 
 
 # --- pulse_client — full behaviour lives in test_pulse_client.py ----------
@@ -650,16 +755,25 @@ def _judge_verdict(**scores):
     )
 
 
-def _make_anchors(n: int, human_scores: dict[str, int] | None = None) -> list[dict]:
-    human = human_scores or {
-        d: 5
-        for d in (
-            "factual_correctness",
-            "completeness",
-            "format_adherence",
-            "sql_plausibility",
-        )
-    }
+DIMS = (
+    "factual_correctness",
+    "completeness",
+    "format_adherence",
+    "sql_plausibility",
+)
+
+# A spread that no constant score can pass: within ±1 tops out at 70% (k=4).
+# §10.2 asks for anchors "spanning the score range — not 10 easy passes", and
+# `assert_anchor_set_usable` now enforces that, so a flat anchor set is no
+# longer a legal fixture.
+_SPREAD = [1, 1, 2, 3, 3, 4, 4, 5, 5, 5]
+
+
+def _make_anchors(
+    n: int | None = None, human_scores: dict[str, int] | None = None
+) -> list[dict]:
+    """Anchors whose human grades span the scale, one per `_SPREAD` entry."""
+    count = n if n is not None else len(_SPREAD)
     return [
         {
             "question_id": f"anchor-{i:03d}",
@@ -669,66 +783,105 @@ def _make_anchors(n: int, human_scores: dict[str, int] | None = None) -> list[di
             "reference_sql": "SELECT 1",
             "platform_answer": "?",
             "generated_sql": "SELECT 1",
-            "human_scores": human,
+            "human_scores": human_scores
+            or {d: _SPREAD[i % len(_SPREAD)] for d in DIMS},
         }
-        for i in range(n)
+        for i in range(count)
     ]
+
+
+def _mirror_verdicts(anchors: list[dict], **override: int) -> dict:
+    """A judge that reproduces the human grade on every dimension."""
+    out = {}
+    for a in anchors:
+        scores = dict(a["human_scores"])
+        scores.update(override)
+        out[a["question_id"]] = _judge_verdict(**scores)
+    return out
 
 
 def test_calibration_requires_min_anchor_count():
     anchors = _make_anchors(ACCEPTANCE_MIN_ANCHORS - 1)
-    verdicts = {a["question_id"]: _judge_verdict() for a in anchors}
     with pytest.raises(ValueError, match="≥"):
-        evaluate("crm", verdicts, anchors)
+        evaluate("crm", _mirror_verdicts(anchors), anchors)
 
 
 def test_calibration_passes_when_all_within_pm1_no_flips():
-    anchors = _make_anchors(ACCEPTANCE_MIN_ANCHORS)
-    # human 5 across the board, judge 4 across the board → within ±1, no flips
-    verdicts = {
-        a["question_id"]: _judge_verdict(
-            **{
-                d: 4
-                for d in (
-                    "factual_correctness",
-                    "completeness",
-                    "format_adherence",
-                    "sql_plausibility",
-                )
-            }
-        )
-        for a in anchors
-    }
-    result = evaluate("crm", verdicts, anchors)
+    anchors = _make_anchors()
+    result = evaluate("crm", _mirror_verdicts(anchors), anchors)
     assert result.passed
-    for d, r in result.per_dimension.items():
+    for r in result.per_dimension.values():
         assert r.within_pm1_pct == 100.0
         assert r.directional_flip_count == 0
 
 
-def test_calibration_fails_on_directional_flip_even_at_100pct_within_pm1_after_partial_perfect():
-    """A single 5→2 flip must sink the whole dimension per §10.2 (never directional)."""
-    anchors = _make_anchors(ACCEPTANCE_MIN_ANCHORS)
-    verdicts = {a["question_id"]: _judge_verdict() for a in anchors}
-    # First anchor: judge scores factual as 2 (human was 5) → directional flip
-    verdicts[anchors[0]["question_id"]] = _judge_verdict(factual_correctness=2)
+def test_constant_judge_cannot_pass_a_spanning_anchor_set():
+    """The point of the anchor-strength rule: a judge that reads nothing fails.
+
+    Against the old CRM anchor set a flat 4 scored 100% on factual_correctness
+    and 90% on format_adherence — a pass on half the dimensions while measuring
+    nothing at all.
+    """
+    anchors = _make_anchors()
+    for k in range(1, 6):
+        verdicts = {
+            a["question_id"]: _judge_verdict(**{d: k for d in DIMS}) for a in anchors
+        }
+        assert not evaluate("crm", verdicts, anchors).passed, f"constant {k} passed"
+
+
+def test_anchor_set_is_rejected_when_it_cannot_discriminate():
+    from judge.calibration import AnchorSetTooWeak, anchor_strength
+
+    flat = _make_anchors(ACCEPTANCE_MIN_ANCHORS, {d: 5 for d in DIMS})
+    strength = anchor_strength(flat)
+    assert strength["factual_correctness"].passing_constants == (4, 5)
+    assert not strength["factual_correctness"].passes
+
+    with pytest.raises(AnchorSetTooWeak, match="spanning the score range"):
+        evaluate("crm", _mirror_verdicts(flat), flat)
+
+
+def test_shipped_crm_anchor_file_is_quarantined_not_loadable():
+    """`crm.provisional.json` was graded against the rubric it is meant to
+    validate and cannot detect a constant judge, so it must not be reachable as
+    `crm.json`. See judge/anchors/README.md."""
+    from judge.calibration import ANCHORS_DIR, load_anchors
+
+    assert not (ANCHORS_DIR / "crm.json").exists()
+    assert (ANCHORS_DIR / "crm.provisional.json").exists()
+    with pytest.raises(FileNotFoundError, match="No calibration anchors"):
+        load_anchors("crm")
+
+
+def test_calibration_fails_on_directional_flip_even_at_100pct_within_pm1():
+    """A single 5→2 flip must sink the whole dimension per §10.2."""
+    anchors = _make_anchors()
+    verdicts = _mirror_verdicts(anchors)
+    flipped = next(a for a in anchors if a["human_scores"]["factual_correctness"] == 5)
+    scores = dict(flipped["human_scores"])
+    scores["factual_correctness"] = 2
+    verdicts[flipped["question_id"]] = _judge_verdict(**scores)
     result = evaluate("crm", verdicts, anchors)
     assert not result.passed
     assert result.per_dimension["factual_correctness"].directional_flip_count == 1
 
 
 def test_calibration_fails_below_90pct_within_pm1():
-    anchors = _make_anchors(ACCEPTANCE_MIN_ANCHORS)
-    verdicts = {a["question_id"]: _judge_verdict() for a in anchors}
-    # 2 out of 10 are >1 apart on completeness (3 vs 5 = diff 2, not a flip)
+    anchors = _make_anchors()
+    verdicts = _mirror_verdicts(anchors)
+    # Two anchors off by 2 on completeness → 80% within ±1, below the threshold.
     for a in anchors[:2]:
-        verdicts[a["question_id"]] = _judge_verdict(completeness=3)
+        human = a["human_scores"]["completeness"]
+        scores = dict(a["human_scores"])
+        scores["completeness"] = human + 2 if human <= 3 else human - 2
+        verdicts[a["question_id"]] = _judge_verdict(**scores)
     result = evaluate("crm", verdicts, anchors)
-    assert not result.passed
     assert result.per_dimension["completeness"].within_pm1_pct == 80.0
     assert (
         result.per_dimension["completeness"].within_pm1_pct < ACCEPTANCE_AGREEMENT_PCT
     )
+    assert not result.passed
 
 
 def test_directional_flip_matches_the_contract_wording():
@@ -745,13 +898,48 @@ def test_directional_flip_matches_the_contract_wording():
     assert _is_directional_flip(3, 5) is False  # mid, not a flip
 
 
-def test_calibration_marker_gate(tmp_path):
-    """is_calibrated returns True only after record_passed writes the marker."""
-    assert is_calibrated("crm", calibration_dir=tmp_path) is False
-    anchors = _make_anchors(ACCEPTANCE_MIN_ANCHORS)
-    verdicts = {a["question_id"]: _judge_verdict() for a in anchors}
-    result = evaluate("crm", verdicts, anchors)
-    assert result.passed
-    marker = record_passed("crm", result, calibration_dir=tmp_path)
+def test_calibration_marker_is_bound_to_the_judge_that_earned_it(tmp_path):
+    """§10.2's gate only means something if the marker vouches for the judge
+    about to run. A pass on one model / prompt revision / mode licenses that
+    judge and no other."""
+    from judge.calibration import JudgeFingerprint, check_calibrated
+
+    fp = JudgeFingerprint(
+        model_version="floodgate/anthropic.claude-sonnet-4-6",
+        prompt_version="judge-abc123",
+        mode="per_dimension",
+    )
+    assert check_calibrated("crm", fp, tmp_path).calibrated is False
+
+    anchors = _make_anchors()
+    result = evaluate("crm", _mirror_verdicts(anchors), anchors)
+    marker = record_passed("crm", result, fingerprint=fp, calibration_dir=tmp_path)
     assert marker.is_file()
-    assert is_calibrated("crm", calibration_dir=tmp_path) is True
+    assert check_calibrated("crm", fp, tmp_path).calibrated is True
+    assert is_calibrated("crm", fp, tmp_path) is True
+
+    # A different model must NOT inherit the pass.
+    other = JudgeFingerprint("openai/gpt-4o-mini", "judge-abc123", "per_dimension")
+    state = check_calibrated("crm", other, tmp_path)
+    assert state.calibrated is False
+    assert state.stale is True
+    assert "model_version" in state.reason
+
+    # Nor a changed prompt, nor a different scoring mode.
+    for changed in (
+        JudgeFingerprint(fp.model_version, "judge-deadbeef", "per_dimension"),
+        JudgeFingerprint(fp.model_version, fp.prompt_version, "combined"),
+    ):
+        assert check_calibrated("crm", changed, tmp_path).calibrated is False
+
+
+def test_legacy_marker_without_a_fingerprint_does_not_license_a_run(tmp_path):
+    from judge.calibration import JudgeFingerprint, check_calibrated
+
+    (tmp_path / "crm.passed.json").write_text(
+        json.dumps({"domain": "crm", "passed_at_utc": "2026-09-01T00:00:00Z"}),
+        encoding="utf-8",
+    )
+    state = check_calibrated("crm", JudgeFingerprint("m", "p", "combined"), tmp_path)
+    assert state.calibrated is False
+    assert "predates judge fingerprinting" in state.reason

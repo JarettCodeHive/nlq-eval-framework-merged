@@ -36,7 +36,7 @@ Example D — Sentence order and length differ, same information carried.
   → factual_correctness = 5, completeness = 5. Order reversed but every value
     is present with identical numerics. Not a deduction.
 
-DO DEDUCT (all four should score 1 on the dimensions shown):
+DO DEDUCT — the score to assign is stated on each example:
 
 Example E — Number wrong, wording irrelevant.
   EXPECTED ANSWER: 72
@@ -48,17 +48,21 @@ Example F — Number rounded to fewer digits than expected.
   PLATFORM ANSWER: "4,182,000"
   → factual_correctness = 1. Rounding-loss is still numeric variance.
 
-Example G — Missing an entity the question or judge_reference requires.
+Example G — Required entity missing, value present.
+  QUESTION: "Which sales rep closed the most deal value, and how much?"
   EXPECTED ANSWER: Priya Raghavan — 4,182,650.00
   PLATFORM ANSWER: "4,182,650.00"
-  → completeness = 1. Number is right; rep name absent = incomplete.
+  → factual_correctness = 5, completeness = 3. The number is right, so nothing
+    factual is contradicted. One of the two things asked for is missing, which
+    is "missing fields" on the completeness scale — a 3, NOT a 1. Reserve 1 for
+    a response that leaves the question essentially unanswered.
 
 Example H — Answer is entirely verbal, no numbers where numbers were asked.
   EXPECTED ANSWER: Technology 8,240,100.00; Finance 6,102,750.00; Healthcare 4,988,300.00
   PLATFORM ANSWER: "Technology led H1 2026 in closed deal value."
   → factual_correctness = 1, completeness = 1. The specific numbers were the
     substance of the answer; a category without figures does not answer this
-    question.
+    question, so here completeness genuinely is 1.
 
 RULE OF THUMB: if you find yourself deducting for HOW something is said rather
 than WHAT is said, stop and re-check against the examples above.

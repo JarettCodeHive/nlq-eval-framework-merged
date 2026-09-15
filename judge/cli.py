@@ -6,7 +6,7 @@ scorecard consumer can read the JSON without an adapter.
 
 See `docs/judge_runbook.md` for the full flag surface and a live-run walkthrough.
 
-  python -m judge.cli                                     # mock judge + good fixtures (CI/dev)
+  python -m judge.cli --input-csv pairs.csv                # live platform + LLM judge
   python -m judge.cli --pulse regressed                   # regression signal against fixtures
   python -m judge.cli --judge llm --pulse live \\
       --input-csv <pairs.csv> --domain crm                # real platform API (HC-4)
@@ -25,20 +25,29 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from judge.calibration import is_calibrated
+from judge.calibration import JudgeFingerprint, check_calibrated
+from judge.checks import CheckStatus, check_null_handling, check_rephrase_groups
 from judge.client import JudgeClient
 from judge.config import (
     AzureSettings,
+    FloodgateNarrativeSettings,
+    FloodgateOIDCSettings,
     MissingCredentials,
     load_judge_config,
     load_llm_settings,
 )
 from judge.contracts import DIMENSIONS, JudgeRequest, JudgeVerdict
-from judge.exact_match import ExactMatchResult, NumericNormalization, exact_match
+from judge.exact_match import (
+    ComparisonPolicy,
+    ExactMatchOutcome,
+    ExactMatchResult,
+    evaluate_answer,
+)
 from judge.input_contract import InputRow, load_input_csv
-from judge.mock_judge import MockJudge
-from judge.mock_pulse import EchoPulse, MockPulse, SQLPulse, load_pairs
+from judge.heuristic_judge import HeuristicJudge
+from judge.sql_pulse import SQLPulse
 from judge.openai_judge import OpenAIJudge
+from judge.prompts import prompt_version
 from scorecard.baseline import BaselineExists, establish_baseline, load_baseline
 from scorecard.report import write_scorecard_md, write_scorecard_pdf
 from scorecard.summary import (
@@ -51,10 +60,96 @@ from scorecard.summary import (
 # Non-live Pulse sources (fixtures / offline stand-ins). A --release run against
 # one of these still produces artifacts, but its baseline is marked provisional
 # — only `--pulse live` goes through the real platform API (HC-4).
-_STANDIN_PULSE = {"good", "regressed", "bad", "echo", "sql"}
+# Sources that are not the platform. A release run refuses these outright.
+_STANDIN_PULSE = {"sql"}
 
 MODULE_ROOT = Path(__file__).resolve().parent
 RUNS_DIR = MODULE_ROOT / "runs"
+# Measured against org 4104 on the crm_dataset_v2 full profile.
+SECONDS_PER_QUESTION = 140.0
+
+
+def _model_version(settings, cfg) -> str:
+    """The string identifying this judge in verdicts, cache keys and manifests.
+
+    It has to distinguish deployments and proxies, not just models: Azure routes
+    on a deployment name, and the same Anthropic model through Floodgate is not
+    an interchangeable measurement with the same model elsewhere.
+    """
+    if isinstance(settings, AzureSettings):
+        return f"azure/{settings.deployment}"
+    if isinstance(settings, (FloodgateOIDCSettings, FloodgateNarrativeSettings)):
+        return f"floodgate/{cfg.model}"
+    return cfg.model
+
+
+def _judge_fingerprint(args: argparse.Namespace) -> JudgeFingerprint | None:
+    """Identify the judge this run would use, without building it.
+
+    Needed before the §10.2 gate: a calibration marker vouches for one model,
+    one prompt revision and one scoring mode, so the gate has to know which
+    judge is about to run. Credential loading and config merging are local and
+    cheap — no network call happens here.
+    """
+    if args.judge != "llm":
+        return None
+    settings = load_llm_settings()
+    cfg = load_judge_config(args.domain).model_copy(update={"mode": args.mode})
+    return JudgeFingerprint(
+        model_version=_model_version(settings, cfg),
+        prompt_version=prompt_version(),
+        mode=args.mode,
+    )
+
+
+def _resolve_policy(args: argparse.Namespace) -> ComparisonPolicy:
+    """Build the exact-match comparison policy this run declares.
+
+    Defaults settle OI-2 and OI-3 rather than leaving the scorer unusable while
+    they are open — see `judge/exact_match.py`. Both are one flag to reverse.
+    """
+    if getattr(args, "normalize_numerics", False):
+        print(
+            "[judge] NOTE: --normalize-numerics is deprecated and now a no-op — "
+            "value-based numeric comparison is the default (--numeric-form value). "
+            "Pass --numeric-form string for the old byte-identical behaviour.",
+            file=sys.stderr,
+        )
+    return ComparisonPolicy(
+        numeric_form=args.numeric_form,
+        require_labels=not args.ignore_entity_labels,
+    )
+
+
+def _make_llm_judge(
+    settings,
+    cfg,
+    *,
+    cache_dir: Path,
+    prompt_log_path: Path | None,
+    judge_run_id: str,
+) -> JudgeClient:
+    """Pick the transport for the detected provider. Everything downstream —
+    caching, audit records, scoring modes — is identical either way."""
+    if isinstance(settings, (FloodgateOIDCSettings, FloodgateNarrativeSettings)):
+        # Imported here so the `anthropic` SDK is only required by runs that
+        # actually go through Floodgate.
+        from judge.floodgate_judge import FloodgateJudge
+
+        return FloodgateJudge(
+            settings,
+            cfg,
+            cache_dir=cache_dir,
+            prompt_log_path=prompt_log_path,
+            judge_run_id=judge_run_id,
+        )
+    return OpenAIJudge(
+        settings,
+        cfg,
+        cache_dir=cache_dir,
+        prompt_log_path=prompt_log_path,
+        judge_run_id=judge_run_id,
+    )
 
 
 def _build_judge(
@@ -66,8 +161,11 @@ def _build_judge(
     judge_run_id: str,
 ) -> tuple[JudgeClient, dict]:
     """Return (judge, provenance) — provenance goes into the run manifest."""
-    if name == "mock":
-        return MockJudge(), {"provider": "mock", "model": "mock-judge-v1"}
+    if name == "heuristic":
+        return HeuristicJudge(), {
+            "provider": "heuristic",
+            "model": "heuristic-test-double-v1",
+        }
     if name == "llm":
         settings = load_llm_settings()
         cfg = load_judge_config(domain).model_copy(
@@ -75,21 +173,18 @@ def _build_judge(
         )
         # Cache dir keyed on the model_version string so runs against different
         # providers/deployments don't share a cache line.
-        # Azure routes on the deployment; elsewhere the resolved config model.
-        model_version = (
-            f"azure/{settings.deployment}"
-            if isinstance(settings, AzureSettings)
-            else cfg.model
-        )
+        model_version = _model_version(settings, cfg)
         cache_dir = MODULE_ROOT / ".judge_cache" / model_version.replace("/", "_")
         provenance = {
             **settings.redacted,
             "model": model_version,
             "temperature": cfg.temperature,
-            "seed": cfg.seed,
+            # Anthropic has no seed; the Floodgate judge warns and the manifest
+            # must not claim one was applied.
+            "seed": None if model_version.startswith("floodgate/") else cfg.seed,
         }
         return (
-            OpenAIJudge(
+            _make_llm_judge(
                 settings,
                 cfg,
                 cache_dir=cache_dir,
@@ -99,6 +194,55 @@ def _build_judge(
             provenance,
         )
     raise ValueError(f"unknown judge: {name!r}")
+
+
+def _write_run_manifest(out_dir: Path, run_id: str, ts_iso: str, args) -> None:
+    """Everything needed to reproduce or audit this run, captured up front.
+
+    Written before any network call so it exists even if the run dies.
+    """
+    import hashlib
+    import platform
+    import subprocess
+
+    def _git(*a: str) -> str | None:
+        try:
+            return subprocess.run(
+                ["git", *a], capture_output=True, text=True, timeout=5, check=True
+            ).stdout.strip()
+        except Exception:
+            return None
+
+    inputs = {}
+    csv_path = getattr(args, "input_csv", None)
+    if csv_path and Path(csv_path).is_file():
+        raw = Path(csv_path).read_bytes()
+        inputs["input_csv"] = {
+            "path": str(Path(csv_path).resolve()),
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+
+    manifest = {
+        "run_id": run_id,
+        "run_timestamp_iso": ts_iso,
+        "argv": sys.argv[1:],
+        "args": vars(args),
+        "inputs": inputs,
+        "git": {
+            "commit": _git("rev-parse", "HEAD"),
+            "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+            "dirty": bool(_git("status", "--porcelain")),
+        },
+        "environment": {
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+            "cwd": str(Path.cwd()),
+        },
+    }
+    (out_dir / "run_manifest.json").write_text(
+        json.dumps(manifest, indent=2, default=str), encoding="utf-8"
+    )
 
 
 class PlatformError(RuntimeError):
@@ -164,13 +308,20 @@ def _print_row(
     pair: dict,
     req: JudgeRequest,
     verdict: JudgeVerdict | Exception,
-    em_result: ExactMatchResult,
+    em: ExactMatchOutcome,
 ) -> None:
     print(f"\n--- {pair['question_id']}  |  {pair['tier']}  ------------------")
     print(f"Q:  {req.question}")
     print(f"expected_answer : {req.expected_answer}")
     print(f"actual_answer   : {req.platform_answer[:200]}")
-    print(f"exact_match     : {em_result.value.upper()}")
+    print(f"exact_match     : {em.result.value.upper()}")
+    if em.result is ExactMatchResult.FAIL:
+        print(f"  why           : {em.detail}")
+    if pair.get("null_handling") in ("fail", "unknown"):
+        print(
+            f"null_handling   : {pair['null_handling'].upper()} — "
+            f"{pair.get('null_handling_detail')}"
+        )
     if isinstance(verdict, PlatformError):
         print(f"PLATFORM ERROR: {verdict}  (not scored)")
         return
@@ -183,11 +334,69 @@ def _print_row(
     print(f"judge_rationale : {verdict.rationale[:220]}")
 
 
+def _summarise_null_handling(results: list) -> dict:
+    """Roll up the §9.2 T3 check. Diagnostic, never part of a score."""
+    counts: dict[str, int] = {}
+    findings: list[str] = []
+    for pair, _req, _v, _em in results:
+        status = pair.get("null_handling") or CheckStatus.NOT_APPLICABLE.value
+        counts[status] = counts.get(status, 0) + 1
+        if status == CheckStatus.FAIL.value:
+            findings.append(str(pair.get("question_id")))
+    return {
+        "counts": counts,
+        "applicable": sum(
+            n
+            for status, n in counts.items()
+            if status != CheckStatus.NOT_APPLICABLE.value
+        ),
+        "failed_question_ids": sorted(findings),
+    }
+
+
+def _report_checks(results: list, rephrase_findings: list) -> None:
+    """Print the §9.2 / §9.5 diagnostics that are not part of either score."""
+    null_failures = [
+        pair
+        for pair, _req, _v, _em in results
+        if pair.get("null_handling") == CheckStatus.FAIL.value
+    ]
+    if null_failures:
+        print(
+            f"\n[judge] ⚠ NULL-handling findings ({len(null_failures)}) — §9.2 T3: "
+            "an outer-join question answered with inner joins only, so unmatched "
+            "rows are silently dropped:",
+            file=sys.stderr,
+        )
+        for pair in null_failures[:10]:
+            print(f"[judge]   {pair.get('question_id')}", file=sys.stderr)
+
+    platform_findings = [f for f in rephrase_findings if f.is_platform_finding]
+    dataset_findings = [f for f in rephrase_findings if f.is_dataset_finding]
+    if platform_findings:
+        print(
+            f"\n[judge] ⚠ REPHRASE-GROUP findings ({len(platform_findings)}) — §9.5: "
+            "variants of one question returned different values. This is a "
+            "platform finding, not a dataset defect:",
+            file=sys.stderr,
+        )
+        for f in platform_findings[:10]:
+            print(f"[judge]   {f.group_id}: {f.detail}", file=sys.stderr)
+    if dataset_findings:
+        print(
+            f"\n[judge] ⚠ REPHRASE-GROUP dataset defects ({len(dataset_findings)}) — "
+            "variants of one group declare different expected_answers (§9.5):",
+            file=sys.stderr,
+        )
+        for f in dataset_findings[:10]:
+            print(f"[judge]   {f.group_id}: {f.detail}", file=sys.stderr)
+
+
 def _row_dict(
     pair: dict,
     req: JudgeRequest,
     verdict: JudgeVerdict | Exception,
-    em_result: ExactMatchResult,
+    em: ExactMatchOutcome,
 ) -> dict:
     """Row shape matches Execution Spec §11.2 (question-level drill-down)."""
     row: dict = {
@@ -197,8 +406,12 @@ def _row_dict(
         "natural_language_question": req.question,
         "expected_answer": req.expected_answer,
         "actual_answer": req.platform_answer,
-        "exact_match_result": em_result.value,  # §HC-3, §11.2
+        "exact_match_result": em.result.value,  # §HC-3, §11.2
+        "exact_match_detail": em.detail,  # which requirement went unmet
+        "expected_answer_off_contract": em.off_contract,  # §9.3 shape violation
         "platform_generated_sql": req.generated_sql,  # §HC-5 — mandatory on failure
+        "null_handling": pair.get("null_handling"),  # §9.2 T3 diagnostic
+        "null_handling_detail": pair.get("null_handling_detail"),
         "rephrase_group_id": pair.get("rephrase_group_id"),  # §11.2 optional
     }
     if isinstance(verdict, JudgeVerdict):
@@ -218,7 +431,7 @@ def _row_dict(
 
 def _summarise(
     results: list[
-        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchResult]
+        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchOutcome]
     ],
 ) -> dict:
     verdicts = [v for _, _, v, _ in results if isinstance(v, JudgeVerdict)]
@@ -228,7 +441,8 @@ def _summarise(
         for _, _, v, _ in results
         if isinstance(v, Exception) and not isinstance(v, PlatformError)
     ]
-    em = [e for _, _, _, e in results]
+    em = [outcome.result for _, _, _, outcome in results]
+    off_contract = sum(1 for _, _, _, o in results if o.off_contract)
     _excluded = {ExactMatchResult.NOT_APPLICABLE, ExactMatchResult.ERROR}
     em_eligible = [e for e in em if e not in _excluded]
     per_dim = {
@@ -245,10 +459,13 @@ def _summarise(
             "eligible": len(em_eligible),
             "pass": sum(1 for e in em_eligible if e == ExactMatchResult.PASS),
             "fail": sum(1 for e in em_eligible if e == ExactMatchResult.FAIL),
+            # §14.2 condition 4 is about exclusions that quietly raise the
+            # percentage. NOT_APPLICABLE is one, so it is named, not derived.
             "not_applicable": sum(
                 1 for e in em if e == ExactMatchResult.NOT_APPLICABLE
             ),
             "platform_error": sum(1 for e in em if e == ExactMatchResult.ERROR),
+            "expected_answer_off_contract": off_contract,
             "pass_pct": (
                 sum(1 for e in em_eligible if e == ExactMatchResult.PASS)
                 / len(em_eligible)
@@ -268,7 +485,7 @@ def _summarise(
 
 
 def _resolve_scorecard_mode(
-    args: argparse.Namespace, *, calibrated: bool
+    args: argparse.Namespace, *, calibrated: bool, calibration_reason: str = ""
 ) -> tuple[str, list[str]]:
     """Decide PREVIEW vs RELEASE. Returns (mode, blocking reasons).
 
@@ -281,10 +498,28 @@ def _resolve_scorecard_mode(
     blockers: list[str] = []
     if args.judge != "llm":
         blockers.append(
-            "a release run requires --judge llm (the mock judge never scores for real)"
+            "a release run requires --judge llm (the heuristic test double never scores for real)"
+        )
+    if args.pulse in _STANDIN_PULSE:
+        # HC-4: all evaluation goes through the platform. A baseline built from
+        # anything else measures our own reference SQL, not the system under
+        # evaluation — it would look like an accuracy number and be worthless.
+        blockers.append(
+            f"a release run requires --pulse live; {args.pulse!r} does not reach "
+            "the platform (HC-4)"
         )
     if not calibrated:
-        blockers.append(f"domain {args.domain!r} has no calibration marker (§10.2)")
+        blockers.append(
+            f"domain {args.domain!r} is not calibrated for this judge (§10.2)"
+            + (f": {calibration_reason}" if calibration_reason else "")
+        )
+    if args.numeric_form != "value" or args.ignore_entity_labels:
+        # A baseline is only comparable to later runs scored the same way, and a
+        # relaxed comparison must never become the reference point silently.
+        blockers.append(
+            "a release run must use the declared default comparison "
+            "(--numeric-form value, entity labels required); this run relaxes it"
+        )
     if not args.platform_version:
         blockers.append("--platform-version is required for a release run (§11.1)")
     if not args.dataset_version:
@@ -299,7 +534,7 @@ def _write_run(
     pulse_mode: str,
     ctx: RunContext,
     results: list[
-        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchResult]
+        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchOutcome]
     ],
     summary: dict,
 ) -> Path:
@@ -325,25 +560,45 @@ def _write_run(
 
 async def _run(args: argparse.Namespace) -> int:
     # §10.2 gate: uncalibrated scores never enter the scorecard. The gate
-    # applies to LLM judges only — the mock judge is a heuristic, plainly
+    # applies to LLM judges only — the test double is a heuristic, plainly
     # labelled, and never used for real scoring.
-    if (
-        args.judge == "llm"
-        and not is_calibrated(args.domain)
-        and not args.allow_uncalibrated
-    ):
+    #
+    # The marker must vouch for THIS judge, not for the domain in the abstract:
+    # a pass earned on one model, prompt revision or scoring mode says nothing
+    # about another. `_judge_fingerprint` resolves that identity up front.
+    try:
+        fingerprint = _judge_fingerprint(args)
+    except MissingCredentials as exc:
+        print(f"[judge] {exc}", file=sys.stderr)
+        return 2
+    calibration = check_calibrated(args.domain, fingerprint)
+    calibrated = calibration.calibrated
+    if args.judge == "llm" and not calibrated and not args.allow_uncalibrated:
+        if calibration.stale:
+            remedy = (
+                "Re-run calibration for this configuration: the marker cannot "
+                "vouch for a judge it was not earned against."
+            )
+        else:
+            remedy = (
+                "Options: (1) run the calibration protocol against "
+                "anchors/<domain>.json and record the pass with "
+                "`python main.py calibrate --domain <domain>`; or (2) pass "
+                "--allow-uncalibrated for a smoke test (scores are then labelled "
+                "uncalibrated and must not feed a scorecard)."
+            )
         print(
-            f"[judge] REFUSING TO RUN: no calibration passed for domain={args.domain!r} "
+            f"[judge] REFUSING TO RUN: {calibration.reason} "
             "(§10.2 last line — uncalibrated scores never enter the scorecard).\n"
-            "Options: (1) run the calibration protocol against anchors/<domain>.json and "
-            "record the pass with calibration.record_passed(); or (2) pass "
-            "--allow-uncalibrated for a smoke test (scores will be labelled uncalibrated).",
+            f"{remedy}",
             file=sys.stderr,
         )
         return 3
 
-    calibrated = is_calibrated(args.domain)
-    scorecard_mode, blockers = _resolve_scorecard_mode(args, calibrated=calibrated)
+    policy = _resolve_policy(args)
+    scorecard_mode, blockers = _resolve_scorecard_mode(
+        args, calibrated=calibrated, calibration_reason=calibration.reason
+    )
     if blockers:
         print(
             "[judge] REFUSING RELEASE RUN — a release scorecard must be trustworthy:\n"
@@ -357,7 +612,23 @@ async def _run(args: argparse.Namespace) -> int:
     run_id = now.strftime("%Y%m%dT%H%M%SZ")
     run_timestamp_iso = now.isoformat()
     out_dir = RUNS_DIR / run_id
+    # Created up front, not at write-time: a run that dies mid-way must keep
+    # whatever it already fetched, and must leave a log saying what it was doing.
+    out_dir.mkdir(parents=True, exist_ok=True)
     prompt_log_path = out_dir / "prompts_log.jsonl"
+
+    from judge.run_log import RunLog
+
+    run_log = RunLog(out_dir / "run_log.jsonl")
+    run_log.event(
+        "run.start",
+        run_id=run_id,
+        argv=sys.argv[1:],
+        args=vars(args),
+        cwd=str(Path.cwd()),
+        python=sys.version.split()[0],
+    )
+    _write_run_manifest(out_dir, run_id, run_timestamp_iso, args)
 
     try:
         judge, provenance = _build_judge(
@@ -371,6 +642,15 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"[judge] {exc}", file=sys.stderr)
         return 2
 
+    if not args.input_csv:
+        # Both remaining sources need authored pairs. There is no demo set to
+        # fall back to — a run without real pairs scores nothing meaningful.
+        print(
+            f"[judge] --pulse {args.pulse} requires --input-csv <Q&A pair CSV>.",
+            file=sys.stderr,
+        )
+        return 2
+
     if args.pulse == "live" and not args.input_csv:
         # The bundled data/sample_pairs.json is a canned demo set, not the real
         # Q&A pairs — sending it to the live platform produces misleading FAILs.
@@ -381,15 +661,10 @@ async def _run(args: argparse.Namespace) -> int:
         )
         return 2
 
-    if args.input_csv:
-        # The run's --domain is the fallback, not a hardcoded "crm" — otherwise
-        # a Sales pair set with no `domain` column is silently scored, cached
-        # and reported as CRM.
-        pairs = _rows_from_input(
-            load_input_csv(args.input_csv, default_domain=args.domain)
-        )
-    else:
-        pairs = load_pairs()
+    # The run's --domain is the fallback, not a hardcoded "crm" — otherwise a
+    # Sales pair set with no `domain` column is silently scored, cached and
+    # reported as CRM.
+    pairs = _rows_from_input(load_input_csv(args.input_csv, default_domain=args.domain))
     if args.limit:
         pairs = pairs[: args.limit]
 
@@ -407,19 +682,10 @@ async def _run(args: argparse.Namespace) -> int:
         )
 
     # Pulse source selection:
-    #   good/regressed/bad -> canned fixtures keyed by question_id (CI/dev)
-    #   echo / sql         -> offline stand-ins over --input-csv pairs
-    #   live               -> the real platform API (HC-4)
-    if args.pulse == "echo":
-        if not args.input_csv:
-            print(
-                "[judge] --pulse echo requires --input-csv (echo replays each pair's expected_answer)",
-                file=sys.stderr,
-            )
-            return 2
-        pulse = EchoPulse(pairs)
-        pulse_label = "echo (offline perfect-Pulse stand-in)"
-    elif args.pulse == "sql":
+    #   sql  -> executes each pair's reference_sql in DuckDB (§14.2 ground-truth
+    #           verification; PREVIEW only, never scores the platform)
+    #   live -> the real platform API (HC-4) — the only release-eligible source
+    if args.pulse == "sql":
         if not args.input_csv:
             print("[judge] --pulse sql requires --input-csv", file=sys.stderr)
             return 2
@@ -438,6 +704,7 @@ async def _run(args: argparse.Namespace) -> int:
         from judge.pulse_client import (
             MissingPulseCredentials,
             PulseClient,
+            check_token_headroom,
             load_pulse_settings,
         )
 
@@ -446,16 +713,39 @@ async def _run(args: argparse.Namespace) -> int:
         except MissingPulseCredentials as exc:
             print(f"[judge] {exc}", file=sys.stderr)
             return 2
-        pulse = PulseClient(pulse_settings, pairs)
-        pulse_label = f"live (org_id={pulse_settings.org_id})"
-    else:
-        pulse = MockPulse(mode=args.pulse)
-        pulse_label = f"{args.pulse} (canned fixture)"
+        # A Pulse token lives ~1 hour and a question costs ~2 minutes. Say so
+        # before spending the run, not after it 401s halfway through.
+        est_s = (len(pairs) / max(1, args.pulse_concurrency)) * SECONDS_PER_QUESTION
+        warning = check_token_headroom(pulse_settings, est_s)
+        if warning:
+            print(f"[judge] ⚠ {warning}", file=sys.stderr)
+            run_log.event(
+                "pulse.token_warning", warning=warning, est_run_s=round(est_s)
+            )
+            if not args.ignore_token_expiry:
+                print(
+                    "[judge] Refusing to start. Pass --ignore-token-expiry to run "
+                    "anyway (partial results are still logged).",
+                    file=sys.stderr,
+                )
+                return 2
 
-    if args.judge == "mock" and args.mode == "per_dimension":
+        pulse = PulseClient(
+            pulse_settings,
+            pairs,
+            raw_dir=out_dir / "pulse_raw",
+            run_log=run_log,
+        )
+        pulse_label = f"live (org_id={pulse_settings.org_id})"
+        run_log.event("pulse.settings", **pulse_settings.redacted)
+    else:  # pragma: no cover — argparse constrains --pulse to {sql, live}
+        print(f"[judge] unknown --pulse source {args.pulse!r}", file=sys.stderr)
+        return 2
+
+    if args.judge == "heuristic" and args.mode == "per_dimension":
         print(
-            "[judge] NOTE: --mode per_dimension has no effect with --judge mock — "
-            "the heuristic never renders a prompt. Use --judge llm to exercise it.",
+            "[judge] NOTE: --mode per_dimension has no effect with --judge "
+            "heuristic — the test double never renders a prompt. Use --judge llm.",
             file=sys.stderr,
         )
 
@@ -466,11 +756,6 @@ async def _run(args: argparse.Namespace) -> int:
         f"pulse={pulse_label}  pairs={len(pairs)}  "
         f"domain={args.domain} [{calibration_state}]  scorecard={scorecard_mode}"
     )
-    if scorecard_mode == "RELEASE" and provisional_pulse:
-        print(
-            "[judge] NOTE: release run against a non-live Pulse source — the "
-            "baseline it writes is marked provisional until re-run with --pulse live."
-        )
     print(f"[judge] provider provenance: {json.dumps(provenance)}")
 
     try:
@@ -482,6 +767,13 @@ async def _run(args: argparse.Namespace) -> int:
             pulse.close()
 
     platform_errors = {pair["question_id"]: err for pair, _, err in collected if err}
+    run_log.event(
+        "pulse.phase_complete",
+        collected=len(collected),
+        answered=len(collected) - len(platform_errors),
+        errors=len(platform_errors),
+        error_ids=sorted(platform_errors),
+    )
     if platform_errors:
         print(
             f"[judge] ⚠ {len(platform_errors)}/{len(collected)} questions got no "
@@ -494,8 +786,18 @@ async def _run(args: argparse.Namespace) -> int:
 
     # Only score the questions the platform actually answered.
     to_judge = [(pair, req) for pair, req, err in collected if not err]
+    run_log.event(
+        "judge.phase_start",
+        to_judge=len(to_judge),
+        concurrency=args.concurrency,
+        mode=args.mode,
+    )
     verdicts = await judge.judge_many(
         [req for _, req in to_judge], concurrency=args.concurrency
+    )
+    judge_errors = sum(1 for v in verdicts if isinstance(v, Exception))
+    run_log.event(
+        "judge.phase_complete", verdicts=len(verdicts), judge_errors=judge_errors
     )
     await judge.aclose()
     verdict_by_qid = {
@@ -503,21 +805,33 @@ async def _run(args: argparse.Namespace) -> int:
     }
 
     # Deterministic exact-match runs alongside the judge, not through it.
-    normalize = (
-        NumericNormalization() if args.normalize_numerics else None
-    )  # OI-2: provisional relaxation, off by default
     results: list[
-        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchResult]
+        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchOutcome]
     ] = []
     for pair, req, err in collected:
         if err:
-            results.append((pair, req, PlatformError(err), ExactMatchResult.ERROR))
+            outcome = ExactMatchOutcome(ExactMatchResult.ERROR, str(err))
+            verdict: JudgeVerdict | Exception = PlatformError(err)
         else:
-            v = verdict_by_qid[pair["question_id"]]
-            em = exact_match(
-                req.expected_answer, req.platform_answer, normalize=normalize
+            verdict = verdict_by_qid[pair["question_id"]]
+            outcome = evaluate_answer(
+                req.expected_answer, req.platform_answer, policy=policy
             )
-            results.append((pair, req, v, em))
+        # §9.2's T3 "explicit NULL-handling check" — a diagnostic reported beside
+        # the scores, never folded into them (§11.3, §22).
+        null_check = check_null_handling(
+            tier=pair.get("tier"),
+            reference_sql=pair.get("reference_sql"),
+            platform_sql=req.generated_sql,
+        )
+        pair["null_handling"] = null_check.status.value
+        pair["null_handling_detail"] = null_check.detail
+        results.append((pair, req, verdict, outcome))
+
+    # §9.5 — every variant of a rephrase group must resolve the same values.
+    rephrase_findings = check_rephrase_groups(
+        [(pair, req.expected_answer, outcome) for pair, req, _, outcome in results]
+    )
 
     if len(results) <= 30:
         for pair, req, v, em in results:
@@ -525,25 +839,72 @@ async def _run(args: argparse.Namespace) -> int:
 
     summary = _summarise(results)
     summary["calibrated"] = calibrated
+    summary["calibration"] = {
+        "state": "calibrated" if calibrated else "uncalibrated",
+        "reason": calibration.reason,
+        "judge_fingerprint": fingerprint.as_dict() if fingerprint else None,
+        "marker_fingerprint": (
+            calibration.marker_fingerprint.as_dict()
+            if calibration.marker_fingerprint
+            else None
+        ),
+    }
     summary["provider"] = provenance
-    summary["numeric_normalization"] = normalize.label if normalize else "off"
-    if normalize:
+    summary["comparison_policy"] = policy.label
+    summary["comparison_is_default"] = policy.is_certified_default
+    summary["null_handling"] = _summarise_null_handling(results)
+    summary["rephrase_groups"] = {
+        "groups": len(rephrase_findings),
+        "platform_findings": [
+            {
+                "group_id": f.group_id,
+                "question_ids": f.question_ids,
+                "detail": f.detail,
+            }
+            for f in rephrase_findings
+            if f.is_platform_finding
+        ],
+        "dataset_findings": [
+            {
+                "group_id": f.group_id,
+                "question_ids": f.question_ids,
+                "detail": f.detail,
+            }
+            for f in rephrase_findings
+            if f.is_dataset_finding
+        ],
+    }
+    _report_checks(results, rephrase_findings)
+    if not policy.is_certified_default:
         print(
-            "[judge] NOTE: --normalize-numerics is on — exact-match ignored "
-            f"[{normalize.label}]. This is the provisional OI-2 relaxation, not "
-            "the certified §HC-3 comparison; the scorecard is marked accordingly.",
+            f"[judge] NOTE: exact-match ran under a NON-DEFAULT comparison "
+            f"[{policy.label}]. The scorecard is marked accordingly and this run "
+            "cannot establish a baseline.",
             file=sys.stderr,
         )
     # Read off the VERDICTS, not the judge — a cache-served run never talks to
     # the provider, so the judge object would wrongly report "enforced".
     scored = [v for _, _, v, _ in results if isinstance(v, JudgeVerdict)]
     temp_enforced = all(v.temperature_enforced for v in scored) if scored else True
+    seed_enforced = all(v.seed_enforced for v in scored) if scored else True
     summary["judge_temperature_enforced"] = temp_enforced
+    summary["judge_seed_enforced"] = seed_enforced
+    if not seed_enforced:
+        # The manifest must not advertise a determinism control that never went
+        # on the wire; keep what was ASKED for, separately from what applied.
+        provenance["seed_requested"] = provenance.get("seed")
+        provenance["seed"] = None
     if not temp_enforced:
         print(
             "[judge] ⚠ the judge model rejected temperature=0 — this run ran on "
-            "the model default + fixed seed. Reproducibility rests on the seed "
-            "(§10.1). Recorded as judge_temperature_enforced=false.",
+            "the model default. Recorded as judge_temperature_enforced=false.",
+            file=sys.stderr,
+        )
+    if not seed_enforced:
+        print(
+            "[judge] ⚠ the configured seed never reached the provider — recorded "
+            "as judge_seed_enforced=false and cleared from the provenance block "
+            "(§10.1 'where supported').",
             file=sys.stderr,
         )
 
@@ -554,8 +915,15 @@ async def _run(args: argparse.Namespace) -> int:
         dataset_version=args.dataset_version,
         scorecard_mode=scorecard_mode,
         calibrated=calibrated,
-        numeric_normalization=normalize.label if normalize else "off",
+        comparison_policy=policy.label,
+        comparison_is_default=policy.is_certified_default,
         judge_temperature_enforced=temp_enforced,
+        judge_seed_enforced=seed_enforced,
+        rephrase_findings=[
+            f"{f.group_id}: {f.detail}"
+            for f in rephrase_findings
+            if f.is_platform_finding or f.is_dataset_finding
+        ],
     )
     out_dir = _write_run(
         run_id, args.judge, args.mode, args.pulse, ctx, results, summary
@@ -574,10 +942,22 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"[judge] written: {out_dir / 'results.json'}")
     if prompt_log_path.is_file() and prompt_log_path.stat().st_size > 0:
         print(f"[judge] full prompt/response log: {prompt_log_path}")
+    raw_dir = out_dir / "pulse_raw"
+    if raw_dir.is_dir():
+        n = len(list(raw_dir.glob("*.json")))
+        print(f"[judge] raw platform responses: {raw_dir} ({n} file(s))")
+    if run_log.path:
+        print(f"[judge] run event log: {run_log.path}")
 
-    if args.judge == "mock":
+    run_log.event(
+        "run.complete",
+        summary=summary,
+        exit_reason="ok" if not summary["judge_errors"] else "judge_errors",
+    )
+
+    if args.judge == "heuristic":
         print(
-            "\n[judge] NOTE: mock judge is a heuristic stand-in — scores are NOT "
+            "\n[judge] NOTE: the heuristic judge is a test double — scores are NOT "
             "semantic. Use --judge llm for real evaluation."
         )
     if not summary["calibrated"] and args.judge == "llm":
@@ -600,7 +980,7 @@ async def _run(args: argparse.Namespace) -> int:
 def _finalise_scorecard(
     out_dir: Path,
     results: list[
-        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchResult]
+        tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchOutcome]
     ],
     ctx: RunContext,
     *,
@@ -700,19 +1080,54 @@ async def _calibrate(domain: str, concurrency: int = 4) -> int:
       ≥90% agreement within ±1 (per calibration.ACCEPTANCE_AGREEMENT_PCT)
       and ≥10 anchors are present.
     """
-    from judge.calibration import evaluate, load_anchors, record_passed
+    from judge.calibration import (
+        AnchorSetTooWeak,
+        JudgeFingerprint,
+        anchor_strength,
+        assert_anchor_set_usable,
+        evaluate,
+        load_anchors,
+        record_passed,
+    )
 
     anchors = load_anchors(domain)
+    # §10.2 wants anchors "spanning the score range — not 10 easy passes".
+    # Check that BEFORE spending a provider budget on a set that cannot certify
+    # anything, and show exactly which dimension is undiscriminating.
+    try:
+        assert_anchor_set_usable(domain, anchors)
+    except (AnchorSetTooWeak, ValueError) as exc:
+        print(f"[calibrate] REFUSING: {exc}", file=sys.stderr)
+        for dim, strength in anchor_strength(anchors).items():
+            mark = "ok  " if strength.passes else "WEAK"
+            print(
+                f"[calibrate]   {mark} {dim:22s} human scores="
+                f"{list(strength.distinct_scores)}"
+                + (
+                    f"  constant-{'/'.join(str(k) for k in strength.passing_constants)}"
+                    "-would-pass"
+                    if strength.passing_constants
+                    else ""
+                ),
+                file=sys.stderr,
+            )
+        return 2
+
     settings = load_llm_settings()
     # per_dimension: 4 scoped prompts per anchor, prevents the halo effect where
-    # a low score on one dimension pulls the others down (PLAN §10.2 note).
+    # a low score on one dimension pulls the others down (§10.2 note).
+    mode = "per_dimension"
     cfg = load_judge_config(domain).model_copy(
-        update={"mode": "per_dimension", "cache_enabled": True}
+        update={"mode": mode, "cache_enabled": True}
     )
-    model_version = (
-        f"azure/{settings.deployment}"
-        if isinstance(settings, AzureSettings)
-        else cfg.model
+    model_version = _model_version(settings, cfg)
+    # The marker records this, and a scoring run whose fingerprint differs is
+    # treated as uncalibrated — a pass on one model/prompt/mode does not vouch
+    # for another.
+    fingerprint = JudgeFingerprint(
+        model_version=model_version,
+        prompt_version=prompt_version(),
+        mode=mode,
     )
     cache_dir = MODULE_ROOT / ".judge_cache" / model_version.replace("/", "_")
     judge_run_id = (
@@ -720,7 +1135,7 @@ async def _calibrate(domain: str, concurrency: int = 4) -> int:
         f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     )
     calibration_log = RUNS_DIR / judge_run_id / "prompts_log.jsonl"
-    judge = OpenAIJudge(
+    judge = _make_llm_judge(
         settings,
         cfg,
         cache_dir=cache_dir,
@@ -771,9 +1186,13 @@ async def _calibrate(domain: str, concurrency: int = 4) -> int:
         )
 
     if result.passed:
-        marker = record_passed(domain, result)
+        marker = record_passed(domain, result, fingerprint=fingerprint)
         print(f"[calibrate] PASSED — wrote {marker}")
-        print(f"[calibrate] --judge llm now allowed against domain={domain!r}")
+        print(
+            f"[calibrate] --judge llm now allowed against domain={domain!r} for "
+            f"model={fingerprint.model_version} prompt={fingerprint.prompt_version} "
+            f"mode={fingerprint.mode}. Changing any of the three re-opens the gate."
+        )
         return 0
     print(
         f"[calibrate] FAILED — no marker written. --judge llm will refuse to run "
@@ -793,10 +1212,11 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog=prog, description="judge end-to-end demo runner")
     ap.add_argument(
         "--judge",
-        choices=["llm", "mock"],
+        choices=["llm", "heuristic"],
         default="llm",
-        help="llm = Azure OpenAI / OpenAI direct (default). "
-        "mock = deterministic heuristic fallback for CI/dev.",
+        help="llm = the real LLM judge (default). heuristic = deterministic "
+        "test double for CI/dev — string overlap, NOT semantic scoring. Never "
+        "release-eligible.",
     )
     ap.add_argument(
         "--mode",
@@ -806,15 +1226,14 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
     )
     ap.add_argument(
         "--pulse",
-        choices=["good", "regressed", "bad", "echo", "sql", "live"],
-        default="good",
-        help="Pulse source: good/regressed/bad = canned fixtures keyed by question_id (CI/dev). "
-        "echo = replays each pair's expected_answer as the platform answer "
-        "(offline plumbing test; requires --input-csv). "
-        "sql = executes each pair's reference_sql against a CSV dataset and returns that "
-        "(requires --input-csv AND --pulse-data). "
-        "live = the real platform API (HC-4) — needs the PULSE_* creds in judge/.env and "
-        "--input-csv. Only 'live' is eligible for a non-provisional release baseline.",
+        choices=["sql", "live"],
+        default="live",
+        help="Answer source. live = the real platform API (HC-4) — the default, "
+        "and the ONLY source a release run accepts; needs the PULSE_* creds in "
+        "judge/.env and --input-csv. sql = executes each pair's reference_sql in "
+        "DuckDB (§14.2 ground-truth verification of pairs against the dataset; "
+        "requires --input-csv AND --pulse-data). sql never scores the platform "
+        "and its runs are PREVIEW-only.",
     )
     ap.add_argument(
         "--pulse-data",
@@ -858,12 +1277,27 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
         help="Version tag for the Q&A dataset used this run (§11.1).",
     )
     ap.add_argument(
+        "--numeric-form",
+        choices=["value", "string"],
+        default="value",
+        help="How a numeric answer is compared (OI-2). value = identical VALUE, "
+        "so '28,731' == '28731' == '28731.00' while '4,182,000' still fails "
+        "'4,182,650.00' — the default, on the reading that §HC-3 protects "
+        "rendering and fails only numeric variance. string = byte-identical "
+        "rendering, the pre-OI-2 reading. A release run requires the default.",
+    )
+    ap.add_argument(
+        "--ignore-entity-labels",
+        action="store_true",
+        help="Compare only the numerics in expected_answer, not the entity or "
+        "category labels beside them. Diagnostic only — it re-admits the "
+        "false pass where every right number is attached to the wrong entity, "
+        "so a release run refuses it.",
+    )
+    ap.add_argument(
         "--normalize-numerics",
         action="store_true",
-        help="OI-2 provisional relaxation: ignore thousands separators and "
-        "trailing decimal zeros in exact-match (so '$438,632.65' matches "
-        "'438632.65'). OFF by default — the certified §HC-3 comparison is "
-        "byte-identical. Runs using this are marked in the scorecard.",
+        help=argparse.SUPPRESS,  # deprecated: value comparison is now the default
     )
     ap.add_argument(
         "--limit", type=int, default=0, help="score only first N pairs (0 = all)"
@@ -878,6 +1312,13 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
         help="in-flight platform (Pulse) calls. Live Pulse answers take ~30s "
         "each; raise this for a big run, within the API's rate limit. Forced to "
         "1 for --pulse sql.",
+    )
+    ap.add_argument(
+        "--ignore-token-expiry",
+        action="store_true",
+        help="Start a --pulse live run even when PULSE_AUTH_TOKEN will expire "
+        "before it finishes. Off by default: a token that dies mid-run turns the "
+        "remaining questions into 401s and wastes the whole run.",
     )
     return ap
 
