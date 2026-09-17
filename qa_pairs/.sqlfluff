@@ -1,0 +1,15 @@
+[sqlfluff]
+dialect = ansi
+max_line_length = 200
+# House style for this project's reference SQL:
+#   AL01  implicit table aliasing (FROM accounts a) is allowed and preferred
+#   RF04  column names that are also keywords (status, priority) are the real
+#         schema names and must not be renamed
+exclude_rules = AL01, RF04
+
+# schema/ddl.sql (local reference copy of schemas/crm/crm_ddl.sql) is
+# indented with 4 spaces; match it so `sqlfluff lint schema/ddl.sql` passes.
+# Reference SQL is stored collapsed to one line, so indentation rules do not
+# apply to it (see tests/test_sqlfluff.py EXCLUDE).
+[sqlfluff:indentation]
+tab_space_size = 4

@@ -76,9 +76,7 @@ def build(profile: str) -> None:
     source = resolve_dataset_source(BASE, profile)
     src_dir = source.csv_dir
     if not src_dir.is_dir():
-        raise SystemExit(
-            f"source CSVs not found for profile '{profile}': {src_dir}"
-        )
+        raise SystemExit(f"source CSVs not found for profile '{profile}': {src_dir}")
     for label, path in (("CRM DDL", source.ddl_path), ("CRM DBML", source.dbml_path)):
         if not path.is_file():
             raise SystemExit(f"{label} not found: {path}")

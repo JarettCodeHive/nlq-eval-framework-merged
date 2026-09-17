@@ -1,0 +1,52 @@
+name: qa-pairs
+
+on:
+  push:
+    paths:
+      - "qa_pairs/**"
+      - "schemas/crm/**"
+      - "config/generation/**"
+      - ".github/workflows/qa-pairs.yml"
+  pull_request:
+    paths:
+      - "qa_pairs/**"
+      - "schemas/crm/**"
+      - "config/generation/**"
+      - ".github/workflows/qa-pairs.yml"
+
+defaults:
+  run:
+    working-directory: qa_pairs
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: pip install -r ../requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (black)
+        run: black --check .
+
+      - name: SQLFluff (local reference DDL)
+        run: sqlfluff lint schema/ddl.sql
+
+      - name: Tests (dataset-independent subset)
+        run: pytest
+        # NOTE: most tests need a built dataset (dataset/<profile>/crm_<profile>.duckdb +
+        # the generated qa_pairs release) and are skipped here rather than failed. Full
+        # release-mode verification requires running the CRM generator (generators/crm)
+        # first to populate tmp/generated/crm/dev/imperfect/ and release/crm/<version>/,
+        # then generator/generate_crm.py -> validate_crm.py -> scale_pairs.py ->
+        # author_qa_pairs.py -> rephrase.py, then `QA_RELEASE=1 pytest`. That is a
+        # cross-track (Track A + Track B) pipeline step, intentionally not wired into
+        # this workflow yet - see docs/REMEDIATION.md "Contract deviation" entry.

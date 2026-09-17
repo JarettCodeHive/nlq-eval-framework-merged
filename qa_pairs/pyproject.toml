@@ -1,0 +1,40 @@
+# Tooling config for Track B (Q&A evaluation pairs). Scoped to qa_pairs/ -
+# other tracks (generators/, judge/, scorecard/) own their own style.
+# Tool versions are pinned once, at the repo-root requirements.txt.
+# Repo README already targets Python 3.11 for the shared virtualenv.
+
+[project]
+name = "nlq-eval-qa-pairs"
+version = "0.3.0"
+description = "Track B - CRM Q&A evaluation pair generator and scorer reference"
+requires-python = ">=3.11"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+extend-exclude = "dataset/|fixtures/|rephrase/"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["dataset", "fixtures", "rephrase"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "E501",    # line length is black's job
+    "UP007",   # keep `X | None` written as-is under `from __future__ import annotations`
+    "B905",    # zip(strict=) is 3.10+; keep this importable on older interpreters too
+    "SIM105",  # contextlib.suppress over try/except/pass - not always clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+# the PAIRS fixture list is intentionally written as dict(...) calls for readability
+"generator/author_qa_pairs.py" = ["E402", "E501", "C408"]
+# generator scripts insert the repo root on sys.path before importing utils/
+"generator/*" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

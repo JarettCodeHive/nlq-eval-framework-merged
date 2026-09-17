@@ -1,5 +1,51 @@
 # Remediation
 
+## Sync from qa_pairs_poc + gap closure (2026-09-17)
+
+This track's working copy was `qa_pairs_poc/` in a separate repo
+(`nlq-eval-framework`, branch `DM/qa_pair_7sept`); `nlq-eval-framework-merged`
+is now the target for all further work. This entry reconciles the two after
+the prior pull (2026-09-14, commit `3744517`) fell one commit behind:
+
+- **`.sqlfluff` was missing entirely** from this repo - `sqlfluff lint`
+  had no dialect configured and `test_authoritative_ddl_is_sqlfluff_clean`
+  failed outright (`SQLFluffUserError: No dialect was specified`). Restored
+  at `qa_pairs/.sqlfluff` (same house style as the POC: AL01/RF04 excluded,
+  4-space indentation to match `schema/ddl.sql`).
+- **No `pyproject.toml` / CI** for this track. Added `qa_pairs/pyproject.toml`
+  (ruff + black config, `requires-python = ">=3.11"` per this repo's own
+  README) and `.github/workflows/qa-pairs.yml` (ruff, black, sqlfluff, and
+  the dataset-independent test subset). Tool versions are whatever this
+  repo's root `requirements.txt` already pins (ruff 0.5.5 / black 24.4.2 /
+  sqlfluff 3.1.0) - not the POC's separate pins. A handful of pre-existing
+  import-order issues (`I001`) in `utils/dataset_source.py`, `utils/verify.py`,
+  and the two newer test files were auto-fixed to make the new gate pass;
+  no logic changed.
+- **Contract deviation not yet ported**: `question_id`/`tier` added to
+  `crm_qa_pairs.csv` (POC commit `ea68d9d`, 2026-09-15) - see that commit's
+  message for the full rationale. This is a real deviation from scope
+  Section 9.3's frozen 7-field contract, done on explicit instruction for
+  easier review joins; `question_id`/`tier` remain in the companion CSV too,
+  so a spec-compliant 7-field file is a one-line column drop. Needs the
+  Platform Owner's sign-off before this 9-field format is final.
+
+Verified end-to-end in this repo (not just the POC): staged the POC's
+already-verified `crm_dataset_v2` CSVs into `tmp/generated/crm/dev/imperfect/`
+and `release/crm/dataset-v1.0.0/`, ran
+`generate_crm -> validate_crm -> scale_pairs -> author_qa_pairs -> rephrase`
+for both profiles through this repo's actual `utils.dataset_source` /
+`utils.output_paths` resolution, and `pytest` - **60 passed**, `ruff`/`black`/
+`sqlfluff` clean, `crm_qa_pairs.csv` correctly 9-field
+(`question_id, tier, natural_language_question, ...`). Everything below this
+entry is the POC's remediation history as of 2026-09-10 (`docs/REMEDIATION.md`
+review sections were carried over unchanged; more of the POC's later
+`fixtures/`/`rephrase/` output was intentionally NOT re-committed here since
+this repo's `dev` source CSVs are a different generator sample than the ones
+that produced the currently-committed `qa_pairs/fixtures/dev/*` - the numbers
+differ pair-by-pair even at the same seed. `dev` is never a delivery
+artifact; re-generate `fixtures/`/`rephrase/` from this repo's own generator
+output when needed rather than trusting the POC's copies.
+
 ## Review 5 (2026-09-10, second release-readiness review)
 
 | Finding | Fix |

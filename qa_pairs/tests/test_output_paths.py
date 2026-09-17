@@ -6,7 +6,6 @@ import pytest
 
 from utils.output_paths import qa_version, resolve_qa_output_dir
 
-
 QA_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = QA_ROOT.parent
 
