@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T5-05-SEED-01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "WITH by_region AS (SELECT a.region, SUM(CASE WHEN i.interaction_at >= DATE '2026-01-01' AND i.interaction_at < DATE '2026-04-01' THEN i.engagement_points ELSE 0 END) AS prev_q, SUM(CASE WHEN i.interaction_at >= DATE '2026-04-01' AND i.interaction_at < DATE '2026-07-01' THEN i.engagement_points ELSE 0 END) AS this_q FROM accounts a INNER JOIN contacts c ON a.account_id = c.account_id INNER JOIN interactions i ON c.contact_id = i.contact_id WHERE a.region IS NOT NULL GROUP BY a.region) SELECT region, prev_q AS prev_quarter_points, this_q AS this_quarter_points, ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change FROM by_region ORDER BY pct_change DESC NULLS LAST, region ASC LIMIT 1;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "9448364d0668589d806b861c8edd3acaf73e4be8d1dad358ea07c2f34d57d929",
+  "generated_expected_answer": "South | 46072 | 22797 | -50.52",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T5-05"
+}

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T2-01-SEED-01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT COUNT(s.case_id) AS case_count FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id WHERE a.region = 'West';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "f4cfb2ac1f3e593f7bf2e2e144b59d6f6d40344670c1ba785073431c43f569f7",
+  "generated_expected_answer": "29049",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T2-01"
+}

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T3-06-SEED-01",
+  "domain": "crm",
+  "tier": "T3",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT COUNT(*) AS campaign_count FROM campaigns c LEFT JOIN interactions i ON c.campaign_id = i.campaign_id WHERE c.status = 'Completed' AND i.interaction_id IS NULL;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "83151157c10d85af7c84657c71c3e3603d955160f0526fce672481da83a2e090",
+  "generated_expected_answer": "450",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T3-06"
+}

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T5-02-SEED-01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT a.account_name, COUNT(s.case_id) AS open_cases FROM accounts a INNER JOIN support_cases s ON a.account_id = s.account_id WHERE s.status IN ('New', 'InProgress', 'PendingCustomer') GROUP BY a.account_id, a.account_name ORDER BY open_cases DESC, a.account_name ASC LIMIT 5;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 5,
+  "result_hash": "c0448e1313ec971cad496af19e104ebe9d8296d3e9bc47cf1dda3c006ba894ed",
+  "generated_expected_answer": "Graham LLC | 13; Bond Bates and Beck | 12; Daniels Russell | 12; Mcgrath Ltd | 12; Barnes Moss and Yoder | 11",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T5-02"
+}

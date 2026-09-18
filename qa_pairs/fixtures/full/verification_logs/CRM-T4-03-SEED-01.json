@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T4-03-SEED-01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT s.category AS entity, ROUND(COUNT(*) FILTER (WHERE s.resolved_at IS NOT NULL AND s.resolved_at <= s.sla_due_at) * 100.0 / COUNT(*), 2) AS sla_compliance_pct FROM accounts a INNER JOIN contacts c ON a.account_id = c.account_id INNER JOIN support_cases s ON c.contact_id = s.contact_id WHERE a.customer_tier = 'Strategic' GROUP BY s.category ORDER BY entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 6,
+  "result_hash": "4cd4f81e4857dd9fb5235b0b928040ee3e03525810a30915737cd9cd8c70ec67",
+  "generated_expected_answer": "Access | 24.38; Billing | 24.18; GeneralInquiry | 21.62; Integration | 22.94; ProductIssue | 25.77; ServiceRequest | 23.73",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T4-03"
+}

@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T3-04-SEED-01",
+  "domain": "crm",
+  "tier": "T3",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT COUNT(*) AS contacts_without_campaigns FROM contacts c LEFT JOIN contact_campaigns cc ON c.contact_id = cc.contact_id WHERE cc.campaign_id IS NULL;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "ddfe0e8d462af661f81db36589c39882dc0f2330785b5d80cd34f2f520ad618f",
+  "generated_expected_answer": "480",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T3-04"
+}

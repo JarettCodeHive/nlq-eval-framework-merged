@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T1-06-SEED-01",
+  "domain": "crm",
+  "tier": "T1",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT COUNT(*) AS west_accounts FROM accounts WHERE region = 'West';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "818a291377e2e0e3288a8f721c3079afdd2259e1b6dae343289e3fd2b7df9144",
+  "generated_expected_answer": "4841",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T1-06"
+}

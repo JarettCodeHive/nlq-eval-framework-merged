@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T2-02-SEED-01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT a.customer_tier, COUNT(s.case_id) AS case_count FROM support_cases s INNER JOIN accounts a ON s.account_id = a.account_id WHERE s.priority = 'Critical' GROUP BY a.customer_tier ORDER BY case_count DESC, a.customer_tier ASC LIMIT 1;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "e722ea2cde057a8b783777f5b8d62bff3c1f511b2a875e7fb60944184f45687e",
+  "generated_expected_answer": "Standard | 6229",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T2-02"
+}

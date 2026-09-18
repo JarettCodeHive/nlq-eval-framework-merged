@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T2-05-SEED-01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT i.direction, COUNT(*) AS direction_count FROM interactions i INNER JOIN contacts c ON i.contact_id = c.contact_id WHERE c.is_active = true GROUP BY i.direction ORDER BY direction_count DESC, i.direction ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 2,
+  "result_hash": "2b7d65b999cd0d3d5bda5dd74a5f102c8c7060f364df9dfed4207ffd1059e794",
+  "generated_expected_answer": "Outbound | 90424; Inbound | 89940",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T2-05"
+}

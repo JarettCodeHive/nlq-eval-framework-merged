@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T1-02-SEED-01",
+  "domain": "crm",
+  "tier": "T1",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT COUNT(*) AS active_campaigns FROM campaigns WHERE status = 'Active';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "310ced37200b1a0dae25edb263fe52c491f6e467268acab0ffec06666e2ed959",
+  "generated_expected_answer": "1235",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T1-02"
+}

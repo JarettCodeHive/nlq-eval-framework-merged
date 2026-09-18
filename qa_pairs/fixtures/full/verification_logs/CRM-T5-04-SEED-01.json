@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T5-04-SEED-01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "WITH q AS (SELECT SUM(CASE WHEN interaction_at >= DATE '2026-01-01' AND interaction_at < DATE '2026-04-01' THEN engagement_points ELSE 0 END) AS prev_q, SUM(CASE WHEN interaction_at >= DATE '2026-04-01' AND interaction_at < DATE '2026-07-01' THEN engagement_points ELSE 0 END) AS this_q FROM interactions) SELECT prev_q AS prev_quarter_points, this_q AS this_quarter_points, this_q - prev_q AS absolute_change, ROUND(CASE WHEN prev_q = 0 THEN NULL ELSE (this_q - prev_q) / CAST(prev_q AS DOUBLE) * 100 END, 2) AS pct_change, CASE WHEN this_q > prev_q THEN 'up' WHEN this_q < prev_q THEN 'down' ELSE 'flat' END AS direction FROM q;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "2651b84342f3fad1e26bff91887809ca3676c43e00f95cab217ef0905269a70c",
+  "generated_expected_answer": "233248 | 113025 | -120223 | -51.54 | down",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T5-04"
+}

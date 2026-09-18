@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T2-04-SEED-01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT COUNT(i.interaction_id) AS interaction_count FROM interactions i INNER JOIN campaigns c ON i.campaign_id = c.campaign_id WHERE c.campaign_type = 'Retention';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "152ba1a6beec6a16017cd2f232916d56421cff979f2eed42ea784ca76afa8b11",
+  "generated_expected_answer": "28005",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T2-04"
+}

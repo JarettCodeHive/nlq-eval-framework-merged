@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T4-02-SEED-01",
+  "domain": "crm",
+  "tier": "T4",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT s.priority AS entity, COUNT(s.case_id) AS case_count FROM accounts a INNER JOIN contacts c ON a.account_id = c.account_id INNER JOIN support_cases s ON c.contact_id = s.contact_id WHERE a.industry = 'Healthcare' GROUP BY s.priority ORDER BY case_count DESC, entity ASC;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 4,
+  "result_hash": "20fee583a210e9afdb442e41056e39d83bdec03175505fad8d4fecf1a822d644",
+  "generated_expected_answer": "Medium | 4520; Low | 3003; High | 2381; Critical | 719",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T4-02"
+}

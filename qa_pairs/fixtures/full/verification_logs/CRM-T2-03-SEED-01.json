@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T2-03-SEED-01",
+  "domain": "crm",
+  "tier": "T2",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT COUNT(c.contact_id) AS contact_count FROM contacts c INNER JOIN accounts a ON c.account_id = a.account_id WHERE a.industry = 'Technology';",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 1,
+  "result_hash": "958ad6fb6e1d5977638ffa9b61e4a33d1624319b660a80a46c1915521d00c623",
+  "generated_expected_answer": "6673",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T2-03"
+}

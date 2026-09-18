@@ -1,0 +1,33 @@
+question_id,tier,family,result_hash,natural_language_question
+CRM-T1-01-SEED-01,T1,T1-01,332d04540e9b4a3ce25ea4c945bcf32932c19861f157450c6ee76e75b8f1bebc,What is the total budget of Retention campaigns?
+CRM-T1-02-SEED-01,T1,T1-02,310ced37200b1a0dae25edb263fe52c491f6e467268acab0ffec06666e2ed959,How many campaigns are currently active?
+CRM-T1-03-SEED-01,T1,T1-03,52b67fec538f6a101aeb78f4c7d3ea27e7de490ebb119b5e4180d229ed26f01a,How many support cases are logged as critical priority?
+CRM-T1-04-SEED-01,T1,T1-04,b65d4ccbd731b0567be84164afe59ed2b0b906fca7003681e5c868b43bdc96f8,How many support cases fall under the Billing category?
+CRM-T1-05-SEED-01,T1,T1-05,b394ef1c9fdf9f3de9a36d1d4e1a8127d897ce5f3fb8565ad887b32f4cd5e29e,How many interactions are meetings?
+CRM-T1-06-SEED-01,T1,T1-06,818a291377e2e0e3288a8f721c3079afdd2259e1b6dae343289e3fd2b7df9144,How many accounts do we have in the West region?
+CRM-T1-07-SEED-01,T1,T1-07,f59f52637e1f7462419d76242c44191e63d2c81e94177c0f54c429a2cf5fb616,How many critical-priority support cases were resolved within their SLA deadline?
+CRM-T2-01-SEED-01,T2,T2-01,f4cfb2ac1f3e593f7bf2e2e144b59d6f6d40344670c1ba785073431c43f569f7,How many support cases belong to West-region accounts?
+CRM-T2-02-SEED-01,T2,T2-02,e722ea2cde057a8b783777f5b8d62bff3c1f511b2a875e7fb60944184f45687e,Which customer tier has the most critical-priority support cases?
+CRM-T2-03-SEED-01,T2,T2-03,958ad6fb6e1d5977638ffa9b61e4a33d1624319b660a80a46c1915521d00c623,How many contacts do we have across accounts in the technology industry?
+CRM-T2-04-SEED-01,T2,T2-04,152ba1a6beec6a16017cd2f232916d56421cff979f2eed42ea784ca76afa8b11,How many interactions are attributed to Retention campaigns?
+CRM-T2-05-SEED-01,T2,T2-05,2b7d65b999cd0d3d5bda5dd74a5f102c8c7060f364df9dfed4207ffd1059e794,What is the inbound/outbound interaction breakdown for active contacts?
+CRM-T2-06-SEED-01,T2,T2-06,3ba9b06fa2b4b6161fa26e1f4aa37e7a1549df2bc38351dcb897222a6bbc4651,Which accounts had the most meeting interactions recorded directly against them?
+CRM-T2-07-SEED-01,T2,T2-07,162fda1c3929b763e2d86af726d2bffe63c88d66c327b6eb9bd69d6042c8aefb,How many email interactions came from contacts with the title IT Director?
+CRM-T2-08-SEED-01,T2,T2-08,70d0fb9d8aa6073931b0b1b767b61284e4cf5bc84e225365fa7c692c4d519936,What percentage of support cases for accounts in technology were resolved within their SLA deadline?
+CRM-T3-01-SEED-01,T3,T3-01,822fb7b543bfa03e8eedad42c8edcd6db8f61ba8c01c52496b738156a3809c7c,How many customer accounts have no contacts on record?
+CRM-T3-02-SEED-01,T3,T3-02,e9ab8bc5c3509451b36cca93c8b7a8d2a3a4b2896cc691e8bd6deacbf2f69916,How many accounts have no interactions recorded directly against them?
+CRM-T3-03-SEED-01,T3,T3-03,08fceb7eae8b0b70b71853d2bd2245d4a998a6198558cb9b663c3fae2e9f82f0,How many contacts have no recorded interactions?
+CRM-T3-04-SEED-01,T3,T3-04,ddfe0e8d462af661f81db36589c39882dc0f2330785b5d80cd34f2f520ad618f,How many contacts are not enrolled in any campaign?
+CRM-T3-05-SEED-01,T3,T3-05,75cc7328c04ad5dec3d926c00f6282d5057b3c594e4f8dd8a6a0a14910fa53b9,How many campaigns have no attributed interactions?
+CRM-T3-06-SEED-01,T3,T3-06,83151157c10d85af7c84657c71c3e3603d955160f0526fce672481da83a2e090,How many completed campaigns have no attributed interactions?
+CRM-T4-01-SEED-01,T4,T4-01,193323caefd05f0fdeeb8bb24a91b60ecb92a9a31c144409254fab2f23cb7ec7,"For West-region accounts, how does engagement break down by interaction channel?"
+CRM-T4-02-SEED-01,T4,T4-02,20fee583a210e9afdb442e41056e39d83bdec03175505fad8d4fecf1a822d644,"For accounts in healthcare, how do the support cases raised by their contacts break down by priority?"
+CRM-T4-03-SEED-01,T4,T4-03,4cd4f81e4857dd9fb5235b0b928040ee3e03525810a30915737cd9cd8c70ec67,"For strategic-tier accounts, what is the SLA compliance rate of the support cases raised by their contacts, by category?"
+CRM-T4-05-SEED-01,T4,T4-05,524a5fbad7cf9dea8fb24eafd34cf4b35110048556540f92aa2c57e88d94afb6,"For West-region accounts, how do the support cases raised by their contacts break down by status?"
+CRM-T4-06-SEED-01,T4,T4-06,ab4db497d233e472c8decafe011cb140d0e4bc74729fb636bb19a368dbc60ca1,"For accounts in healthcare, how does engagement break down by interaction type?"
+CRM-T4-04-SEED-01,T4,T4-04,f1d44bf2ceb75cd918593577b250f704d22c6365b0db2a8ac82abd983b33e6b3,"For Retention campaigns, how does total multi-touch attribution weight break down by member status?"
+CRM-T5-01-SEED-01,T5,T5-01,2362094ff020500d71f62e96864bff923dcab4c715a345ddf494c7d8c7bc209b,Which three campaign types drove the most customer engagement?
+CRM-T5-02-SEED-01,T5,T5-02,c0448e1313ec971cad496af19e104ebe9d8296d3e9bc47cf1dda3c006ba894ed,Which accounts have the largest open support backlog right now?
+CRM-T5-03-SEED-01,T5,T5-03,7b26ad0f656856d5d49321624a565427d91f8e39d6a03708be09e5d65cf58a8b,Which accounts look at risk from an open support backlog and no recent engagement?
+CRM-T5-04-SEED-01,T5,T5-04,2651b84342f3fad1e26bff91887809ca3676c43e00f95cab217ef0905269a70c,How did customer engagement change from Q1 2026 to Q2 2026?
+CRM-T5-05-SEED-01,T5,T5-05,9448364d0668589d806b861c8edd3acaf73e4be8d1dad358ea07c2f34d57d929,Which region had the best customer-engagement trend from Q1 2026 to Q2 2026?

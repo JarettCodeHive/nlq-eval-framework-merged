@@ -1,0 +1,22 @@
+{
+  "question_id": "CRM-T5-01-SEED-01",
+  "domain": "crm",
+  "tier": "T5",
+  "qa_version": "0.3.0",
+  "dataset_version": "dataset-v1.0.0",
+  "profile": "full",
+  "reference_sql": "SELECT c.campaign_type, SUM(i.engagement_points) AS total_points FROM campaigns c INNER JOIN interactions i ON c.campaign_id = i.campaign_id GROUP BY c.campaign_type ORDER BY total_points DESC, c.campaign_type ASC LIMIT 3;",
+  "execution_status": "ok",
+  "error": null,
+  "row_count_returned": 3,
+  "result_hash": "2362094ff020500d71f62e96864bff923dcab4c715a345ddf494c7d8c7bc209b",
+  "generated_expected_answer": "Awareness | 189982; CustomerEducation | 178379; Retention | 176866",
+  "deterministic": true,
+  "library_versions": {
+    "python": "3.11.16",
+    "duckdb": "0.10.3",
+    "jinja2": "3.1.4"
+  },
+  "kind": "seed_fixture",
+  "family": "T5-01"
+}

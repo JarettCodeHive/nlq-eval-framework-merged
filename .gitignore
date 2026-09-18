@@ -3,3 +3,18 @@ tmp/
 release/
 qa_pairs/dataset/
 qa_pairs/qa_pairs/
+
+# Secrets — never commit. judge/.env.example is the checked-in template.
+.env
+.env.*
+!.env.example
+*creds*.env
+
+# Judge-owned local state
+judge/.judge_cache/
+judge/.calibration/
+judge/runs/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
