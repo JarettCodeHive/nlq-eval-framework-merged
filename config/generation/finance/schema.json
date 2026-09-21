@@ -1,0 +1,453 @@
+{
+  "tables": {
+    "accounts": {
+      "primary_key": "account_id",
+      "role": "reference_hierarchy",
+      "row_targets": {
+        "dev": 50,
+        "full": 200
+      },
+      "fields": [
+        {
+          "name": "account_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "account_number",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "key": "unique",
+          "synthetic_source": "deterministic_account_number"
+        },
+        {
+          "name": "account_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "synthetic_chart_of_accounts_name"
+        },
+        {
+          "name": "account_type",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.account_types"
+        },
+        {
+          "name": "account_subtype",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "business_mappings.account_subtypes"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "synthetic_source": "domain_values.source_currencies"
+        },
+        {
+          "name": "parent_account_id",
+          "type": "integer",
+          "nullable": true,
+          "key": "foreign",
+          "references": {
+            "table": "accounts",
+            "field": "account_id"
+          },
+          "synthetic_source": "generation_rules.accounts.hierarchy"
+        },
+        {
+          "name": "normal_balance",
+          "type": "varchar",
+          "max_length": 16,
+          "nullable": false,
+          "synthetic_source": "business_mappings.normal_balance_by_account_type"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "generation_rules.accounts.active_probability"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "transactions": {
+      "primary_key": "transaction_id",
+      "role": "fact",
+      "row_targets": {
+        "dev": 1000,
+        "full": 100000
+      },
+      "fields": [
+        {
+          "name": "transaction_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "transaction_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.fx_calendar",
+          "imperfection_target": "boundary_date"
+        },
+        {
+          "name": "description",
+          "type": "varchar",
+          "max_length": 1024,
+          "nullable": true,
+          "synthetic_source": "deterministic_transaction_description"
+        },
+        {
+          "name": "source_system",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.source_systems"
+        },
+        {
+          "name": "source_currency",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "synthetic_source": "domain_values.source_currencies"
+        },
+        {
+          "name": "target_currency",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.reporting_currency"
+        },
+        {
+          "name": "total_amount",
+          "type": "decimal",
+          "precision": 19,
+          "scale": 4,
+          "nullable": false,
+          "synthetic_source": "distributions.transaction_amount",
+          "distribution": "pareto",
+          "imperfection_target": "fixed_scale_outlier"
+        },
+        {
+          "name": "reversed",
+          "type": "boolean",
+          "nullable": false,
+          "default": false,
+          "synthetic_source": "generation_rules.transactions.reversed_probability"
+        },
+        {
+          "name": "posted_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "generation_rules.transactions.posted_lag_days"
+        }
+      ]
+    },
+    "ledger_entries": {
+      "primary_key": "entry_id",
+      "role": "fact_junction",
+      "row_targets": {
+        "dev": 2000,
+        "full": 200000
+      },
+      "unique_constraints": [
+        [
+          "transaction_id",
+          "line_number"
+        ]
+      ],
+      "fields": [
+        {
+          "name": "entry_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "transaction_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "transactions",
+            "field": "transaction_id"
+          }
+        },
+        {
+          "name": "account_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "accounts",
+            "field": "account_id"
+          }
+        },
+        {
+          "name": "line_number",
+          "type": "integer",
+          "nullable": false,
+          "synthetic_source": "sequential_within_transaction"
+        },
+        {
+          "name": "debit_amount",
+          "type": "decimal",
+          "precision": 19,
+          "scale": 4,
+          "nullable": true,
+          "synthetic_source": "balanced_minor_unit_allocation"
+        },
+        {
+          "name": "credit_amount",
+          "type": "decimal",
+          "precision": 19,
+          "scale": 4,
+          "nullable": true,
+          "synthetic_source": "balanced_minor_unit_allocation"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "synthetic_source": "source_transaction.source_currency"
+        },
+        {
+          "name": "posting_type",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.posting_types"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "budgets": {
+      "primary_key": "budget_id",
+      "role": "planning_reference",
+      "row_targets": {
+        "dev": 100,
+        "full": 800
+      },
+      "fields": [
+        {
+          "name": "budget_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "accounts",
+            "field": "account_id"
+          }
+        },
+        {
+          "name": "fiscal_year",
+          "type": "integer",
+          "nullable": false,
+          "synthetic_source": "generation_rules.budgets.periods"
+        },
+        {
+          "name": "period_start",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.budgets.periods"
+        },
+        {
+          "name": "period_end",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.budgets.periods"
+        },
+        {
+          "name": "budget_amount",
+          "type": "decimal",
+          "precision": 19,
+          "scale": 4,
+          "nullable": false,
+          "synthetic_source": "distributions.budget_amount",
+          "distribution": "pareto"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.reporting_currency"
+        },
+        {
+          "name": "scenario",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.budget_scenarios"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "fx_rates": {
+      "primary_key": "rate_id",
+      "role": "reference",
+      "row_targets": {
+        "dev": 370,
+        "full": 3650
+      },
+      "unique_constraints": [
+        [
+          "from_currency",
+          "to_currency",
+          "rate_date"
+        ]
+      ],
+      "fields": [
+        {
+          "name": "rate_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "from_currency",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "synthetic_source": "generation_rules.fx_calendar.currency_pairs"
+        },
+        {
+          "name": "to_currency",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.reporting_currency"
+        },
+        {
+          "name": "rate_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.fx_calendar"
+        },
+        {
+          "name": "rate",
+          "type": "decimal",
+          "precision": 19,
+          "scale": 6,
+          "nullable": true,
+          "synthetic_source": "generation_rules.fx_daily_movement",
+          "imperfection_target": "controlled_null"
+        },
+        {
+          "name": "rate_source",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.rate_sources"
+        },
+        {
+          "name": "is_estimated",
+          "type": "boolean",
+          "nullable": false,
+          "default": false,
+          "synthetic_source": "generation_rules.fx_rates.estimated_probability"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "accounts",
+      "parent_field": "account_id",
+      "child_table": "accounts",
+      "child_field": "parent_account_id",
+      "cardinality": "1:N hierarchy",
+      "join_type": "left"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "transactions",
+      "parent_field": "transaction_id",
+      "child_table": "ledger_entries",
+      "child_field": "transaction_id",
+      "cardinality": "1:N",
+      "join_type": "inner_from_ledger_left_from_transaction"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "accounts",
+      "parent_field": "account_id",
+      "child_table": "ledger_entries",
+      "child_field": "account_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "accounts",
+      "parent_field": "account_id",
+      "child_table": "budgets",
+      "child_field": "account_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "analytical_composite",
+      "left_table": "transactions",
+      "right_table": "fx_rates",
+      "conditions": [
+        {
+          "left_field": "source_currency",
+          "right_field": "from_currency"
+        },
+        {
+          "left_field": "target_currency",
+          "right_field": "to_currency"
+        },
+        {
+          "left_field": "transaction_date",
+          "right_field": "rate_date"
+        }
+      ],
+      "cardinality": "N:1",
+      "join_type": "inner_lookup",
+      "enforced_as_foreign_key": false
+    }
+  ]
+}

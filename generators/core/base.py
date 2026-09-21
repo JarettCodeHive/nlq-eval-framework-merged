@@ -395,7 +395,7 @@ class GenerationSettings:
                     f"max is {self.max_rows_per_table}"
                 )
         if self.profile in self.release_disallowed_profiles:
-            if self.output_path.parts[-2:] == ("crm", self.dataset_version):
+            if self.targets_versioned_release:
                 raise ValueError(f"{self.profile} cannot target a release directory")
 
     @property
@@ -403,6 +403,14 @@ class GenerationSettings:
         """Return whether this settings object targets release-scale output."""
 
         return self.profile == self.release_profile
+
+    @property
+    def targets_versioned_release(self) -> bool:
+        """Return whether output uses this domain's versioned release path."""
+
+        return self.output_path == (
+            PROJECT_ROOT / "release" / self.domain / self.dataset_version
+        )
 
     def metadata(self) -> dict[str, Any]:
         """Return deterministic run metadata suitable for manifest input."""

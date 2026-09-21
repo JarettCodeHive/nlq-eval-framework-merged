@@ -1,0 +1,158 @@
+{
+  "join_path_requirements": [
+    {
+      "id": "sales_jp_001",
+      "name": "leads_to_deals",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "leads",
+        "deals"
+      ],
+      "join_condition": "leads.lead_id = deals.lead_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "deals.lead_id IS NULL",
+      "purpose": "Supports leads without deals and lead-conversion analysis."
+    },
+    {
+      "id": "sales_jp_002",
+      "name": "deals_to_leads",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "deals",
+        "leads"
+      ],
+      "join_condition": "deals.lead_id = leads.lead_id",
+      "required_result": "non_empty",
+      "purpose": "Supports deal analysis using source-lead attributes."
+    },
+    {
+      "id": "sales_jp_003",
+      "name": "deals_to_quotations",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "deals",
+        "quotations"
+      ],
+      "join_condition": "deals.deal_id = quotations.deal_id",
+      "required_result": "non_empty",
+      "purpose": "Supports deal-level quote-line aggregation."
+    },
+    {
+      "id": "sales_jp_004",
+      "name": "products_to_quotations",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "products",
+        "quotations"
+      ],
+      "join_condition": "products.product_id = quotations.product_id",
+      "required_result": "non_empty",
+      "purpose": "Supports product sales and quoted-price analysis."
+    },
+    {
+      "id": "sales_jp_005",
+      "name": "deals_to_quotations_to_products",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "deals",
+        "quotations",
+        "products"
+      ],
+      "join_condition": "quotations.deal_id = deals.deal_id AND quotations.product_id = products.product_id",
+      "required_result": "non_empty",
+      "purpose": "Supports the required Deal-to-Product path through quotation lines."
+    },
+    {
+      "id": "sales_jp_006",
+      "name": "leads_to_deals_to_quotations_to_products",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "leads",
+        "deals",
+        "quotations",
+        "products"
+      ],
+      "join_condition": "deals.lead_id = leads.lead_id AND quotations.deal_id = deals.deal_id AND quotations.product_id = products.product_id",
+      "required_result": "non_empty",
+      "purpose": "Supports the complete Lead-to-Deal-to-Product business path."
+    },
+    {
+      "id": "sales_jp_007",
+      "name": "targets_to_won_deals",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "left_analytical",
+      "tables": [
+        "targets",
+        "deals"
+      ],
+      "join_condition": "deals.rep_name = targets.rep_name AND deals.close_date >= targets.period_start AND deals.close_date < targets.period_end AND deals.stage = 'Won'",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "deals.deal_id IS NULL",
+      "purpose": "Supports targets with zero attained revenue."
+    },
+    {
+      "id": "sales_jp_008",
+      "name": "won_deals_to_targets",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner_analytical",
+      "tables": [
+        "targets",
+        "deals"
+      ],
+      "join_condition": "deals.rep_name = targets.rep_name AND deals.close_date >= targets.period_start AND deals.close_date < targets.period_end AND deals.stage = 'Won'",
+      "required_result": "non_empty",
+      "purpose": "Supports quota-attainment SUM calculations for won deals."
+    }
+  ],
+  "consistency_rules": [
+    "Every deal must reference an existing lead, and that lead must have status Converted.",
+    "A deal must copy rep_name ownership from its source lead.",
+    "Leads without deals must remain present for the declared LEFT JOIN path.",
+    "Generated product SKU values must be unique even though SKU is not a SQL key.",
+    "Every quotation must reference an existing deal and product.",
+    "The quotation bridge must include at least one multi-product deal and one product used by multiple deals.",
+    "Quotation created_at must be on or before quoted_at.",
+    "Closed deals require close_date; open deals may have a null close_date.",
+    "Deal created_at, close_date, and expected_close_date must follow configured chronological rules.",
+    "Target periods for each representative must not overlap and use start-inclusive, end-exclusive boundaries.",
+    "Representative names and territories must align across leads, deals, and targets.",
+    "At least one target period must contain won deals and at least one must have zero attainment.",
+    "All deal, product, quotation-price, and target monetary values use USD.",
+    "Only quotations may gain rows during imperfection injection."
+  ]
+}

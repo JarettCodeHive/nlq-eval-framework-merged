@@ -3,7 +3,8 @@
 Sources of truth:
 
 - Join specification: `schemas/crm/docs/01_join_path_requirements.md`
-- Executable contract: `config/generation/crm.json`
+- Config entry point: `config/generation/crm.json`
+- Executable contract: `config/generation/crm/validation.json`
 - DDL: `schemas/crm/crm_ddl.sql`
 
 The DuckDB validator loads all six CSVs under the canonical DDL and evaluates

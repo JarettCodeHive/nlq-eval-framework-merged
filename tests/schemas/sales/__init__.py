@@ -1,0 +1,1 @@
+"""Sales schema contract tests."""

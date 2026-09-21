@@ -3,7 +3,8 @@
 Source of truth:
 
 - Canonical CRM DDL: `schemas/crm/crm_ddl.sql`
-- CRM generation config: `config/generation/crm.json`
+- CRM config entry point: `config/generation/crm.json`
+- CRM schema contract: `config/generation/crm/schema.json`
 
 This document describes schema-copy generation under Step 18 of
 `CRM_Engagement_Schema_Implementation_Plan.md`.

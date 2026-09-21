@@ -17,6 +17,8 @@ def test_format_fixed_decimal() -> None:
     assert format_fixed_decimal(500000, 2) == "5000.00"
     assert format_fixed_decimal(-123456, 2) == "-1234.56"
     assert format_fixed_decimal(42, 0) == "42"
+    assert format_fixed_decimal(123456, 4) == "12.3456"
+    assert format_fixed_decimal(123456, 6) == "0.123456"
 
 
 def test_pareto_distribution_when_numpy_is_installed() -> None:

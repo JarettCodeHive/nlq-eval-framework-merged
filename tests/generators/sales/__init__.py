@@ -1,0 +1,1 @@
+"""Sales generator tests."""

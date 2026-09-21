@@ -1,0 +1,1 @@
+"""Finance schema contract tests."""

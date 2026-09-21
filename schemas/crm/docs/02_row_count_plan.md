@@ -3,7 +3,7 @@
 Sources of truth:
 
 - Shared cap: `config/generation/base.json`
-- CRM targets: `config/generation/crm.json`
+- CRM targets: `config/generation/crm/schema.json`
 - Current plan: `CRM_Engagement_Schema_Implementation_Plan.md`
 
 CRM uses explicit row targets. The `dev` profile supports fast local checks;

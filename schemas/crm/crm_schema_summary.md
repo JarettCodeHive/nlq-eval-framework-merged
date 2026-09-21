@@ -7,8 +7,10 @@ contract is Draft v0.2, internally validated, and pending external sign-off.
 It reflects the client feedback separating CRM from Sales and is aligned with
 the executable source of truth, `schemas/crm/crm_ddl.sql`.
 
-The ERD, DDL, `config/generation/crm.json`, and
+The ERD, DDL, assembled `config/generation/crm.json` contract, and
 `schemas/crm/crm_csv_header_spec.md` agree on all six tables and field order.
+Physical table and relationship definitions live in
+`config/generation/crm/schema.json`.
 The DDL and config also agree on physical data types, nullability, defaults,
 primary keys, the unique case number, and foreign-key relationships. Business
 rules that require comparisons across rows remain generator and validator

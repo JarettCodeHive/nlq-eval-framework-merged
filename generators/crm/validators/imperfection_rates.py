@@ -55,7 +55,15 @@ class CRMImperfectionRateValidator:
     def validate_exported_csvs(self) -> list[IntegrityCheckResult]:
         """Validate imperfection rates in CSVs from the configured output path."""
 
-        tables = self._read_csv_tables(self._csv_paths(self.settings.output_path))
+        return self.validate_csv_directory(self.settings.output_path)
+
+    def validate_csv_directory(
+        self,
+        directory: Path,
+    ) -> list[IntegrityCheckResult]:
+        """Validate imperfections in a complete persisted CRM CSV directory."""
+
+        tables = self._read_csv_tables(self._csv_paths(directory))
         return self.validate_tables(tables)
 
     def generate_and_validate(self) -> list[IntegrityCheckResult]:

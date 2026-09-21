@@ -5,27 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from generators.core.progress import ProgressReporter
-
-from generators.crm.config import settings_for_profile
-from generators.crm.validators.config import validate_crm_config
-from generators.crm.data_dictionary import CRMDataDictionaryGenerator
-from generators.crm.distributions import CRMDistributionApplier
-from generators.crm.export import CRMCSVExporter
-from generators.crm.generator import CRMBaseEntityGenerator
-from generators.crm.hashes import CRMHashComputer
-from generators.crm.imperfections import CRMImperfectionInjector
-from generators.crm.manifest import CRMManifestGenerator
-from generators.crm.schema_sql import CRMSchemaSQLGenerator
-from generators.crm.validators.fk_integrity import CRMDuckDBFKValidator
-from generators.crm.validators.imperfection_rates import CRMImperfectionRateValidator
-from generators.crm.validators.join_paths import CRMJoinPathValidator
-from generators.crm.validators.relational import CRMRelationalValidator
-from generators.crm.validators.reproducibility import CRMReproducibilityValidator
-from generators.crm.validators.row_caps import CRMRowCapValidator
+from generators.crm.pipeline import CRMDatasetPipeline
+from generators.domain_registry import DATASET_DOMAINS
+from generators.domain_registry import dataset_domain
+from generators.finance.pipeline import FinanceDatasetPipeline
+from generators.sales.pipeline import SalesDatasetPipeline
 from qa_pairs.generator.author_qa_pairs import generate_seed_fixtures
 from qa_pairs.generator.generate_crm import build as stage_qa_dataset
 from qa_pairs.generator.rephrase import generate_rephrases
@@ -42,9 +29,9 @@ CommandHandler = Callable[[argparse.Namespace], None]
 def run_validate_config(args: argparse.Namespace) -> None:
     """Validate config and schema alignment for a domain/profile."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    settings = settings_for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    settings = runtime.settings_for_profile(args.profile)
 
     print("Config/schema validation passed")
     print(f"domain: {settings.domain}")
@@ -61,25 +48,54 @@ def run_validate_config(args: argparse.Namespace) -> None:
 def run_show_config(args: argparse.Namespace) -> None:
     """Print deterministic generation metadata for a domain/profile."""
 
-    _ensure_crm(args.domain)
-    settings = settings_for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    settings = runtime.settings_for_profile(args.profile)
 
     print("Generation metadata")
     for key, value in settings.metadata().items():
         print(f"{key}: {value}")
 
 
-def run_generate_base(args: argparse.Namespace) -> None:
-    """Generate clean CRM base tables and print a validation summary."""
+def run_build_dataset(args: argparse.Namespace) -> None:
+    """Build and validate one complete persisted dataset profile."""
 
-    _ensure_crm(args.domain)
+    runtime = dataset_domain(args.domain)
+    pipelines = {
+        "crm": CRMDatasetPipeline,
+        "finance": FinanceDatasetPipeline,
+        "sales": SalesDatasetPipeline,
+    }
+    try:
+        pipeline = pipelines[args.domain]
+    except KeyError as exc:
+        raise NotImplementedError(
+            "build-dataset currently supports only crm, finance, and sales; "
+            f"got {args.domain}"
+        ) from exc
+
     progress = ProgressReporter()
-    progress.report("Validating CRM configuration and schema")
-    validate_crm_config()
-    generator = CRMBaseEntityGenerator.for_profile(args.profile, progress=progress)
+    output_path = pipeline.for_profile(
+        args.profile,
+        progress=progress,
+    ).run()
+
+    print(f"{runtime.display_name} dataset build passed")
+    print(f"domain: {args.domain}")
+    print(f"profile: {args.profile}")
+    print(f"output: {output_path}")
+
+
+def run_generate_base(args: argparse.Namespace) -> None:
+    """Generate clean domain base tables and print a validation summary."""
+
+    runtime = dataset_domain(args.domain)
+    progress = ProgressReporter()
+    progress.report(f"Validating {runtime.display_name} configuration and schema")
+    runtime.validate_config()
+    generator = runtime.base_generator.for_profile(args.profile, progress=progress)
     tables = generator.generate_tables()
 
-    print("Generated clean CRM base entities")
+    print(f"Generated clean {runtime.display_name} base entities")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print("tables:")
@@ -87,23 +103,26 @@ def run_generate_base(args: argparse.Namespace) -> None:
         table = tables[table_name]
         print(f"  {table_name}: rows={len(table)} columns={len(table.columns)}")
 
-    _print_relationship_summary(tables)
+    runtime.print_relationship_summary(tables)
 
     if args.write_preview:
-        _write_preview_tables(args.profile, tables, stage="base")
+        _write_preview_tables(args.domain, args.profile, tables, stage="base")
 
 
 def run_apply_distributions(args: argparse.Namespace) -> None:
-    """Generate CRM base tables, apply distributions, and print checks."""
+    """Generate domain base tables, apply distributions, and print checks."""
 
-    _ensure_crm(args.domain)
+    runtime = dataset_domain(args.domain)
     progress = ProgressReporter()
-    progress.report("Validating CRM configuration and schema")
-    validate_crm_config()
-    applier = CRMDistributionApplier.for_profile(args.profile, progress=progress)
+    progress.report(f"Validating {runtime.display_name} configuration and schema")
+    runtime.validate_config()
+    applier = runtime.distribution_applier.for_profile(
+        args.profile,
+        progress=progress,
+    )
     tables = applier.generate_distributed_tables()
 
-    print("Applied CRM statistical distributions")
+    print(f"Applied {runtime.display_name} statistical distributions")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print("tables:")
@@ -111,24 +130,27 @@ def run_apply_distributions(args: argparse.Namespace) -> None:
         table = tables[table_name]
         print(f"  {table_name}: rows={len(table)} columns={len(table.columns)}")
 
-    _print_distribution_summary(tables)
-    _print_relationship_summary(tables)
+    runtime.print_distribution_summary(tables)
+    runtime.print_relationship_summary(tables)
 
     if args.write_preview:
-        _write_preview_tables(args.profile, tables, stage="distributed")
+        _write_preview_tables(args.domain, args.profile, tables, stage="distributed")
 
 
 def run_apply_imperfections(args: argparse.Namespace) -> None:
-    """Generate CRM distributed tables, inject imperfections, and print checks."""
+    """Generate distributed tables, inject imperfections, and print checks."""
 
-    _ensure_crm(args.domain)
+    runtime = dataset_domain(args.domain)
     progress = ProgressReporter()
-    progress.report("Validating CRM configuration and schema")
-    validate_crm_config()
-    injector = CRMImperfectionInjector.for_profile(args.profile, progress=progress)
+    progress.report(f"Validating {runtime.display_name} configuration and schema")
+    runtime.validate_config()
+    injector = runtime.imperfection_injector.for_profile(
+        args.profile,
+        progress=progress,
+    )
     tables = injector.generate_imperfect_tables()
 
-    print("Injected CRM controlled imperfections")
+    print(f"Injected {runtime.display_name} controlled imperfections")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print("tables:")
@@ -136,19 +158,19 @@ def run_apply_imperfections(args: argparse.Namespace) -> None:
         table = tables[table_name]
         print(f"  {table_name}: rows={len(table)} columns={len(table.columns)}")
 
-    _print_imperfection_summary(tables, injector)
-    _print_relationship_summary(tables)
+    runtime.print_imperfection_summary(tables, injector)
+    runtime.print_relationship_summary(tables)
 
     if args.write_preview:
-        _write_preview_tables(args.profile, tables, stage="imperfect")
+        _write_preview_tables(args.domain, args.profile, tables, stage="imperfect")
 
 
 def run_validate_relations(args: argparse.Namespace) -> None:
-    """Validate CRM relational integrity after imperfections."""
+    """Validate domain relational integrity after imperfections."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    validator = CRMRelationalValidator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    validator = runtime.relational_validator.for_profile(args.profile)
     results = validator.generate_and_validate()
     failures = [result for result in results if not result.passed]
 
@@ -167,16 +189,16 @@ def run_validate_relations(args: argparse.Namespace) -> None:
 
 
 def run_export_csvs(args: argparse.Namespace) -> None:
-    """Export full-profile CRM release CSVs."""
+    """Export release CSVs for a dataset domain."""
 
-    _ensure_crm(args.domain)
+    runtime = dataset_domain(args.domain)
     progress = ProgressReporter()
-    progress.report("Validating CRM configuration and schema")
-    validate_crm_config()
-    exporter = CRMCSVExporter.for_profile(args.profile, progress=progress)
+    progress.report(f"Validating {runtime.display_name} configuration and schema")
+    runtime.validate_config()
+    exporter = runtime.csv_exporter.for_profile(args.profile, progress=progress)
     results = exporter.export_full_profile_csvs()
 
-    print("Exported CRM full-profile CSVs")
+    print(f"Exported {runtime.display_name} release CSVs")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print(f"output_dir: {exporter.output_dir}")
@@ -188,11 +210,11 @@ def run_export_csvs(args: argparse.Namespace) -> None:
 
 
 def run_validate_row_caps(args: argparse.Namespace) -> None:
-    """Validate CRM row counts against the per-table hard cap."""
+    """Validate domain row counts against the per-table hard cap."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    validator = CRMRowCapValidator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    validator = runtime.row_cap_validator.for_profile(args.profile)
     if args.generated:
         results = validator.generate_and_validate()
         source = "generated"
@@ -220,11 +242,11 @@ def run_validate_row_caps(args: argparse.Namespace) -> None:
 
 
 def run_validate_fk(args: argparse.Namespace) -> None:
-    """Validate CRM CSV foreign-key integrity through DuckDB constraints."""
+    """Validate domain CSV foreign-key integrity through DuckDB."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    validator = CRMDuckDBFKValidator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    validator = runtime.fk_validator.for_profile(args.profile)
     if args.generated:
         results = validator.generate_and_validate()
         source = "generated temporary CSVs"
@@ -249,11 +271,11 @@ def run_validate_fk(args: argparse.Namespace) -> None:
 
 
 def run_validate_join_paths(args: argparse.Namespace) -> None:
-    """Validate CRM join paths required by the golden dataset plan."""
+    """Validate domain join paths required by the golden dataset plan."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    validator = CRMJoinPathValidator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    validator = runtime.join_path_validator.for_profile(args.profile)
     if args.generated:
         results = validator.generate_and_validate()
         source = "generated temporary CSVs"
@@ -278,11 +300,11 @@ def run_validate_join_paths(args: argparse.Namespace) -> None:
 
 
 def run_validate_imperfection_rates(args: argparse.Namespace) -> None:
-    """Validate CRM controlled imperfection rates."""
+    """Validate domain controlled imperfection rates."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    validator = CRMImperfectionRateValidator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    validator = runtime.imperfection_rate_validator.for_profile(args.profile)
     if args.generated:
         results = validator.generate_and_validate()
         source = "generated"
@@ -307,14 +329,14 @@ def run_validate_imperfection_rates(args: argparse.Namespace) -> None:
 
 
 def run_compute_sha256(args: argparse.Namespace) -> None:
-    """Compute SHA-256 hashes for exported CRM release CSVs."""
+    """Compute SHA-256 hashes for exported domain release CSVs."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    computer = CRMHashComputer.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    computer = runtime.hash_computer.for_profile(args.profile)
     hashes = computer.compute_exported_csv_hashes()
 
-    print("Computed CRM release CSV SHA-256 hashes")
+    print(f"Computed {runtime.display_name} release CSV SHA-256 hashes")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print(f"output_dir: {computer.settings.output_path}")
@@ -326,53 +348,53 @@ def run_compute_sha256(args: argparse.Namespace) -> None:
 
 
 def run_generate_manifest(args: argparse.Namespace) -> None:
-    """Generate CRM release manifest.json."""
+    """Generate a domain release manifest.json."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    generator = CRMManifestGenerator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    generator = runtime.manifest_generator.for_profile(args.profile)
     manifest_path = generator.write_manifest()
 
-    print("Generated CRM release manifest")
+    print(f"Generated {runtime.display_name} release manifest")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print(f"path: {manifest_path}")
 
 
 def run_generate_data_dictionary(args: argparse.Namespace) -> None:
-    """Generate CRM release data dictionary."""
+    """Generate a domain release data dictionary."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    generator = CRMDataDictionaryGenerator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    generator = runtime.data_dictionary_generator.for_profile(args.profile)
     output_path = generator.write_release_dictionary()
 
-    print("Generated CRM release data dictionary")
+    print(f"Generated {runtime.display_name} release data dictionary")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print(f"path: {output_path}")
 
 
 def run_generate_schema_sql(args: argparse.Namespace) -> None:
-    """Generate CRM release schema.sql."""
+    """Generate a domain release schema.sql."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    generator = CRMSchemaSQLGenerator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    generator = runtime.schema_sql_generator.for_profile(args.profile)
     output_path = generator.write_release_schema()
 
-    print("Generated CRM release schema SQL")
+    print(f"Generated {runtime.display_name} release schema SQL")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
     print(f"path: {output_path}")
 
 
 def run_validate_reproducibility(args: argparse.Namespace) -> None:
-    """Validate CRM release CSV reproducibility."""
+    """Validate domain release CSV reproducibility."""
 
-    _ensure_crm(args.domain)
-    validate_crm_config()
-    validator = CRMReproducibilityValidator.for_profile(args.profile)
+    runtime = dataset_domain(args.domain)
+    runtime.validate_config()
+    validator = runtime.reproducibility_validator.for_profile(args.profile)
     results = validator.validate_release()
 
     failures = [result for result in results if not result.passed]
@@ -425,11 +447,17 @@ def run_qa_generate_rephrases(args: argparse.Namespace) -> None:
     generate_rephrases(args.profile)
 
 
-def _write_preview_tables(profile: str, tables: dict[str, Any], stage: str) -> None:
+def _write_preview_tables(
+    domain: str,
+    profile: str,
+    tables: dict[str, Any],
+    stage: str,
+) -> None:
     if profile == "full":
         raise ValueError("--write-preview is only allowed for non-release profiles")
 
-    output_dir = Path("tmp") / "generated" / "crm" / profile / stage
+    settings = dataset_domain(domain).settings_for_profile(profile)
+    output_dir = settings.output_path / stage
     output_dir.mkdir(parents=True, exist_ok=True)
     for table_name, table in tables.items():
         output_path = output_dir / f"{table_name}.csv"
@@ -437,170 +465,10 @@ def _write_preview_tables(profile: str, tables: dict[str, Any], stage: str) -> N
         print(f"preview_written: {output_path}")
 
 
-def _print_relationship_summary(tables: dict[str, Any]) -> None:
-    accounts = tables["accounts"]
-    contacts = tables["contacts"]
-    campaigns = tables["campaigns"]
-    contact_campaigns = tables["contact_campaigns"]
-    interactions = tables["interactions"]
-    support_cases = tables["support_cases"]
-
-    account_ids = set(accounts["account_id"].tolist())
-    contact_ids = set(contacts["contact_id"].tolist())
-    campaign_ids = set(campaigns["campaign_id"].tolist())
-    membership_pairs = set(
-        zip(
-            contact_campaigns["contact_id"],
-            contact_campaigns["campaign_id"],
-            strict=True,
-        )
-    )
-    attributed_interactions = interactions[interactions["campaign_id"] != ""]
-    contact_accounts = dict(
-        zip(contacts["contact_id"], contacts["account_id"], strict=True)
-    )
-    contacts_with_multiple_campaigns = int(
-        contact_campaigns.groupby("contact_id")["campaign_id"].nunique().ge(2).sum()
-    )
-    campaigns_with_multiple_contacts = int(
-        contact_campaigns.groupby("campaign_id")["contact_id"].nunique().ge(2).sum()
-    )
-    interaction_accounts_consistent = all(
-        row.account_id == "" or row.account_id == contact_accounts[row.contact_id]
-        for row in interactions.itertuples(index=False)
-    )
-    case_contacts_consistent = all(
-        row.contact_id == "" or contact_accounts[row.contact_id] == row.account_id
-        for row in support_cases.itertuples(index=False)
-    )
-
-    print("relationship_checks:")
-    print(
-        "  contacts.account_id valid: "
-        f"{_non_empty_values(contacts['account_id']).issubset(account_ids)}"
-    )
-    print(
-        "  contact_campaigns.contact_id valid: "
-        f"{set(contact_campaigns['contact_id']).issubset(contact_ids)}"
-    )
-    print(
-        "  contact_campaigns.campaign_id valid: "
-        f"{set(contact_campaigns['campaign_id']).issubset(campaign_ids)}"
-    )
-    print(f"  contacts_with_multiple_campaigns: {contacts_with_multiple_campaigns}")
-    print(f"  campaigns_with_multiple_contacts: {campaigns_with_multiple_contacts}")
-    print(
-        "  interactions.contact_id valid: "
-        f"{set(interactions['contact_id']).issubset(contact_ids)}"
-    )
-    print(
-        "  interactions.campaign_id valid: "
-        f"{_non_empty_values(interactions['campaign_id']).issubset(campaign_ids)}"
-    )
-    print(
-        "  interactions.account_id valid: "
-        f"{_non_empty_values(interactions['account_id']).issubset(account_ids)}"
-    )
-    print(
-        f"  interaction contact/account consistent: {interaction_accounts_consistent}"
-    )
-    print(
-        "  attributed interactions have membership: "
-        f"{all((row.contact_id, row.campaign_id) in membership_pairs for row in attributed_interactions.itertuples(index=False))}"
-    )
-    print(
-        "  support_cases.account_id valid: "
-        f"{set(support_cases['account_id']).issubset(account_ids)}"
-    )
-    print(
-        "  support_cases.contact_id valid: "
-        f"{_non_empty_values(support_cases['contact_id']).issubset(contact_ids)}"
-    )
-    print(f"  support-case contact/account consistent: {case_contacts_consistent}")
-
-
-def _print_distribution_summary(tables: dict[str, Any]) -> None:
-    campaigns = tables["campaigns"]
-    interactions = tables["interactions"]
-    support_cases = tables["support_cases"]
-
-    campaign_budgets = campaigns.loc[
-        campaigns["budget_amount"].astype(str).ne(""), "budget_amount"
-    ].astype(float)
-    print("distribution_checks:")
-    print(f"  campaign_budget_min: {campaign_budgets.min():.2f}")
-    print(f"  campaign_budget_max: {campaign_budgets.max():.2f}")
-    print(f"  campaign_budget_mean: {campaign_budgets.mean():.2f}")
-    print(f"  interaction_contacts: {interactions['contact_id'].nunique()}")
-    engagement_points = interactions["engagement_points"].astype(int)
-    print(f"  engagement_points_min: {engagement_points.min()}")
-    print(f"  engagement_points_max: {engagement_points.max()}")
-    print(f"  engagement_points_mean: {engagement_points.mean():.2f}")
-    print(
-        "  attributed_interaction_campaigns: "
-        f"{interactions.loc[interactions['campaign_id'].astype(str).ne(''), 'campaign_id'].nunique()}"
-    )
-    print("  organic_interactions: " f"{_empty_count(interactions['campaign_id'])}")
-    print(f"  support_case_open_dates: {support_cases['opened_at'].nunique()}")
-    unresolved_cases = support_cases[support_cases["resolved_at"].astype(str).eq("")]
-    resolved_cases = support_cases[support_cases["resolved_at"].astype(str).ne("")]
-    sla_met = int(
-        resolved_cases["resolved_at"]
-        .astype(str)
-        .le(resolved_cases["sla_due_at"].astype(str))
-        .sum()
-    )
-    print(f"  support_cases_total: {len(support_cases)}")
-    print(f"  support_cases_unresolved: {len(unresolved_cases)}")
-    print(f"  resolved_cases_within_sla: {sla_met}/{len(resolved_cases)}")
-
-
-def _print_imperfection_summary(
-    tables: dict[str, Any],
-    injector: CRMImperfectionInjector,
-) -> None:
-    contacts = tables["contacts"]
-    contact_campaigns = tables["contact_campaigns"]
-    interactions = tables["interactions"]
-    support_cases = tables["support_cases"]
-
-    print("imperfection_checks:")
-    duplicate_rows = len(contacts) - injector.generator.row_count("contacts")
-    outlier_target = injector.crm_config["imperfection_targets"][
-        "engagement_point_outliers"
-    ]
-    outlier_minimum = int(outlier_target["minimum_value"])
-    expected_boundaries = {
-        f"{value}T00:00:00" for value in injector.config["boundary_dates"]
-    }
-
-    print(f"  contact_near_duplicates: {duplicate_rows}")
-    print(
-        "  contact_campaigns.attribution_weight_empty: "
-        f"{_empty_count(contact_campaigns['attribution_weight'])}"
-    )
-    print(
-        f"  engagement_point_outliers_ge_{outlier_minimum}: "
-        f"{int((interactions['engagement_points'].astype(int) >= outlier_minimum).sum())}"
-    )
-    print(
-        "  support_case_boundary_openings: "
-        f"{int(support_cases['opened_at'].astype(str).isin(expected_boundaries).sum())}"
-    )
-
-
-def _empty_count(values: Any) -> int:
-    return int((values.astype(str) == "").sum())
-
-
-def _non_empty_values(values: Any) -> set[Any]:
-    return {value for value in values.tolist() if str(value) != ""}
-
-
 def _ensure_crm(domain: str) -> None:
     if domain != "crm":
         raise NotImplementedError(
-            f"Only crm is implemented for generation; got {domain}"
+            f"Q&A commands currently support only crm; got {domain}"
         )
 
 
@@ -623,6 +491,7 @@ def _ensure_crm(domain: str) -> None:
 COMMANDS: dict[str, CommandHandler] = {
     "validate-config": run_validate_config,
     "show-config": run_show_config,
+    "build-dataset": run_build_dataset,
     "generate-base": run_generate_base,
     "apply-distributions": run_apply_distributions,
     "apply-imperfections": run_apply_imperfections,
@@ -659,7 +528,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--domain",
         default="crm",
-        help="Domain to use. Defaults to crm.",
+        help=(
+            "Dataset domain to use. Supported dataset domains: "
+            f"{', '.join(sorted(DATASET_DOMAINS))}. Defaults to crm."
+        ),
     )
     parser.add_argument(
         "--profile",
@@ -670,7 +542,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--write-preview",
         action="store_true",
-        help="Write generated base CSV previews for non-release profiles.",
+        help="Write generated stage CSV previews for non-release profiles.",
     )
     validation_source = parser.add_mutually_exclusive_group()
     validation_source.add_argument(

@@ -1,10 +1,14 @@
--- Sales DDL - Draft v0.1
+-- Sales DDL - Contract v1.0
 --
 -- Conformance: ANSI SQL, intended to lint clean under
 -- `sqlfluff lint --dialect ansi`.
 -- Runs unmodified in DuckDB 0.10+.
 --
 -- Source ERD: schemas/sales/sales_er.dbml
+-- CSV contract: schemas/sales/sales_csv_header_spec.md
+--
+-- Currency policy: Sales is USD-only. Mixed-currency aggregation and FX
+-- conversion belong to the Finance domain.
 --
 -- NOT-NULL rules: never nullify a PK or INNER-JOIN FK.
 -- INNER-JOIN FKs: deals.lead_id, quotations.deal_id,
@@ -41,7 +45,7 @@ CREATE TABLE deals (
     rep_name VARCHAR(255) NOT NULL,
     stage VARCHAR(32) NOT NULL, -- noqa: RF04
     deal_amount DECIMAL(15, 2) NOT NULL,
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD' CHECK (currency_code = 'USD'),
     close_date DATE,
     expected_close_date DATE,
     created_at TIMESTAMP NOT NULL,
@@ -56,7 +60,7 @@ CREATE TABLE products (
     product_name VARCHAR(255) NOT NULL,
     category VARCHAR(64),
     list_price DECIMAL(15, 2),
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD' CHECK (currency_code = 'USD'),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_products PRIMARY KEY (product_id)
@@ -87,7 +91,7 @@ CREATE TABLE targets (
     period_start DATE NOT NULL,
     period_end DATE NOT NULL,
     quota_amount DECIMAL(15, 2) NOT NULL,
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD' CHECK (currency_code = 'USD'),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_targets PRIMARY KEY (target_id)
 );

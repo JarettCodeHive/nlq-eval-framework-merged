@@ -1,0 +1,416 @@
+{
+  "tables": {
+    "leads": {
+      "primary_key": "lead_id",
+      "role": "dimension",
+      "row_targets": {
+        "dev": 150,
+        "full": 15000
+      },
+      "fields": [
+        {
+          "name": "lead_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "lead_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "deterministic_faker_name"
+        },
+        {
+          "name": "company_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "normalized_faker_company"
+        },
+        {
+          "name": "lead_source",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.lead_sources"
+        },
+        {
+          "name": "lead_status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.lead_statuses"
+        },
+        {
+          "name": "rep_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "generation_rules.representatives.pool_sizes"
+        },
+        {
+          "name": "territory",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "domain_values.territories"
+        },
+        {
+          "name": "score",
+          "type": "integer",
+          "nullable": true,
+          "synthetic_source": "generation_rules.leads.score"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "deals": {
+      "primary_key": "deal_id",
+      "role": "transaction_dimension",
+      "row_targets": {
+        "dev": 50,
+        "full": 5000
+      },
+      "fields": [
+        {
+          "name": "deal_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "lead_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "leads",
+            "field": "lead_id"
+          }
+        },
+        {
+          "name": "deal_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "synthetic_deal_name"
+        },
+        {
+          "name": "rep_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "source_lead.rep_name"
+        },
+        {
+          "name": "stage",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.deal_stages"
+        },
+        {
+          "name": "deal_amount",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": false,
+          "synthetic_source": "distributions.deal_amount",
+          "distribution": "pareto",
+          "imperfection_target": "fixed_scale_outlier"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "fixed_usd"
+        },
+        {
+          "name": "close_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "stage_aware_close_date",
+          "null_semantics": "Open deal without an actual close date."
+        },
+        {
+          "name": "expected_close_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "deterministic_expected_close_date"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "products": {
+      "primary_key": "product_id",
+      "role": "reference",
+      "row_targets": {
+        "dev": 50,
+        "full": 500
+      },
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "sku",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "synthetic_source": "deterministic_sku"
+        },
+        {
+          "name": "product_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "synthetic_product_name"
+        },
+        {
+          "name": "category",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "domain_values.product_categories"
+        },
+        {
+          "name": "list_price",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "generation_rules.products.list_price",
+          "imperfection_target": "controlled_null"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "fixed_usd"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "generation_rules.products.active_probability"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp",
+          "imperfection_target": "boundary_timestamp"
+        }
+      ]
+    },
+    "quotations": {
+      "primary_key": "quotation_id",
+      "role": "fact_junction",
+      "row_targets": {
+        "dev": 300,
+        "full": 30000
+      },
+      "fields": [
+        {
+          "name": "quotation_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "deal_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "deals",
+            "field": "deal_id"
+          }
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "products",
+            "field": "product_id"
+          }
+        },
+        {
+          "name": "quote_number",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "synthetic_source": "deterministic_quote_number"
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false,
+          "synthetic_source": "generation_rules.quotations.quantity"
+        },
+        {
+          "name": "unit_price",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": false,
+          "synthetic_source": "product_list_price_adjustment"
+        },
+        {
+          "name": "discount_pct",
+          "type": "decimal",
+          "precision": 5,
+          "scale": 2,
+          "nullable": false,
+          "default": 0,
+          "synthetic_source": "generation_rules.quotations.discount_pct"
+        },
+        {
+          "name": "quote_status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.quote_statuses"
+        },
+        {
+          "name": "quoted_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "targets": {
+      "primary_key": "target_id",
+      "role": "reference",
+      "row_targets": {
+        "dev": 40,
+        "full": 400
+      },
+      "fields": [
+        {
+          "name": "target_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "rep_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "generation_rules.representatives.pool_sizes"
+        },
+        {
+          "name": "territory",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "representative_territory"
+        },
+        {
+          "name": "period_start",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.targets.periods"
+        },
+        {
+          "name": "period_end",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.targets.periods"
+        },
+        {
+          "name": "quota_amount",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": false,
+          "synthetic_source": "distributions.quota_amount",
+          "distribution": "pareto"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "fixed_usd"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "leads",
+      "parent_field": "lead_id",
+      "child_table": "deals",
+      "child_field": "lead_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "deals",
+      "parent_field": "deal_id",
+      "child_table": "quotations",
+      "child_field": "deal_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "products",
+      "parent_field": "product_id",
+      "child_table": "quotations",
+      "child_field": "product_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "analytical",
+      "parent_table": "targets",
+      "parent_field": "rep_name",
+      "child_table": "deals",
+      "child_field": "rep_name",
+      "cardinality": "N:N temporal",
+      "join_type": "left",
+      "additional_condition": "deals.close_date >= targets.period_start AND deals.close_date < targets.period_end",
+      "enforced_as_foreign_key": false
+    }
+  ]
+}

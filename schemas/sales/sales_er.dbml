@@ -3,7 +3,7 @@
 // Paste directly into https://dbdiagram.io/
 // ============================================================
 //
-// STATUS: Draft v0.1
+// STATUS: Contract v1.0 - implementation-frozen, pending external sign-off.
 //
 // Source alignment:
 //   v3 execution scope locks Sales to:
@@ -47,18 +47,22 @@
 //   deals and products. It uses a surrogate quotation_id because duplicate
 //   deal-line imperfections are intentionally represented as rows, not collapsed
 //   by a composite deal_id/product_id key.
+//
+// Currency policy:
+//   Sales is USD-only. Every currency_code value must be USD. Mixed-currency
+//   aggregation and FX conversion belong to the Finance domain.
 
 // ------------------------------------------------------------
 // LEADS
 // ------------------------------------------------------------
 Table leads {
   lead_id integer [pk, not null, note: 'Unique lead ID']
-  lead_name varchar [not null, note: 'Synthetic lead or prospect name']
-  company_name varchar [not null, note: 'Synthetic prospect company name; not a CRM account dimension']
-  lead_source varchar [not null, note: 'enum: WebForm | Referral | EventBooth | ColdCall | Inbound']
-  lead_status varchar [not null, note: 'enum: New | Contacted | Qualified | Disqualified | Converted']
-  rep_name varchar [not null, note: 'Owner rep; joins analytically to targets.rep_name for quota questions']
-  territory varchar [note: 'Sales territory for GROUP BY and filter questions']
+  lead_name varchar(255) [not null, note: 'Synthetic lead or prospect name']
+  company_name varchar(255) [not null, note: 'Synthetic prospect company name; not a CRM account dimension']
+  lead_source varchar(32) [not null, note: 'enum: WebForm | Referral | EventBooth | ColdCall | Inbound']
+  lead_status varchar(32) [not null, note: 'enum: New | Contacted | Qualified | Disqualified | Converted']
+  rep_name varchar(255) [not null, note: 'Owner rep; joins analytically to targets.rep_name for quota questions']
+  territory varchar(64) [note: 'Sales territory for GROUP BY and filter questions']
   score integer [note: '0-100 lead score; nullable if selected for NULL injection']
   created_at timestamp [not null]
 
@@ -71,11 +75,11 @@ Table leads {
 Table deals {
   deal_id integer [pk, not null, note: 'Unique deal ID']
   lead_id integer [not null, ref: > leads.lead_id, note: 'INNER JOIN path - NOT NULL']
-  deal_name varchar [not null]
-  rep_name varchar [not null, note: 'Analytical string key to targets.rep_name for quota attainment']
-  stage varchar [not null, note: 'enum: Prospecting | Negotiation | Won | Lost']
+  deal_name varchar(255) [not null]
+  rep_name varchar(255) [not null, note: 'Analytical string key to targets.rep_name for quota attainment']
+  stage varchar(32) [not null, note: 'enum: Prospecting | Negotiation | Won | Lost']
   deal_amount decimal(15, 2) [not null, note: 'Revenue/sales amount; Pareto alpha=1.16 for sales-amount questions']
-  currency_code char(3) [not null, default: 'USD']
+  currency_code char(3) [not null, default: 'USD', note: 'Fixed value: USD']
   close_date date [note: 'Nullable; used with target periods and LEFT JOIN / NULL-handling questions']
   expected_close_date date
   created_at timestamp [not null]
@@ -88,11 +92,11 @@ Table deals {
 // ------------------------------------------------------------
 Table products {
   product_id integer [pk, not null, note: 'Unique product ID']
-  sku varchar [not null, note: 'Synthetic stock keeping unit']
-  product_name varchar [not null]
-  category varchar [note: 'enum: Software | Hardware | Services | Subscription']
+  sku varchar(64) [not null, note: 'Synthetic stock keeping unit']
+  product_name varchar(255) [not null]
+  category varchar(64) [note: 'enum: Software | Hardware | Services | Subscription']
   list_price decimal(15, 2) [note: 'Nullable; domain imperfection focus: missing product prices']
-  currency_code char(3) [not null, default: 'USD']
+  currency_code char(3) [not null, default: 'USD', note: 'Fixed value: USD']
   is_active boolean [not null, default: true]
   created_at timestamp [not null]
 
@@ -106,11 +110,11 @@ Table quotations {
   quotation_id integer [pk, not null, note: 'Unique quotation line ID']
   deal_id integer [not null, ref: > deals.deal_id, note: 'INNER JOIN path - NOT NULL']
   product_id integer [not null, ref: > products.product_id, note: 'INNER JOIN path - NOT NULL']
-  quote_number varchar [not null, note: 'Synthetic business quote number; multiple line rows may share a quote_number']
+  quote_number varchar(64) [not null, note: 'Synthetic business quote number; multiple line rows may share a quote_number']
   quantity integer [not null]
   unit_price decimal(15, 2) [not null, note: 'Captured quote-time price; insulated from products.list_price NULLs']
   discount_pct decimal(5, 2) [not null, default: 0]
-  quote_status varchar [not null, note: 'enum: Draft | Sent | Accepted | Rejected | Expired']
+  quote_status varchar(32) [not null, note: 'enum: Draft | Sent | Accepted | Rejected | Expired']
   quoted_at timestamp [not null]
   created_at timestamp [not null]
 
@@ -122,12 +126,12 @@ Table quotations {
 // ------------------------------------------------------------
 Table targets {
   target_id integer [pk, not null, note: 'Unique sales target ID']
-  rep_name varchar [not null, note: 'Analytical string key to deals.rep_name']
-  territory varchar [note: 'Sales territory for quota segmentation']
+  rep_name varchar(255) [not null, note: 'Analytical string key to deals.rep_name']
+  territory varchar(64) [note: 'Sales territory for quota segmentation']
   period_start date [not null]
   period_end date [not null]
   quota_amount decimal(15, 2) [not null, note: 'Target quota amount; sales amount distribution can use Pareto alpha=1.16']
-  currency_code char(3) [not null, default: 'USD']
+  currency_code char(3) [not null, default: 'USD', note: 'Fixed value: USD']
   created_at timestamp [not null]
 
   Note: 'Reference - target 400 rows, approximately 50 reps by 8 quarters. Targets are linked to deals by rep_name and date range, not by a strict FK, because each rep has multiple quota periods.'
@@ -140,6 +144,7 @@ Table targets {
 //   deals.rep_name = targets.rep_name
 //   AND deals.close_date >= targets.period_start
 //   AND deals.close_date < targets.period_end
-// The visual link below captures the rep-name relationship only; validation and
-// query generation must also apply the period predicate.
-Ref: deals.rep_name > targets.rep_name
+// No Ref is drawn for this relationship because it is not a foreign key and
+// neither rep_name column is unique. Drawing a DBML Ref would falsely imply a
+// physical cardinality that omits the required period predicate. Validation
+// and query generation must enforce the complete analytical join above.

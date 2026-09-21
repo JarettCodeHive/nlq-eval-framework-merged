@@ -3,7 +3,7 @@
 Sources of truth:
 
 - Shared rates: `config/generation/base.json`
-- CRM targets: `config/generation/crm.json:imperfection_targets`
+- CRM targets: `config/generation/crm/generation.json:imperfection_targets`
 - Implementation: `generators/crm/imperfection_rates.py`
 
 ## Exact Checks

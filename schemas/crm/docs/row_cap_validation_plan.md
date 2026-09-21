@@ -3,7 +3,7 @@
 Sources of truth:
 
 - Cap: `config/generation/base.json:max_rows_per_table`
-- Row targets: `config/generation/crm.json`
+- Row targets: `config/generation/crm/schema.json`
 - Duplicate rate: `config/generation/base.json:imperfections.duplicate_pct`
 
 The hard cap is 250,000 rows per table. Expected and actual counts include the

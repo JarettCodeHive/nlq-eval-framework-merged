@@ -3,7 +3,7 @@
 Source of truth:
 
 - Exported CSV path: `release/crm/dataset-v1.0.0/`
-- Table order: `config/generation/crm.json`
+- Table order: `config/generation/crm/release.json`
 - CSV format contract: `config/generation/base.json`
 
 This document describes release hashing under Step 18 of

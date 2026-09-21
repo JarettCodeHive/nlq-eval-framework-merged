@@ -4,7 +4,9 @@ Sources of truth:
 
 - DDL: `schemas/crm/crm_ddl.sql`
 - Join contract: `schemas/crm/docs/01_join_path_requirements.md`
-- Generation config: `config/generation/crm.json`
+- Config entry point: `config/generation/crm.json`
+- Schema and relationships: `config/generation/crm/schema.json`
+- Consistency rules: `config/generation/crm/validation.json`
 
 Relational validation runs after imperfection injection and before export.
 

@@ -145,7 +145,15 @@ class CRMDuckDBFKValidator:
     def validate_exported_csvs(self) -> list[IntegrityCheckResult]:
         """Validate CSVs already exported to the configured output path."""
 
-        return self._validate_csv_paths(self._csv_paths(self.settings.output_path))
+        return self.validate_csv_directory(self.settings.output_path)
+
+    def validate_csv_directory(
+        self,
+        directory: Path,
+    ) -> list[IntegrityCheckResult]:
+        """Validate a complete persisted CRM CSV directory."""
+
+        return self._validate_csv_paths(self._csv_paths(directory))
 
     def generate_and_validate(self) -> list[IntegrityCheckResult]:
         """Generate imperfect CRM tables and validate temporary CSV exports."""

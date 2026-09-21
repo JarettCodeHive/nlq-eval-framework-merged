@@ -3,7 +3,8 @@
 Sources of truth:
 
 - CSV format: `config/generation/base.json`
-- Output path and table order: `config/generation/crm.json`
+- Output path and table order: `config/generation/crm/release.json`
+- Table and header order: `config/generation/crm/schema.json`
 - DDL and headers: `schemas/crm/`
 
 The full-profile export regenerates base data, distributions, and
