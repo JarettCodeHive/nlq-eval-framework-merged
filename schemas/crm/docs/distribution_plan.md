@@ -4,7 +4,8 @@ Sources of truth:
 
 - Reusable presets: `config/generation/base.json:distribution_defaults`
 - CRM preset selections, overrides, targets, and mappings:
-  `config/generation/crm.json`
+  `config/generation/crm/generation.json`
+- Logical CRM config entry point: `config/generation/crm.json`
 - Effective runtime parameters: `GenerationSettings.distributions`
 - Canonical DDL: `schemas/crm/crm_ddl.sql`
 

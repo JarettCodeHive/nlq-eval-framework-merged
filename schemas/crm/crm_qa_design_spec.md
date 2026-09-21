@@ -7,7 +7,9 @@ Source of truth:
 - ERD: `schemas/crm/crm_er.dbml`
 - DDL: `schemas/crm/crm_ddl.sql`
 - CSV header spec: `schemas/crm/crm_csv_header_spec.md`
-- Generation config: `config/generation/crm.json`
+- Generation config entry point: `config/generation/crm.json`
+- Schema and relationships: `config/generation/crm/schema.json`
+- Join paths and consistency rules: `config/generation/crm/validation.json`
 
 Purpose:
 

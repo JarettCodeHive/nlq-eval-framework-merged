@@ -1,0 +1,10 @@
+{
+  "config_schema_version": "1.0",
+  "domain": "finance",
+  "components": {
+    "release": "finance/release.json",
+    "schema": "finance/schema.json",
+    "generation": "finance/generation.json",
+    "validation": "finance/validation.json"
+  }
+}

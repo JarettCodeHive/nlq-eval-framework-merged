@@ -1,0 +1,268 @@
+{
+  "domain_values": {
+    "lead_sources": [
+      "WebForm",
+      "Referral",
+      "EventBooth",
+      "ColdCall",
+      "Inbound"
+    ],
+    "lead_statuses": [
+      "New",
+      "Contacted",
+      "Qualified",
+      "Disqualified",
+      "Converted"
+    ],
+    "territories": [
+      "North",
+      "South",
+      "East",
+      "West",
+      "Central"
+    ],
+    "deal_stages": [
+      "Prospecting",
+      "Negotiation",
+      "Won",
+      "Lost"
+    ],
+    "product_categories": [
+      "Software",
+      "Hardware",
+      "Services",
+      "Subscription"
+    ],
+    "quote_statuses": [
+      "Draft",
+      "Sent",
+      "Accepted",
+      "Rejected",
+      "Expired"
+    ]
+  },
+  "generation_rules": {
+    "date_windows": {
+      "entity_created_start": "2022-01-01",
+      "deal_activity_start": "2023-01-01",
+      "quotation_activity_start": "2023-01-01",
+      "target_period_start": "2024-01-01"
+    },
+    "representatives": {
+      "pool_sizes": {
+        "dev": 10,
+        "full": 50
+      },
+      "name_source": "deterministic_faker_name",
+      "territory_assignment": "one_fixed_territory_per_representative"
+    },
+    "leads": {
+      "score": {
+        "minimum": 0,
+        "maximum": 100
+      },
+      "status_weights": {
+        "New": 0.22,
+        "Contacted": 0.2,
+        "Qualified": 0.18,
+        "Disqualified": 0.12,
+        "Converted": 0.28
+      },
+      "required_status_coverage": [
+        "New",
+        "Qualified",
+        "Converted"
+      ]
+    },
+    "deals": {
+      "stage_weights": {
+        "Prospecting": 0.25,
+        "Negotiation": 0.25,
+        "Won": 0.32,
+        "Lost": 0.18
+      },
+      "required_stage_coverage": [
+        "Prospecting",
+        "Negotiation",
+        "Won",
+        "Lost"
+      ],
+      "open_stages": [
+        "Prospecting",
+        "Negotiation"
+      ],
+      "closed_stages": [
+        "Won",
+        "Lost"
+      ],
+      "expected_close_offset_days": {
+        "minimum": 14,
+        "maximum": 180
+      },
+      "closed_date_lag_days": {
+        "minimum": 1,
+        "maximum": 365
+      }
+    },
+    "products": {
+      "list_price": {
+        "minimum_amount": 100,
+        "maximum_amount": 250000,
+        "scale": 2
+      },
+      "active_probability": 0.9
+    },
+    "quotations": {
+      "quantity": {
+        "minimum": 1,
+        "maximum": 25
+      },
+      "discount_pct": {
+        "minimum": 0,
+        "maximum": 35,
+        "scale": 2
+      },
+      "unit_price_adjustment_pct": {
+        "minimum": -10,
+        "maximum": 15
+      },
+      "quote_number_group_size": {
+        "minimum": 1,
+        "maximum": 5
+      },
+      "created_to_quoted_lag_days": {
+        "minimum": 0,
+        "maximum": 30
+      }
+    },
+    "targets": {
+      "periods_per_representative": {
+        "dev": 4,
+        "full": 8
+      },
+      "period_months": 3,
+      "start_inclusive": true,
+      "end_exclusive": true,
+      "creation_lead_days": {
+        "minimum": 1,
+        "maximum": 60
+      }
+    }
+  },
+  "business_mappings": {
+    "currency_code": "USD",
+    "quota_attainment": {
+      "attained_stage": "Won",
+      "amount_field": "deals.deal_amount",
+      "representative_condition": "deals.rep_name = targets.rep_name",
+      "period_start_condition": "deals.close_date >= targets.period_start",
+      "period_end_condition": "deals.close_date < targets.period_end",
+      "period_boundary": "start_inclusive_end_exclusive"
+    },
+    "lead_conversion": {
+      "deal_bearing_status": "Converted",
+      "source_field": "deals.lead_id"
+    },
+    "quotation_currency": {
+      "unit_price_currency": "USD",
+      "source_policy": "Sales dataset USD-only policy"
+    },
+    "quotation_many_to_many": {
+      "bridge_table": "quotations",
+      "left_entity": "deals",
+      "right_entity": "products",
+      "require_multi_product_deal": true,
+      "require_multi_deal_product": true
+    }
+  },
+  "distributions": {
+    "deal_amount": {
+      "preset": "pareto_amount"
+    },
+    "quotation_frequency": {
+      "preset": "poisson_frequency",
+      "lambda": 6.0
+    },
+    "date_clustering": {
+      "preset": "gaussian_mixture_dates"
+    },
+    "quota_amount": {
+      "preset": "pareto_amount",
+      "alpha": 1.35,
+      "min_amount": 100000,
+      "max_amount": 5000000,
+      "scale": 2
+    }
+  },
+  "distribution_targets": {
+    "deal_amount": {
+      "table": "deals",
+      "field": "deal_amount",
+      "distribution": "pareto",
+      "settings_key": "deal_amount",
+      "currency": "USD"
+    },
+    "quotation_frequency": {
+      "table": "quotations",
+      "group_by": "deal_id",
+      "distribution": "poisson",
+      "settings_key": "quotation_frequency",
+      "reconcile_to_row_target": true
+    },
+    "date_clustering": {
+      "distribution": "gaussian_mixture",
+      "settings_key": "date_clustering",
+      "targets": [
+        "leads.created_at",
+        "deals.created_at",
+        "deals.close_date",
+        "deals.expected_close_date",
+        "products.created_at",
+        "quotations.created_at",
+        "quotations.quoted_at"
+      ]
+    },
+    "quota_amount": {
+      "table": "targets",
+      "field": "quota_amount",
+      "distribution": "pareto",
+      "settings_key": "quota_amount",
+      "currency": "USD"
+    }
+  },
+  "imperfection_targets": {
+    "missing_product_prices": {
+      "table": "products",
+      "field": "list_price",
+      "rate_source": "config/generation/base.json:imperfections.null_pct"
+    },
+    "near_duplicate_quotation_lines": {
+      "table": "quotations",
+      "business_key_fields": [
+        "deal_id",
+        "product_id",
+        "quote_number"
+      ],
+      "variation_fields": [
+        "quantity",
+        "discount_pct",
+        "quoted_at"
+      ],
+      "rate_source": "config/generation/base.json:imperfections.duplicate_pct"
+    },
+    "deal_amount_outliers": {
+      "table": "deals",
+      "field": "deal_amount",
+      "rate_source": "config/generation/base.json:imperfections.outlier_pct",
+      "minimum_value": 2500000,
+      "maximum_value": 10000000,
+      "scale": 2
+    },
+    "product_created_boundary_timestamps": {
+      "table": "products",
+      "field": "created_at",
+      "values_source": "config/generation/base.json:imperfections.boundary_dates",
+      "timestamp_time": "00:00:00"
+    }
+  }
+}

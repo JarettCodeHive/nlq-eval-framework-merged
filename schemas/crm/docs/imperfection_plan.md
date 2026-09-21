@@ -3,7 +3,7 @@
 Sources of truth:
 
 - Shared rates and boundaries: `config/generation/base.json`
-- CRM target declarations: `config/generation/crm.json`
+- CRM target declarations: `config/generation/crm/generation.json`
 - Canonical DDL: `schemas/crm/crm_ddl.sql`
 
 Imperfections are injected after distributions and remain deterministic.

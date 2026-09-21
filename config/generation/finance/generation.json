@@ -1,0 +1,373 @@
+{
+  "domain_values": {
+    "account_types": [
+      "Asset",
+      "Liability",
+      "Equity",
+      "Revenue",
+      "Expense"
+    ],
+    "source_currencies": [
+      "USD",
+      "EUR",
+      "GBP",
+      "INR",
+      "JPY",
+      "CAD",
+      "AUD",
+      "CHF",
+      "SGD",
+      "AED"
+    ],
+    "source_systems": [
+      "ERP",
+      "Billing",
+      "Payroll",
+      "Expense",
+      "Manual"
+    ],
+    "posting_types": [
+      "Standard",
+      "Adjustment",
+      "Accrual",
+      "Reversal"
+    ],
+    "budget_scenarios": [
+      "Approved",
+      "Forecast",
+      "Stretch"
+    ],
+    "rate_sources": [
+      "SyntheticDaily",
+      "SyntheticEstimated"
+    ]
+  },
+  "generation_rules": {
+    "date_windows": {
+      "entity_created_start": "2022-01-01",
+      "transaction_activity_start": "2025-08-03",
+      "budget_period_start": "2025-01-01"
+    },
+    "accounts": {
+      "active_probability": 0.95,
+      "type_weights": {
+        "Asset": 0.3,
+        "Liability": 0.2,
+        "Equity": 0.1,
+        "Revenue": 0.15,
+        "Expense": 0.25
+      },
+      "currency_weights": {
+        "USD": 0.4,
+        "EUR": 0.12,
+        "GBP": 0.08,
+        "INR": 0.1,
+        "JPY": 0.08,
+        "CAD": 0.06,
+        "AUD": 0.05,
+        "CHF": 0.04,
+        "SGD": 0.04,
+        "AED": 0.03
+      },
+      "hierarchy": {
+        "root_fraction": 0.15,
+        "acyclic_assignment": true,
+        "require_type_compatible_parent": true
+      }
+    },
+    "transactions": {
+      "unposted_to_ledger_fraction": 0.05,
+      "reversed_probability": 0.03,
+      "posted_lag_days": {
+        "minimum": 0,
+        "maximum": 7
+      },
+      "source_system_weights": {
+        "ERP": 0.35,
+        "Billing": 0.25,
+        "Payroll": 0.15,
+        "Expense": 0.15,
+        "Manual": 0.1
+      }
+    },
+    "ledger_entries": {
+      "minimum_lines_per_posted_transaction": 2,
+      "require_even_line_count": true,
+      "reconcile_to_row_target": true,
+      "created_lag_hours": {
+        "minimum": 0,
+        "maximum": 48
+      }
+    },
+    "budgets": {
+      "periods_per_account": {
+        "dev": 2,
+        "full": 4
+      },
+      "period_offsets": {
+        "dev": [
+          0,
+          2
+        ],
+        "full": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "period_months": 3,
+      "start_inclusive": true,
+      "end_exclusive": true,
+      "scenario_weights": {
+        "Approved": 0.6,
+        "Forecast": 0.3,
+        "Stretch": 0.1
+      },
+      "creation_lead_days": {
+        "minimum": 1,
+        "maximum": 60
+      }
+    },
+    "fx_calendar": {
+      "target_currency": "USD",
+      "regular_date_counts": {
+        "dev": 33,
+        "full": 361
+      },
+      "boundary_date_count": 4,
+      "boundary_dates_source": "config/generation/base.json:imperfections.boundary_dates",
+      "expected_total_dates": {
+        "dev": 37,
+        "full": 365
+      },
+      "currency_pairs": [
+        "USD/USD",
+        "EUR/USD",
+        "GBP/USD",
+        "INR/USD",
+        "JPY/USD",
+        "CAD/USD",
+        "AUD/USD",
+        "CHF/USD",
+        "SGD/USD",
+        "AED/USD"
+      ]
+    },
+    "fx_daily_movement": {
+      "algorithm": "bounded_decimal_movement",
+      "maximum_daily_change_bps": 75,
+      "mean_reversion_fraction": "0.100000",
+      "scale": 6,
+      "identity_pair": "USD/USD",
+      "identity_rate": "1.000000"
+    },
+    "fx_rates": {
+      "estimated_probability": 0.1
+    }
+  },
+  "business_mappings": {
+    "reporting_currency": "USD",
+    "account_subtypes": {
+      "Asset": [
+        "Cash",
+        "AccountsReceivable",
+        "Inventory",
+        "PrepaidExpense",
+        "FixedAsset"
+      ],
+      "Liability": [
+        "AccountsPayable",
+        "AccruedLiability",
+        "LongTermDebt"
+      ],
+      "Equity": [
+        "CommonEquity",
+        "RetainedEarnings"
+      ],
+      "Revenue": [
+        "ProductRevenue",
+        "ServiceRevenue",
+        "OtherRevenue"
+      ],
+      "Expense": [
+        "PayrollExpense",
+        "OperatingExpense",
+        "DepreciationExpense",
+        "TaxExpense"
+      ]
+    },
+    "normal_balance_by_account_type": {
+      "Asset": "Debit",
+      "Liability": "Credit",
+      "Equity": "Credit",
+      "Revenue": "Credit",
+      "Expense": "Debit"
+    },
+    "fx_anchor_rates": {
+      "USD/USD": "1.000000",
+      "EUR/USD": "1.080000",
+      "GBP/USD": "1.270000",
+      "INR/USD": "0.012000",
+      "JPY/USD": "0.006800",
+      "CAD/USD": "0.740000",
+      "AUD/USD": "0.660000",
+      "CHF/USD": "1.120000",
+      "SGD/USD": "0.750000",
+      "AED/USD": "0.272300"
+    },
+    "ledger_balance": {
+      "debit_total": "transactions.total_amount",
+      "credit_total": "transactions.total_amount",
+      "amount_currency": "transactions.source_currency",
+      "one_populated_side_per_line": true
+    },
+    "reversal_semantics": {
+      "behavior": "swap_debit_credit_orientation",
+      "rolling_balance_multiplier": 1
+    },
+    "fx_conversion": {
+      "join_fields": [
+        "source_currency=from_currency",
+        "target_currency=to_currency",
+        "transaction_date=rate_date"
+      ],
+      "formula": "transactions.total_amount * fx_rates.rate",
+      "null_rate_result": "unconvertible",
+      "rounding": "multiply_first_round_once"
+    },
+    "budget_actual": {
+      "budget_currency": "USD",
+      "period_boundary": "start_inclusive_end_exclusive",
+      "actual_source": "fx_adjusted_signed_ledger_entries",
+      "join_grain": "account_id_and_budget_period"
+    },
+    "rolling_balance": {
+      "signed_amount": "normal_balance_aware_debit_minus_credit",
+      "order_by": [
+        "transaction_date",
+        "posted_at",
+        "transaction_id",
+        "line_number",
+        "entry_id"
+      ]
+    }
+  },
+  "decimal_policy": {
+    "money_precision": 19,
+    "money_scale": 4,
+    "fx_precision": 19,
+    "fx_scale": 6,
+    "rounding_mode": "ROUND_HALF_UP",
+    "conversion_order": "multiply_first_round_once",
+    "binary_float_prohibited": true
+  },
+  "distributions": {
+    "transaction_amount": {
+      "preset": "pareto_amount",
+      "alpha": 1.16,
+      "min_amount": 10,
+      "max_amount": 10000000,
+      "scale": 4
+    },
+    "ledger_line_frequency": {
+      "preset": "poisson_frequency",
+      "lambda": 3.2
+    },
+    "date_clustering": {
+      "preset": "gaussian_mixture_dates"
+    },
+    "budget_amount": {
+      "preset": "pareto_amount",
+      "alpha": 1.35,
+      "min_amount": 10000,
+      "max_amount": 25000000,
+      "scale": 4
+    }
+  },
+  "distribution_targets": {
+    "transaction_amount": {
+      "table": "transactions",
+      "field": "total_amount",
+      "distribution": "pareto",
+      "settings_key": "transaction_amount",
+      "dependent_rebuild": "ledger_entries"
+    },
+    "ledger_line_frequency": {
+      "table": "ledger_entries",
+      "group_by": "transaction_id",
+      "distribution": "poisson",
+      "settings_key": "ledger_line_frequency",
+      "reconcile_to_row_target": true,
+      "require_even_line_count": true
+    },
+    "date_clustering": {
+      "distribution": "gaussian_mixture",
+      "settings_key": "date_clustering",
+      "targets": [
+        "accounts.created_at",
+        "transactions.transaction_date",
+        "transactions.posted_at",
+        "ledger_entries.created_at",
+        "budgets.created_at",
+        "fx_rates.created_at"
+      ]
+    },
+    "budget_amount": {
+      "table": "budgets",
+      "field": "budget_amount",
+      "distribution": "pareto",
+      "settings_key": "budget_amount",
+      "currency": "USD"
+    },
+    "fx_daily_movement": {
+      "table": "fx_rates",
+      "field": "rate",
+      "distribution": "bounded_decimal_movement",
+      "settings_path": "generation_rules.fx_daily_movement",
+      "anchor_path": "business_mappings.fx_anchor_rates"
+    }
+  },
+  "imperfection_targets": {
+    "missing_fx_rates": {
+      "table": "fx_rates",
+      "field": "rate",
+      "rate_source": "config/generation/base.json:imperfections.null_pct",
+      "protected_pair": "USD/USD",
+      "protect_boundary_dates": true
+    },
+    "near_duplicate_budgets": {
+      "table": "budgets",
+      "business_key_fields": [
+        "account_id",
+        "fiscal_year",
+        "period_start",
+        "period_end",
+        "scenario"
+      ],
+      "variation_fields": [
+        "budget_amount",
+        "created_at"
+      ],
+      "rate_source": "config/generation/base.json:imperfections.duplicate_pct"
+    },
+    "transaction_amount_outliers": {
+      "table": "transactions",
+      "field": "total_amount",
+      "rate_source": "config/generation/base.json:imperfections.outlier_pct",
+      "minimum_value": 25000000,
+      "maximum_value": 100000000,
+      "scale": 4,
+      "dependent_rebuild": "ledger_entries"
+    },
+    "transaction_boundary_dates": {
+      "table": "transactions",
+      "field": "transaction_date",
+      "values_source": "config/generation/base.json:imperfections.boundary_dates",
+      "dependent_updates": [
+        "transactions.posted_at",
+        "fx_rates"
+      ]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "domain": "sales",
+  "dataset_version": "dataset-v1.0.0",
+  "schema_source": "schemas/sales/sales_ddl.sql",
+  "fixed_values": {
+    "seed_source": "config/generation/base.json:seed",
+    "reference_today_source": "config/generation/base.json:reference_today",
+    "manifest_generated_at": "2026-09-16T00:00:00"
+  },
+  "output_paths": {
+    "dev": "tmp/generated/sales/dev",
+    "full": "release/sales/dataset-v1.0.0"
+  },
+  "release_rules": {
+    "release_profile": "full",
+    "refuse_release_export_for_profiles": [
+      "dev"
+    ],
+    "immutable_after_manifest": true,
+    "correction_policy": "Create a new dataset version rather than editing an immutable release."
+  },
+  "table_order": [
+    "leads",
+    "deals",
+    "products",
+    "quotations",
+    "targets"
+  ],
+  "generation_notes": {
+    "row_target_policy": "Explicit per-table targets are base counts before imperfection injection.",
+    "release_profile": "full",
+    "release_directory": "release/sales/dataset-v1.0.0",
+    "row_cap_source": "config/generation/base.json:max_rows_per_table",
+    "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version for reproducible manifests.",
+    "domain_boundary": "Sales covers leads, deals, products, quotation lines, representatives, and quota attainment.",
+    "currency_policy": "Sales is USD-only; mixed-currency and FX evaluation belong to Finance."
+  }
+}

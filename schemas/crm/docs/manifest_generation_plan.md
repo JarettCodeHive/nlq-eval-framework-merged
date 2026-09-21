@@ -2,7 +2,11 @@
 
 Source of truth:
 
-- Dataset metadata: `config/generation/base.json` and `config/generation/crm.json`
+- Shared metadata: `config/generation/base.json`
+- CRM config entry point: `config/generation/crm.json`
+- CRM release and embedded generation metadata:
+  `config/generation/crm/release.json` and
+  `config/generation/crm/generation.json`
 - Exported CSVs: `release/crm/dataset-v1.0.0/`
 - Hash rules: `schemas/crm/docs/sha256_hash_plan.md`
 - Validation gates: row caps, FK integrity, join paths, and imperfection rates

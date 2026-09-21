@@ -1,6 +1,6 @@
 # Sales CSV Header Spec
 
-Status: Draft v0.1 - pending sign-off
+Status: Contract v1.0 - implementation-frozen, pending external sign-off
 
 Source of truth:
 
@@ -24,6 +24,8 @@ schema review before data generation or Q&A authoring proceeds.
 - NULL representation: empty CSV field.
 - Boolean representation: `true` / `false`.
 - Maximum rows per table: `250000`.
+- Currency policy: `currency_code` is required to be `USD` in every Sales
+  table where it appears. Mixed-currency and FX behavior belong to Finance.
 
 ## Tables
 

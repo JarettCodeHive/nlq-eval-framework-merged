@@ -1,0 +1,10 @@
+{
+  "config_schema_version": "1.0",
+  "domain": "sales",
+  "components": {
+    "release": "sales/release.json",
+    "schema": "sales/schema.json",
+    "generation": "sales/generation.json",
+    "validation": "sales/validation.json"
+  }
+}

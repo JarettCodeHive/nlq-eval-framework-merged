@@ -96,7 +96,15 @@ class CRMJoinPathValidator:
     def validate_exported_csvs(self) -> list[IntegrityCheckResult]:
         """Validate joins against CSVs in the configured output path."""
 
-        return self._validate_csv_paths(self._csv_paths(self.settings.output_path))
+        return self.validate_csv_directory(self.settings.output_path)
+
+    def validate_csv_directory(
+        self,
+        directory: Path,
+    ) -> list[IntegrityCheckResult]:
+        """Validate required joins in a complete persisted CRM CSV directory."""
+
+        return self._validate_csv_paths(self._csv_paths(directory))
 
     def generate_and_validate(self) -> list[IntegrityCheckResult]:
         """Generate imperfect tables and validate joins through temporary CSVs."""

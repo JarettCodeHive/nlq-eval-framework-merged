@@ -3,7 +3,7 @@
 // Paste directly into https://dbdiagram.io/
 // ============================================================
 //
-// STATUS: Draft v0.1
+// STATUS: Contract v1.0 - implementation-frozen, pending external sign-off.
 //
 // Source alignment:
 //   v3 execution scope locks Finance to:
@@ -16,7 +16,21 @@
 //   Monetary amounts use DECIMAL(19, 4).
 //   FX rates use DECIMAL(19, 6).
 //   Generator logic and reference SQL must use fixed-point decimal semantics
-//   and one shared rounding convention.
+//   and one shared rounding convention: ROUND_HALF_UP. Multiply first and
+//   round once to monetary scale 4.
+//
+// Currency policy:
+//   Account and transaction source currencies may vary. Finance v1.0 uses USD
+//   as the sole target/reporting currency. fx_rates contains deterministic,
+//   synthetic source-currency-to-USD rates; USD-to-USD is always 1.000000.
+//   Supported source currencies:
+//     USD | EUR | GBP | INR | JPY | CAD | AUD | CHF | SGD | AED
+//
+// Accounting policy:
+//   5% of transactions intentionally have no ledger entries for the required
+//   LEFT JOIN path. Ledger-backed transactions balance exactly at scale 4.
+//   Reversals swap debit/credit orientation; rolling-balance SQL must not apply
+//   a second reversal multiplier.
 //
 // Join semantics annotated:
 //   INNER JOIN paths must produce non-empty results.
@@ -63,13 +77,13 @@
 // ------------------------------------------------------------
 Table accounts {
   account_id integer [pk, not null, note: 'Unique chart-of-accounts ID']
-  account_number varchar [not null, note: 'Synthetic account number; no real-world mapping']
-  account_name varchar [not null]
-  account_type varchar [not null, note: 'enum: Asset | Liability | Equity | Revenue | Expense']
-  account_subtype varchar [note: 'Synthetic subtype for grouped financial reporting']
-  currency_code char(3) [not null, note: 'Functional currency for the account']
+  account_number varchar(64) [not null, unique, note: 'Synthetic account number; no real-world mapping']
+  account_name varchar(255) [not null]
+  account_type varchar(32) [not null, note: 'enum: Asset | Liability | Equity | Revenue | Expense']
+  account_subtype varchar(64) [note: 'Synthetic subtype for grouped financial reporting']
+  currency_code char(3) [not null, note: 'Functional currency; enum: USD | EUR | GBP | INR | JPY | CAD | AUD | CHF | SGD | AED']
   parent_account_id integer [ref: > accounts.account_id, note: 'Nullable self-reference; root accounts have NULL parent']
-  normal_balance varchar [not null, note: 'enum: Debit | Credit']
+  normal_balance varchar(16) [not null, note: 'enum: Debit | Credit']
   is_active boolean [not null, default: true]
   created_at timestamp [not null]
 
@@ -82,11 +96,11 @@ Table accounts {
 Table transactions {
   transaction_id integer [pk, not null, note: 'Unique transaction ID']
   transaction_date date [not null, note: 'Boundary-date imperfection focus; configured dates are deterministically injected']
-  description varchar
-  source_system varchar [not null, note: 'enum: ERP | Billing | Payroll | Expense | Manual']
-  source_currency char(3) [not null, note: 'From-currency for FX lookup']
-  target_currency char(3) [not null, default: 'USD', note: 'Reporting currency for FX lookup']
-  total_amount decimal(19, 4) [not null, note: 'Fixed-point monetary amount; Pareto alpha=1.16']
+  description varchar(1024)
+  source_system varchar(32) [not null, note: 'enum: ERP | Billing | Payroll | Expense | Manual']
+  source_currency char(3) [not null, note: 'From-currency for FX lookup; enum: USD | EUR | GBP | INR | JPY | CAD | AUD | CHF | SGD | AED']
+  target_currency char(3) [not null, default: 'USD', note: 'Fixed reporting currency: USD']
+  total_amount decimal(19, 4) [not null, note: 'Positive fixed-point monetary amount; Pareto alpha=1.16']
   reversed boolean [not null, default: false]
   posted_at timestamp [not null]
 
@@ -103,11 +117,15 @@ Table ledger_entries {
   line_number integer [not null, note: 'Line number within the transaction posting']
   debit_amount decimal(19, 4) [note: 'Nullable; an entry is either debit or credit, not both']
   credit_amount decimal(19, 4) [note: 'Nullable; an entry is either credit or debit, not both']
-  currency_code char(3) [not null]
-  posting_type varchar [not null, note: 'enum: Standard | Adjustment | Accrual | Reversal']
+  currency_code char(3) [not null, note: 'Posting currency; enum: USD | EUR | GBP | INR | JPY | CAD | AUD | CHF | SGD | AED']
+  posting_type varchar(32) [not null, note: 'enum: Standard | Adjustment | Accrual | Reversal']
   created_at timestamp [not null]
 
-  Note: 'Fact / junction table - target 200,000 rows, approximately 2 entries per transaction. Supports double-entry validation and transaction/account many-to-many joins.'
+  indexes {
+    (transaction_id, line_number) [unique, name: 'uq_ledger_entries_transaction_line']
+  }
+
+  Note: 'Fact / junction table - target 200,000 rows, approximately 2 entries per transaction. Exactly one positive debit or credit is populated per row. Supports double-entry validation and transaction/account many-to-many joins.'
 }
 
 // ------------------------------------------------------------
@@ -120,8 +138,8 @@ Table budgets {
   period_start date [not null]
   period_end date [not null]
   budget_amount decimal(19, 4) [not null, note: 'Fixed-point budget amount']
-  currency_code char(3) [not null]
-  scenario varchar [not null, note: 'enum: Approved | Forecast | Stretch']
+  currency_code char(3) [not null, default: 'USD', note: 'Fixed reporting currency: USD']
+  scenario varchar(32) [not null, note: 'enum: Approved | Forecast | Stretch']
   created_at timestamp [not null]
 
   Note: 'Reference / planning table - target 800 rows, approximately 200 accounts by 4 quarters. Supports budget vs actual joins through accounts.'
@@ -132,15 +150,19 @@ Table budgets {
 // ------------------------------------------------------------
 Table fx_rates {
   rate_id integer [pk, not null, note: 'Unique FX rate row ID']
-  from_currency char(3) [not null, note: 'Source currency for FX conversion']
-  to_currency char(3) [not null, note: 'Target/reporting currency for FX conversion']
+  from_currency char(3) [not null, note: 'Source currency; enum: USD | EUR | GBP | INR | JPY | CAD | AUD | CHF | SGD | AED']
+  to_currency char(3) [not null, default: 'USD', note: 'Fixed target/reporting currency: USD']
   rate_date date [not null, note: 'Rate effective date; joins analytically to transactions.transaction_date']
   rate decimal(19, 6) [note: 'Nullable; domain imperfection focus: missing FX quotes']
-  rate_source varchar [not null, note: 'enum: ECB | Fed | Treasury | Synthetic']
+  rate_source varchar(32) [not null, note: 'enum: ECB | Fed | Treasury | Synthetic']
   is_estimated boolean [not null, default: false]
   created_at timestamp [not null]
 
-  Note: 'Reference / lookup - target 3,650 rows, approximately 10 currency pairs by 365 days. Joined by from_currency, to_currency, and rate_date as a non-FK composite lookup.'
+  indexes {
+    (from_currency, to_currency, rate_date) [unique, name: 'uq_fx_rates_currency_date']
+  }
+
+  Note: 'Reference / lookup - target 3,650 rows, approximately 10 currency pairs by 365 days. Rates are positive when populated. Joined by unique from_currency, to_currency, and rate_date as a non-FK composite lookup.'
 }
 
 // ------------------------------------------------------------
@@ -150,7 +172,7 @@ Table fx_rates {
 //   transactions.source_currency = fx_rates.from_currency
 //   AND transactions.target_currency = fx_rates.to_currency
 //   AND transactions.transaction_date = fx_rates.rate_date
-// The visual links below capture the currency-pair relationship only; validation
-// and query generation must also apply the rate_date predicate.
-Ref: transactions.source_currency > fx_rates.from_currency
-Ref: transactions.target_currency > fx_rates.to_currency
+// No Ref is drawn because the relationship is not a physical foreign key and
+// no single participating column is unique. Drawing separate currency links
+// would imply false cardinality and omit the required rate_date predicate.
+// Validation and query generation must enforce the complete composite lookup.

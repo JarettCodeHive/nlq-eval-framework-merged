@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -99,6 +100,20 @@ def ensure_release_can_be_written(output_dir: Path) -> None:
         raise FileExistsError(
             f"Refusing to modify immutable release with manifest: {manifest_path}"
         )
+
+
+def count_csv_rows(path: Path) -> int:
+    """Count CSV data records while respecting quoted multiline fields."""
+
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.reader(handle)
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise ValueError(f"CSV has no header row: {path}") from exc
+        if not header:
+            raise ValueError(f"CSV has an empty header row: {path}")
+        return sum(1 for _row in reader)
 
 
 def _is_null(value: object) -> bool:

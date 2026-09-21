@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from generators.core.base import DeterministicGenerator
 from generators.core.base import DEFAULT_CONFIG_ROOT
 from generators.core.base import GenerationSettings
+from generators.core.base import PROJECT_ROOT
 from generators.core.base import validate_column_contracts
 from generators.crm.config import load_crm_config
 
@@ -33,6 +35,65 @@ def test_settings_load_full_profile_from_config() -> None:
     assert settings.row_counts["interactions"] == 200000
 
 
+def test_crm_full_profile_targets_its_versioned_release() -> None:
+    settings = GenerationSettings.from_config_files("crm", "full")
+
+    assert settings.targets_versioned_release
+
+
+def test_versioned_release_detection_uses_configured_domain() -> None:
+    sales = GenerationSettings.from_config_files("sales", "full")
+    finance = replace(
+        sales,
+        domain="finance",
+        output_path=PROJECT_ROOT / "release" / "finance" / sales.dataset_version,
+    )
+
+    assert finance.targets_versioned_release
+
+
+def test_sales_settings_load_from_component_config(tmp_path: Path) -> None:
+    _write_sales_component_config(tmp_path)
+
+    settings = GenerationSettings.from_config_files(
+        "sales",
+        "dev",
+        config_root=tmp_path,
+    )
+
+    assert settings.domain == "sales"
+    assert settings.dataset_version == "dataset-v1.0.0"
+    assert settings.table_order == (
+        "leads",
+        "deals",
+        "products",
+        "quotations",
+        "targets",
+    )
+    assert settings.row_counts == {
+        "leads": 150,
+        "deals": 50,
+        "products": 25,
+        "quotations": 300,
+        "targets": 10,
+    }
+    assert not settings.targets_versioned_release
+
+
+def test_sales_dev_profile_cannot_target_versioned_release(tmp_path: Path) -> None:
+    _write_sales_component_config(
+        tmp_path,
+        dev_output="release/sales/dataset-v1.0.0",
+    )
+
+    with pytest.raises(ValueError, match="dev cannot target a release directory"):
+        GenerationSettings.from_config_files(
+            "sales",
+            "dev",
+            config_root=tmp_path,
+        )
+
+
 def test_component_config_produces_same_settings_as_monolithic_config(
     tmp_path: Path,
 ) -> None:
@@ -54,9 +115,7 @@ def test_component_config_produces_same_settings_as_monolithic_config(
                 "generation_notes",
             )
         },
-        "schema": {
-            key: crm_config[key] for key in ("tables", "relationships")
-        },
+        "schema": {key: crm_config[key] for key in ("tables", "relationships")},
         "generation": {
             key: crm_config[key]
             for key in (
@@ -174,3 +233,77 @@ def test_faker_stream_is_stable_when_faker_is_installed() -> None:
 
 def _write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_sales_component_config(
+    config_root: Path,
+    dev_output: str = "tmp/generated/sales/dev",
+) -> None:
+    """Write the minimum component config needed to exercise core loading."""
+
+    base_config = json.loads(
+        (DEFAULT_CONFIG_ROOT / "base.json").read_text(encoding="utf-8")
+    )
+    component_root = config_root / "sales"
+    component_root.mkdir()
+    _write_json(config_root / "base.json", base_config)
+    _write_json(
+        config_root / "sales.json",
+        {
+            "config_schema_version": "1.0",
+            "domain": "sales",
+            "components": {
+                "release": "sales/release.json",
+                "schema": "sales/schema.json",
+                "generation": "sales/generation.json",
+                "validation": "sales/validation.json",
+            },
+        },
+    )
+    _write_json(
+        component_root / "release.json",
+        {
+            "domain": "sales",
+            "dataset_version": "dataset-v1.0.0",
+            "schema_source": "schemas/sales/sales_ddl.sql",
+            "fixed_values": {"manifest_generated_at": "2026-09-16T00:00:00"},
+            "output_paths": {
+                "dev": dev_output,
+                "full": "release/sales/dataset-v1.0.0",
+            },
+            "release_rules": {
+                "refuse_release_export_for_profiles": ["dev"],
+            },
+            "table_order": [
+                "leads",
+                "deals",
+                "products",
+                "quotations",
+                "targets",
+            ],
+        },
+    )
+    _write_json(
+        component_root / "schema.json",
+        {
+            "tables": {
+                table_name: {"row_targets": {"dev": row_count, "full": row_count * 100}}
+                for table_name, row_count in {
+                    "leads": 150,
+                    "deals": 50,
+                    "products": 25,
+                    "quotations": 300,
+                    "targets": 10,
+                }.items()
+            }
+        },
+    )
+    _write_json(
+        component_root / "generation.json",
+        {
+            "distributions": {
+                "sales_amount": {"preset": "pareto_amount"},
+            }
+        },
+    )
+    _write_json(component_root / "validation.json", {"join_path_requirements": []})

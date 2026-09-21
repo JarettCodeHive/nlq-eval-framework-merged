@@ -1,0 +1,46 @@
+{
+  "domain": "finance",
+  "dataset_version": "dataset-v1.0.0",
+  "schema_source": "schemas/finance/finance_ddl.sql",
+  "fixed_values": {
+    "seed_source": "config/generation/base.json:seed",
+    "reference_today_source": "config/generation/base.json:reference_today",
+    "manifest_generated_at": "2026-09-18T00:00:00"
+  },
+  "output_paths": {
+    "dev": "tmp/generated/finance/dev",
+    "full": "release/finance/dataset-v1.0.0"
+  },
+  "release_rules": {
+    "release_profile": "full",
+    "refuse_release_export_for_profiles": [
+      "dev"
+    ],
+    "immutable_after_manifest": true,
+    "correction_policy": "Create a new dataset version rather than editing an immutable release."
+  },
+  "table_order": [
+    "accounts",
+    "transactions",
+    "ledger_entries",
+    "budgets",
+    "fx_rates"
+  ],
+  "precision_metadata": {
+    "money_precision": 19,
+    "money_scale": 4,
+    "fx_precision": 19,
+    "fx_scale": 6,
+    "rounding_mode": "ROUND_HALF_UP",
+    "conversion_order": "multiply_first_round_once"
+  },
+  "generation_notes": {
+    "row_target_policy": "Explicit per-table targets are base counts before imperfection injection.",
+    "release_profile": "full",
+    "release_directory": "release/finance/dataset-v1.0.0",
+    "row_cap_source": "config/generation/base.json:max_rows_per_table",
+    "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version for reproducible manifests.",
+    "domain_boundary": "Finance covers chart-of-accounts hierarchy, transactions, double-entry ledger lines, budgets, and synthetic FX conversion.",
+    "currency_policy": "Finance supports configured source currencies and uses USD as the sole v1.0 reporting currency."
+  }
+}

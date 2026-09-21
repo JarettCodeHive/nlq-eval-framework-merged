@@ -48,20 +48,22 @@ nlq-eval-framework/
 
 ### Generation Configuration
 
-`config/generation/base.json` contains shared deterministic defaults. CRM uses
-`config/generation/crm.json` as its stable entry point; that small descriptor
-assembles four focused files:
+`config/generation/base.json` contains shared deterministic defaults. CRM,
+Sales, and Finance use `config/generation/<domain>.json` as stable entry-point
+descriptors.
+Each descriptor assembles four focused component files:
 
-- `config/generation/crm/release.json`: dataset identity, fixed values, output
-  paths, table order, and release rules.
-- `config/generation/crm/schema.json`: tables, fields, row targets, keys, and
-  relationships.
-- `config/generation/crm/generation.json`: domain values, generation rules,
-  business mappings, distributions, and imperfection targets.
-- `config/generation/crm/validation.json`: join-path and consistency rules.
+- `<domain>/release.json`: dataset identity, fixed values, output paths, table
+  order, and release rules.
+- `<domain>/schema.json`: tables, fields, row targets, keys, and relationships.
+- `<domain>/generation.json`: domain values, generation rules, business
+  mappings, distributions, and imperfection targets.
+- `<domain>/validation.json`: join-path and consistency rules.
 
-Generator code reads the assembled configuration through `load_crm_config()`;
-component files are not consumed independently.
+Generator code reads each assembled configuration through its domain loader;
+component files are not consumed independently. Shared presets remain in
+`base.json`, while domain-specific selections and overrides remain in the
+domain's `generation.json`.
 
 ## Python Environment
 
@@ -95,121 +97,236 @@ deactivate
 ## CLI Workflows
 
 Run commands from the repository root with the Python environment activated.
-CRM is currently the implemented generation domain.
+CRM, Sales, and Finance are implemented generation domains. Pass `--domain`
+explicitly in repeatable workflows. Omitting it continues to select CRM for
+backward compatibility.
 
-### Development Profile
+### CRM Dataset Build
 
-The `dev` profile uses smaller row counts for fast local generation and
-validation. It never writes versioned release artifacts.
+Use one command per profile. These workflows generate CSV files and run the
+required post-generation checks against the persisted final CSVs rather than
+requiring separate in-memory validation commands.
 
-1. Validate the generation config against the canonical CRM schema, then show
-   the resolved deterministic settings:
-
-```bash
-python main.py validate-config --profile dev
-python main.py show-config --profile dev
-```
-
-2. Inspect each generation stage in memory:
+Development build:
 
 ```bash
-python main.py generate-base --profile dev
-python main.py apply-distributions --profile dev
-python main.py apply-imperfections --profile dev
+python main.py build-dataset --domain crm --profile dev
 ```
 
-Each stage regenerates its required preceding stages deterministically; it does
-not consume CSV output from an earlier command.
+This writes `base/`, `distributed/`, and `imperfect/` under
+`tmp/generated/crm/dev/`, then validates row caps, DDL and foreign keys, join
+paths, and imperfection rates from `imperfect/*.csv`.
 
-3. Optionally write stage CSVs under `tmp/generated/crm/dev/` for local
-   inspection and notebooks:
+Full release build:
 
 ```bash
-python main.py generate-base --profile dev --write-preview
-python main.py apply-distributions --profile dev --write-preview
-python main.py apply-imperfections --profile dev --write-preview
+python main.py build-dataset --domain crm --profile full
 ```
 
-Preview writes are refused for the `full` profile.
+This generates `release/crm/dataset-v1.0.0/`, validates the written CSVs,
+computes hashes, generates the data dictionary and schema SQL, performs a
+clean-room reproducibility check, and writes `manifest.json` last. The manifest
+seals the release; corrections require a new dataset version.
 
-4. Run development validation against newly generated data:
+Both commands print numbered pipeline progress plus table-level generation and
+CSV export progress.
+
+### Sales Dataset Build
+
+Use one command per profile. The Sales workflow applies the same persisted-data
+gates and release ordering as the CRM workflow.
+
+Development build:
 
 ```bash
-python main.py validate-relations --profile dev
-python main.py validate-row-caps --profile dev
-python main.py validate-row-caps --profile dev --generated
-python main.py validate-fk --profile dev --generated
-python main.py validate-join-paths --profile dev --generated
-python main.py validate-imperfection-rates --profile dev --generated
+python main.py build-dataset --domain sales --profile dev
 ```
 
-### Full Release Profile
+This writes `base/`, `distributed/`, and `imperfect/` under
+`tmp/generated/sales/dev/`, then validates row caps, DDL and foreign keys, join
+paths, and imperfection rates from `imperfect/*.csv`.
 
-The `full` profile creates and validates the delivery-scale release. Run these
-commands in order. If the target release already contains `manifest.json`,
-create a new dataset version rather than modifying the sealed release.
-
-1. Validate and inspect the resolved full-profile configuration:
+Full release build:
 
 ```bash
-python main.py validate-config --profile full
-python main.py show-config --profile full
+python main.py build-dataset --domain sales --profile full
 ```
 
-2. Validate the full generated dataset before writing release files:
+This generates `release/sales/dataset-v1.0.0/`, validates the persisted CSVs,
+computes SHA-256 hashes, generates the data dictionary and schema SQL, performs
+a clean-room reproducibility check, and writes `manifest.json` last. An existing
+manifest prevents the release from being modified in place.
+
+Sales generation produces `leads`, `deals`, `products`, `quotations`, and
+`targets`. The `quotations` table is both the quote-line fact and the explicit
+Deal-to-Product bridge.
+
+Sales Q&A authoring is not implemented yet. The `qa-*` commands remain
+explicitly CRM-only.
+
+### Finance Dataset Build
+
+Finance generates `accounts`, `transactions`, `ledger_entries`, `budgets`, and
+`fx_rates`. Use one command per profile to run generation and persisted-data
+validation in the required order.
+
+Development build:
 
 ```bash
-python main.py validate-relations --profile full
-python main.py validate-row-caps --profile full
-python main.py validate-row-caps --profile full --generated
+python main.py build-dataset --domain finance --profile dev
 ```
 
-3. Generate the complete imperfect dataset and export the release CSVs:
+This writes `base/`, `distributed/`, and `imperfect/` under
+`tmp/generated/finance/dev/`, then validates row caps, DDL and foreign keys,
+accounting balance, join and FX paths, and imperfection rates from the persisted
+`imperfect/*.csv` files.
+
+Full release build:
 
 ```bash
-python main.py export-csvs --profile full
+python main.py build-dataset --domain finance --profile full
 ```
 
-`export-csvs` regenerates the base data, distributions, and imperfections. It
-does not consume dev preview CSVs.
+This generates `release/finance/dataset-v1.0.0/`, validates persisted CSVs and
+Finance-specific accounting/FX contracts, computes hashes, writes the data
+dictionary and schema SQL, performs clean-room reproducibility checks, and
+writes `manifest.json` last.
 
-4. Validate the exported release CSVs:
+Finance uses multiple source currencies and USD as its sole reporting currency.
+Its rates are deterministic synthetic test values generated locally. No live
+rate service or production financial data is read.
+
+### Advanced CRM Commands
+
+Use these commands when investigating a specific stage or validation gate.
+They are not required when `build-dataset` succeeds.
+
+Inspect resolved configuration or write one development stage:
 
 ```bash
-python main.py validate-row-caps --profile full --exported
-python main.py validate-fk --profile full
-python main.py validate-join-paths --profile full
-python main.py validate-imperfection-rates --profile full
+python main.py validate-config --domain crm --profile dev
+python main.py show-config --domain crm --profile dev
+python main.py generate-base --domain crm --profile dev --write-preview
+python main.py apply-distributions --domain crm --profile dev --write-preview
+python main.py apply-imperfections --domain crm --profile dev --write-preview
 ```
 
-5. Compute and inspect the exported CSV hashes:
+Run one generated-data validation gate without relying on saved previews:
 
 ```bash
-python main.py compute-sha256 --profile full
+python main.py validate-relations --domain crm --profile dev
+python main.py validate-row-caps --domain crm --profile dev --generated
+python main.py validate-fk --domain crm --profile dev --generated
+python main.py validate-join-paths --domain crm --profile dev --generated
+python main.py validate-imperfection-rates --domain crm --profile dev --generated
 ```
 
-6. Generate the release documentation and canonical schema copy:
+Run or troubleshoot individual full-release stages before the manifest exists:
 
 ```bash
-python main.py generate-data-dictionary --profile full
-python main.py generate-schema-sql --profile full
+python main.py validate-config --domain crm --profile full
+python main.py show-config --domain crm --profile full
+python main.py validate-relations --domain crm --profile full
+python main.py validate-row-caps --domain crm --profile full
+python main.py validate-row-caps --domain crm --profile full --generated
+python main.py export-csvs --domain crm --profile full
+python main.py validate-row-caps --domain crm --profile full --exported
+python main.py validate-fk --domain crm --profile full
+python main.py validate-join-paths --domain crm --profile full
+python main.py validate-imperfection-rates --domain crm --profile full
+python main.py compute-sha256 --domain crm --profile full
+python main.py generate-data-dictionary --domain crm --profile full
+python main.py generate-schema-sql --domain crm --profile full
+python main.py validate-reproducibility --domain crm --profile full
+python main.py generate-manifest --domain crm --profile full
 ```
 
-7. Regenerate the CSVs in temporary storage and confirm that their SHA-256
-   hashes are byte-identical to the exported release:
+The final command above seals the release and must not be followed by another
+release-writing command.
+
+### Advanced Sales Commands
+
+Use these commands to investigate an individual Sales generation stage or
+validation gate. They are not required when `build-dataset` succeeds.
+
+Inspect configuration, write dev stages, or validate generated data:
 
 ```bash
-python main.py validate-reproducibility --profile full
+python main.py validate-config --domain sales --profile dev
+python main.py show-config --domain sales --profile dev
+python main.py generate-base --domain sales --profile dev --write-preview
+python main.py apply-distributions --domain sales --profile dev --write-preview
+python main.py apply-imperfections --domain sales --profile dev --write-preview
+python main.py validate-relations --domain sales --profile dev
+python main.py validate-row-caps --domain sales --profile dev --generated
+python main.py validate-fk --domain sales --profile dev --generated
+python main.py validate-join-paths --domain sales --profile dev --generated
+python main.py validate-imperfection-rates --domain sales --profile dev --generated
 ```
 
-8. Generate the immutable manifest as the final release command:
+Run or troubleshoot individual full-release stages before the manifest exists:
 
 ```bash
-python main.py generate-manifest --profile full
+python main.py validate-config --domain sales --profile full
+python main.py show-config --domain sales --profile full
+python main.py validate-relations --domain sales --profile full
+python main.py validate-row-caps --domain sales --profile full
+python main.py validate-row-caps --domain sales --profile full --generated
+python main.py export-csvs --domain sales --profile full
+python main.py validate-row-caps --domain sales --profile full --exported
+python main.py validate-fk --domain sales --profile full
+python main.py validate-join-paths --domain sales --profile full
+python main.py validate-imperfection-rates --domain sales --profile full
+python main.py compute-sha256 --domain sales --profile full
+python main.py generate-data-dictionary --domain sales --profile full
+python main.py generate-schema-sql --domain sales --profile full
+python main.py validate-reproducibility --domain sales --profile full
+python main.py generate-manifest --domain sales --profile full
 ```
 
-The manifest seals the release directory. No CSV, documentation, schema, or
-other release-writing command should run afterward.
+The final command seals the Sales release and must remain last.
+
+### Advanced Finance Commands
+
+Use these commands to investigate individual Finance stages or validation
+gates. They are not required when `build-dataset` succeeds.
+
+Inspect configuration, write dev stages, or validate generated data:
+
+```bash
+python main.py validate-config --domain finance --profile dev
+python main.py show-config --domain finance --profile dev
+python main.py generate-base --domain finance --profile dev --write-preview
+python main.py apply-distributions --domain finance --profile dev --write-preview
+python main.py apply-imperfections --domain finance --profile dev --write-preview
+python main.py validate-relations --domain finance --profile dev
+python main.py validate-row-caps --domain finance --profile dev --generated
+python main.py validate-fk --domain finance --profile dev --generated
+python main.py validate-join-paths --domain finance --profile dev --generated
+python main.py validate-imperfection-rates --domain finance --profile dev --generated
+```
+
+Run or troubleshoot individual full-release stages before the manifest exists:
+
+```bash
+python main.py validate-config --domain finance --profile full
+python main.py show-config --domain finance --profile full
+python main.py validate-relations --domain finance --profile full
+python main.py validate-row-caps --domain finance --profile full
+python main.py validate-row-caps --domain finance --profile full --generated
+python main.py export-csvs --domain finance --profile full
+python main.py validate-row-caps --domain finance --profile full --exported
+python main.py validate-fk --domain finance --profile full
+python main.py validate-join-paths --domain finance --profile full
+python main.py validate-imperfection-rates --domain finance --profile full
+python main.py compute-sha256 --domain finance --profile full
+python main.py generate-data-dictionary --domain finance --profile full
+python main.py generate-schema-sql --domain finance --profile full
+python main.py validate-reproducibility --domain finance --profile full
+python main.py generate-manifest --domain finance --profile full
+```
+
+The final command seals the Finance release and must remain last.
 
 ### Q&A Pair Workflow
 
@@ -222,12 +339,12 @@ dataset itself.
 First generate the imperfect dev CSVs, then run the Q&A stages in order:
 
 ```bash
-python main.py apply-imperfections --profile dev --write-preview
-python main.py qa-stage-dataset --profile dev
-python main.py qa-validate-dataset --profile dev
-python main.py qa-author-fixtures --profile dev
-python main.py qa-generate-pairs --profile dev
-python main.py qa-generate-rephrases --profile dev
+python main.py build-dataset --domain crm --profile dev
+python main.py qa-stage-dataset --domain crm --profile dev
+python main.py qa-validate-dataset --domain crm --profile dev
+python main.py qa-author-fixtures --domain crm --profile dev
+python main.py qa-generate-pairs --domain crm --profile dev
+python main.py qa-generate-rephrases --domain crm --profile dev
 ```
 
 The 160 final dev pairs, companion CSV, verification logs, and rephrase
@@ -243,18 +360,18 @@ The full Q&A pipeline reads the frozen CRM dataset from
 `release/crm/dataset-v1.0.0`. Generate and validate that dataset first, then run:
 
 ```bash
-python main.py qa-stage-dataset --profile full
-python main.py qa-validate-dataset --profile full
-python main.py qa-author-fixtures --profile full
-python main.py qa-generate-pairs --profile full
-python main.py qa-generate-rephrases --profile full
+python main.py qa-stage-dataset --domain crm --profile full
+python main.py qa-validate-dataset --domain crm --profile full
+python main.py qa-author-fixtures --domain crm --profile full
+python main.py qa-generate-pairs --domain crm --profile full
+python main.py qa-generate-rephrases --domain crm --profile full
 ```
 
 The final full pair package is written to the independently versioned Q&A
 release directory configured in `qa_pairs/generator/config.json`:
 
 ```text
-release/crm/qa-pairs-v0.3.0/
+release/crm/qa-pairs-v1.0.0/
 ```
 
 `qa-author-fixtures` writes review-only seed fixtures under
@@ -264,19 +381,26 @@ backward compatibility, but `main.py` is the preferred project entry point.
 
 ## First Build Track
 
-CRM is the reference implementation. Build and freeze the CRM schema and
-dataset before authoring CRM Q&A pairs. Other domains should inherit the
-conventions proven in CRM.
+CRM remains the reference implementation. Sales and Finance reuse the shared
+deterministic core and release conventions while retaining their own business
+semantics. Finance adds fixed-point accounting, synthetic FX conversion, and
+double-entry integrity rules without placing those rules in the shared core.
 
 ## Current Status
 
-The engagement-focused CRM implementation is complete through config, base
-generation, distributions, imperfections, validation, signed CSV headers,
-data-dictionary generation, and the Step 18 release packaging pipeline. Q&A
-assets and notebook migration remain deferred in Steps 19 and 20; the full CRM
-test-suite migration is complete through Step 21. Dev inspection and final
-release regeneration follow in Steps 22 onward of
-`CRM_Engagement_Schema_Implementation_Plan.md`.
+The engagement-focused CRM generator, one-command dataset build, and CRM Q&A
+workflow are implemented.
 
-The remaining domains currently provide schema and design assets and will
-follow the CRM reference implementation.
+Sales is implemented through configuration, generation, distributions,
+imperfections, validation, release artifact generation, reproducibility, root
+CLI dispatch, and its full automated test suite. Sales dev workflow verification
+and full release generation remain the next steps in
+`Sales_Dataset_Generation_Implementation_Plan.md`.
+
+Finance is implemented through configuration, deterministic generation,
+fixed-point accounting and FX behavior, validation, release artifacts,
+reproducibility, root CLI dispatch, and its full automated test suite.
+
+Project Management and Logistics currently provide schema and design
+assets and will follow the shared conventions proven by CRM, Sales, and
+Finance.

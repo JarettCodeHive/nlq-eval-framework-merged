@@ -6,7 +6,8 @@ Sources of truth:
 
 - DDL: `schemas/crm/crm_ddl.sql`
 - ERD: `schemas/crm/crm_er.dbml`
-- Generation config: `config/generation/crm.json`
+- Generation config entry point: `config/generation/crm.json`
+- Table and field contract: `config/generation/crm/schema.json`
 
 This specification freezes the release filenames, headers, and column order.
 Any rename, reorder, addition, or removal requires schema review and renewed

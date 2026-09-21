@@ -4,7 +4,8 @@ Sources of truth:
 
 - DDL: `schemas/crm/crm_ddl.sql`
 - ERD: `schemas/crm/crm_er.dbml`
-- Generation config: `config/generation/crm.json`
+- Generation config entry point: `config/generation/crm.json`
+- Executable join paths: `config/generation/crm/validation.json`
 
 This specification defines the engagement-focused CRM join paths that must be
 present in generated and released datasets. Sales-pipeline tables and paths are

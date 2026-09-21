@@ -1,0 +1,137 @@
+{
+  "join_path_requirements": [
+    {
+      "id": "finance_jp_001",
+      "name": "transactions_to_ledger_entries_left",
+      "tier_support": ["T3", "T4", "T5"],
+      "join_type": "left",
+      "tables": ["transactions", "ledger_entries"],
+      "join_condition": "transactions.transaction_id = ledger_entries.transaction_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "ledger_entries.transaction_id IS NULL",
+      "purpose": "Supports intentionally unposted transactions and Transaction-to-Ledger LEFT JOIN questions."
+    },
+    {
+      "id": "finance_jp_002",
+      "name": "ledger_entries_to_transactions",
+      "tier_support": ["T2", "T3", "T4", "T5"],
+      "join_type": "inner",
+      "tables": ["ledger_entries", "transactions"],
+      "join_condition": "ledger_entries.transaction_id = transactions.transaction_id",
+      "required_result": "non_empty",
+      "purpose": "Supports transaction attributes for posted ledger lines."
+    },
+    {
+      "id": "finance_jp_003",
+      "name": "ledger_entries_to_accounts",
+      "tier_support": ["T2", "T3", "T4", "T5"],
+      "join_type": "inner",
+      "tables": ["ledger_entries", "accounts"],
+      "join_condition": "ledger_entries.account_id = accounts.account_id",
+      "required_result": "non_empty",
+      "purpose": "Supports account-level debit, credit, and balance analysis."
+    },
+    {
+      "id": "finance_jp_004",
+      "name": "budgets_to_accounts",
+      "tier_support": ["T2", "T3", "T4", "T5"],
+      "join_type": "inner",
+      "tables": ["budgets", "accounts"],
+      "join_condition": "budgets.account_id = accounts.account_id",
+      "required_result": "non_empty",
+      "purpose": "Supports account and account-type budget analysis."
+    },
+    {
+      "id": "finance_jp_005",
+      "name": "accounts_to_parent_accounts",
+      "tier_support": ["T3", "T4", "T5"],
+      "join_type": "left_self",
+      "tables": ["accounts", "accounts"],
+      "aliases": ["child_account", "parent_account"],
+      "join_condition": "child_account.parent_account_id = parent_account.account_id",
+      "required_result": "non_empty_with_matched_and_unmatched_rows",
+      "unmatched_condition": "parent_account.account_id IS NULL",
+      "purpose": "Supports chart-of-accounts hierarchy and root-account questions."
+    },
+    {
+      "id": "finance_jp_006",
+      "name": "transactions_to_fx_rates",
+      "tier_support": ["T3", "T4", "T5"],
+      "join_type": "inner_analytical_composite",
+      "tables": ["transactions", "fx_rates"],
+      "join_condition": "transactions.source_currency = fx_rates.from_currency AND transactions.target_currency = fx_rates.to_currency AND transactions.transaction_date = fx_rates.rate_date",
+      "required_result": "complete_unique_lookup_coverage",
+      "purpose": "Supports deterministic FX lookup by source, target, and effective date."
+    },
+    {
+      "id": "finance_jp_007",
+      "name": "transactions_to_available_fx_rates",
+      "tier_support": ["T3", "T4", "T5"],
+      "join_type": "inner_analytical_composite",
+      "tables": ["transactions", "fx_rates"],
+      "join_condition": "transactions.source_currency = fx_rates.from_currency AND transactions.target_currency = fx_rates.to_currency AND transactions.transaction_date = fx_rates.rate_date AND fx_rates.rate IS NOT NULL",
+      "required_result": "non_empty",
+      "purpose": "Supports FX-adjusted SUM questions over convertible transactions."
+    },
+    {
+      "id": "finance_jp_008",
+      "name": "transactions_to_missing_fx_rates",
+      "tier_support": ["T3", "T4", "T5"],
+      "join_type": "inner_analytical_composite",
+      "tables": ["transactions", "fx_rates"],
+      "join_condition": "transactions.source_currency = fx_rates.from_currency AND transactions.target_currency = fx_rates.to_currency AND transactions.transaction_date = fx_rates.rate_date AND fx_rates.rate IS NULL",
+      "required_result": "non_empty",
+      "purpose": "Exercises the intentional NULL FX-rate imperfection without removing lookup rows."
+    },
+    {
+      "id": "finance_jp_009",
+      "name": "transactions_to_ledger_entries_to_accounts",
+      "tier_support": ["T4", "T5"],
+      "join_type": "inner",
+      "tables": ["transactions", "ledger_entries", "accounts"],
+      "join_condition": "transactions.transaction_id = ledger_entries.transaction_id AND ledger_entries.account_id = accounts.account_id",
+      "required_result": "non_empty",
+      "purpose": "Supports the required three-table accounting path and rolling balances."
+    },
+    {
+      "id": "finance_jp_010",
+      "name": "budgets_to_preaggregated_actuals",
+      "tier_support": ["T4", "T5"],
+      "join_type": "left_analytical",
+      "tables": ["budgets", "accounts", "ledger_entries", "transactions", "fx_rates"],
+      "join_condition": "Budget periods LEFT JOIN pre-aggregated USD actuals by account_id and start-inclusive/end-exclusive transaction date.",
+      "required_result": "non_empty_with_matched_and_unmatched_parent_rows",
+      "unmatched_condition": "Pre-aggregated actual amount is NULL for the budget account and period.",
+      "purpose": "Supports budget-versus-actual analysis, including periods with no actuals."
+    }
+  ],
+  "accounting_rules": [
+    "Each ledger-backed transaction must have equal debit and credit totals.",
+    "Each debit and credit total must equal the source transaction total_amount.",
+    "Exactly one of debit_amount and credit_amount must be populated and positive per ledger row.",
+    "Ledger currency_code must equal the source transaction source_currency.",
+    "Reversed transactions swap debit and credit orientation without a second rolling-balance multiplier.",
+    "Line numbers must be sequential and unique within each transaction."
+  ],
+  "conversion_rules": [
+    "Every transaction source/target/date key must match exactly one FX row.",
+    "USD/USD rows must always contain rate 1.000000.",
+    "A matched FX row with a NULL rate is intentionally unconvertible, not an orphan.",
+    "FX conversion multiplies first and rounds once to monetary scale 4 using ROUND_HALF_UP.",
+    "Boundary-date transaction FX rows must remain populated."
+  ],
+  "consistency_rules": [
+    "All account numbers and primary keys must be unique.",
+    "The account hierarchy must be acyclic and root accounts must retain NULL parent_account_id values.",
+    "Account subtype and normal balance must agree with account type.",
+    "Every physical foreign key must reference an existing parent row.",
+    "Exactly five percent of base transactions must remain without ledger entries.",
+    "At least one transaction must post to multiple accounts and at least one account must receive multiple transactions.",
+    "Transaction posted_at must be on or after transaction_date within the configured lag.",
+    "Budget periods must be valid, deterministic, and non-overlapping per account and scenario.",
+    "Budget and target currencies must use USD; source and ledger currencies must use the configured currency set.",
+    "FX rows must form the complete configured currency-pair/date grid and preserve composite uniqueness.",
+    "Only budgets may gain rows during imperfection injection.",
+    "All monetary values use scale 4 and populated FX rates use scale 6."
+  ]
+}

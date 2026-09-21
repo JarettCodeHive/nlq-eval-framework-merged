@@ -3,7 +3,8 @@
 Source of truth:
 
 - Seed and fixed date: `config/generation/base.json`
-- CRM row targets and output path: `config/generation/crm.json`
+- CRM row targets: `config/generation/crm/schema.json`
+- CRM output path: `config/generation/crm/release.json`
 - CSV export contract: `config/generation/base.json`
 - Release CSVs: `release/crm/dataset-v1.0.0/`
 

@@ -3,7 +3,8 @@
 Source of truth:
 
 - CRM DDL: `schemas/crm/crm_ddl.sql`
-- CRM generation config: `config/generation/crm.json`
+- CRM config entry point: `config/generation/crm.json`
+- Config sections: `config/generation/crm/*.json`
 - Current CRM implementation plan:
   `CRM_Engagement_Schema_Implementation_Plan.md`
 

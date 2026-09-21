@@ -130,3 +130,25 @@ def test_generated_csv_headers_match_configured_field_order(tmp_path: Path) -> N
         ) as csv_file:
             header = next(csv.reader(csv_file))
         assert header == tables[table_name].columns.tolist()
+
+
+def test_dev_export_writes_all_validated_stages(tmp_path: Path) -> None:
+    if not all(
+        importlib.util.find_spec(package) is not None
+        for package in ("numpy", "pandas", "faker")
+    ):
+        pytest.skip("numpy, pandas, and Faker are not installed")
+
+    exporter = CRMCSVExporter.for_profile("dev")
+    exporter.settings = replace(exporter.settings, output_path=tmp_path)
+
+    results = exporter.export_dev_previews()
+
+    assert list(results) == ["base", "distributed", "imperfect"]
+    for stage_name, stage_results in results.items():
+        assert [result.table_name for result in stage_results] == list(
+            exporter.settings.table_order
+        )
+        assert all(
+            result.path.parent == tmp_path / stage_name for result in stage_results
+        )
