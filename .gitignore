@@ -18,3 +18,11 @@ judge/runs/
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+
+# Python compiled files
+*.pyc
+*.pyo
+*.pyd
+
+# Python cache directories
+__pycache__/
