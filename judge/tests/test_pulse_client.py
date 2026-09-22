@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import time
 
 import httpx
 import pytest
@@ -367,3 +369,150 @@ def test_messages_fallback_never_returns_a_user_turn():
         ],
     }
     assert _extract_answer(data) == "6,673."
+
+
+# --- token refresh -------------------------------------------------------
+
+
+def _jwt(exp_epoch: int) -> str:
+    """A structurally valid unsigned JWT carrying just an `exp` claim."""
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"exp": exp_epoch}).encode())
+        .decode()
+        .rstrip("=")
+    )
+    return f"header.{payload}.signature"
+
+
+def _fresh_jwt(minutes: int = 60) -> str:
+    return _jwt(int(time.time()) + minutes * 60)
+
+
+def _provider_client(handler, provider, **settings_kw) -> PulseClient:
+    s = _settings(**settings_kw)
+    http = httpx.Client(base_url=s.base_url, transport=httpx.MockTransport(handler))
+    return PulseClient(s, _PAIRS, client=http, token_provider=provider)
+
+
+def test_no_provider_sends_the_configured_token_unchanged():
+    """The default path must not change: without a provider the token in
+    settings is what goes on the wire, every time."""
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers["authorization"])
+        return httpx.Response(200, json=_CHAT_BODY)
+
+    c = _client(handler, auth_token="eyJconfigured.jwt.token")
+    c.query("crm-t1-001")
+    assert seen == ["Bearer eyJconfigured.jwt.token"]
+
+
+def test_token_close_to_expiry_is_reminted_before_the_request():
+    minted = _fresh_jwt(60)
+    calls = {"n": 0}
+
+    def provider():
+        calls["n"] += 1
+        return minted
+
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers["authorization"])
+        return httpx.Response(200, json=_CHAT_BODY)
+
+    # 60s of life left is inside TOKEN_REFRESH_MARGIN_S, so it must be replaced
+    # before the call rather than after a failure.
+    c = _provider_client(handler, provider, auth_token=_jwt(int(time.time()) + 60))
+    c.query("crm-t1-001")
+    assert calls["n"] == 1
+    assert seen == [f"Bearer {minted}"]
+
+
+def test_token_with_headroom_is_not_reminted():
+    calls = {"n": 0}
+
+    def provider():
+        calls["n"] += 1
+        return _fresh_jwt(60)
+
+    c = _provider_client(
+        lambda r: httpx.Response(200, json=_CHAT_BODY),
+        provider,
+        auth_token=_fresh_jwt(50),
+    )
+    c.query("crm-t1-001")
+    assert calls["n"] == 0, "a token with 50 min left should be reused"
+
+
+def test_401_triggers_exactly_one_remint_then_succeeds():
+    minted = _fresh_jwt(60)
+    provider_calls = {"n": 0}
+
+    def provider():
+        provider_calls["n"] += 1
+        return minted
+
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers["authorization"])
+        if len(seen) == 1:
+            return httpx.Response(401, text='{"error":"Unauthenticated"}')
+        return httpx.Response(200, json=_CHAT_BODY)
+
+    c = _provider_client(handler, provider, auth_token=_fresh_jwt(50))
+    assert c.query("crm-t1-001").answer_text == "There are 89 active accounts."
+    assert provider_calls["n"] == 1
+    assert seen[1] == f"Bearer {minted}"
+
+
+def test_401_after_a_remint_gives_up_instead_of_looping():
+    """A fresh token that is also rejected means the credential source is wrong.
+    Retrying would burn tokens against a wall."""
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(401, text="nope")
+
+    with pytest.raises(PulseResponseError, match="401"):
+        _provider_client(
+            handler, lambda: _fresh_jwt(60), auth_token=_fresh_jwt(50), max_retries=3
+        ).query("crm-t1-001")
+    assert calls["n"] == 2, "one original attempt + one after re-minting"
+
+
+def test_auth_retry_does_not_consume_the_retryable_budget():
+    """A 401 arriving on the final retry must still get its re-mint. Otherwise a
+    token expiring late in a run loses an answer a refresh would have saved."""
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            return httpx.Response(503, text="down")
+        if calls["n"] == 3:
+            return httpx.Response(401, text="expired")
+        return httpx.Response(200, json=_CHAT_BODY)
+
+    c = _provider_client(
+        handler,
+        lambda: _fresh_jwt(60),
+        auth_token=_fresh_jwt(50),
+        max_retries=2,
+        backoff_base_s=0.001,
+        backoff_max_s=0.002,
+    )
+    assert c.query("crm-t1-001").answer_text == "There are 89 active accounts."
+    assert calls["n"] == 4
+
+
+def test_provider_returning_nothing_fails_loudly():
+    with pytest.raises(PulseResponseError, match="empty token"):
+        _provider_client(
+            lambda r: httpx.Response(200, json=_CHAT_BODY),
+            lambda: "  ",
+            auth_token=_jwt(int(time.time()) + 60),
+        ).query("crm-t1-001")

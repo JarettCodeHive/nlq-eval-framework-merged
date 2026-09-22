@@ -161,7 +161,10 @@ def test_domain_config_overrides_default():
     assert crm.mode == "combined"  # crm.json override
     assert crm.temperature == 0.0  # inherited from default
     assert crm.max_tokens == 1024  # inherited from default
-    assert crm.model == "gpt-4o-mini"
+    # crm.json pins its own model (tier 1) so the config file, not a developer's
+    # .env, decides what scores a CRM run. default.json's gpt-4o-mini is only
+    # reached by a domain that declares no model of its own.
+    assert crm.model == "anthropic.claude-sonnet-4-6"
     assert crm.seed == 42
 
 
@@ -423,6 +426,46 @@ async def test_judge_many_returns_exceptions_per_row():
     results = await Boom().judge_many([REQ, REQ], concurrency=2)
     assert len(results) == 2
     assert all(isinstance(r, Exception) for r in results)
+
+
+async def test_judge_many_reports_progress_for_every_row():
+    """A 160-pair run spends ~18 minutes here. Without a per-row callback the
+    judge leg is silent for its whole duration and a slow run is
+    indistinguishable from a hung one."""
+    seen: list[tuple[int, str]] = []
+    results = await HeuristicJudge().judge_many(
+        [REQ, REQ, REQ],
+        concurrency=2,
+        on_done=lambda n, req, out: seen.append((n, type(out).__name__)),
+    )
+    assert len(results) == 3
+    assert [n for n, _ in seen] == [1, 2, 3], "counter increments once per row"
+    assert all(kind == "JudgeVerdict" for _, kind in seen)
+
+
+async def test_judge_many_reports_failures_too():
+    class Boom(HeuristicJudge):
+        async def judge(self, req):
+            raise RuntimeError("simulated failure")
+
+    seen: list[str] = []
+    await Boom().judge_many(
+        [REQ, REQ],
+        concurrency=2,
+        on_done=lambda n, req, out: seen.append(type(out).__name__),
+    )
+    assert seen == ["RuntimeError", "RuntimeError"], "progress must not skip errors"
+
+
+async def test_a_broken_progress_callback_cannot_fail_the_run():
+    """Reporting is not worth losing verdicts over."""
+
+    def explode(n, req, out):
+        raise ValueError("bad reporter")
+
+    results = await HeuristicJudge().judge_many([REQ], concurrency=1, on_done=explode)
+    assert len(results) == 1
+    assert isinstance(results[0], JudgeVerdict)
 
 
 # --- mock pulse -----------------------------------------------------------

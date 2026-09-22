@@ -72,6 +72,8 @@ def _header_lines(ctx: RunContext, comparisons: dict) -> list[str]:
             "**exact-match ran under a NON-DEFAULT comparison** — this run relaxes "
             "the declared policy and cannot establish a baseline (OI-2 / OI-3)"
         )
+    if ctx.provenance_note:
+        lines.append(f"assembled: {ctx.provenance_note}")
     for finding in ctx.rephrase_findings:
         lines.append(f"**⚠ rephrase-group finding (§9.5): {finding}**")
     if flagged:

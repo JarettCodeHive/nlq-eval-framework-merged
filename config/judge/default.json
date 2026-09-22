@@ -11,5 +11,6 @@
   "concurrency": 4,
   "mode": "combined",
   "json_mode": true,
-  "cache_enabled": true
+  "cache_enabled": true,
+  "run_output_root": "release/{domain}/eval-runs"
 }

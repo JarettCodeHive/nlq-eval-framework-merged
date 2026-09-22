@@ -1,0 +1,4 @@
+{
+  "_note": "Defaults for regression scorecard generation. Per-domain overrides go in config/scorecard/<domain>.json and carry only the fields that differ.",
+  "report_output_root": "release/{domain}/scorecards"
+}

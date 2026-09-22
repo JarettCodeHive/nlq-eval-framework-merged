@@ -183,15 +183,21 @@ the interpolated score levels 2 and 4) is against that exact revision.
 ## Scorecard output
 
 The scorecard package lives at the repo top level (`scorecard/`, per §13.1).
-Every run writes into `judge/runs/<UTC-timestamp>/`:
+A run writes to two roots, sharing one `run_id`. The §11 deliverables go to
+`release/<domain>/scorecards/<UTC-timestamp>/` (`report_output_root` in
+`config/scorecard/`):
 
-- `results.json` — question-level drill-down per §11.2
 - `scorecard_summary.csv` — §11.1 one row per domain + per-tier breakout, with
   `baseline_exact_match_pct` / `delta_pct` / `regression_flag`
 - `question_results.csv` — §11.2 one row per question, `platform_generated_sql`
   logged for every question
 - `scorecard.md` — GitHub-renderable summary
 - `scorecard.pdf` — stakeholder deliverable (Phase-4 exit-gate item; §11.3)
+
+The run's own artifacts go to `release/<domain>/eval-runs/<UTC-timestamp>/`
+(`run_output_root` in `config/judge/`):
+
+- `results.json` — question-level drill-down per §11.2
 - `prompts_log.jsonl` — full prompt/response log (Phase-4 exit-gate item)
 - `pulse_raw/<question_id>.json` — the untouched platform payload (live runs)
 - `run_log.jsonl` — timestamped event stream for the run
@@ -217,7 +223,7 @@ dataset is loaded), `extraction_request` (the tables it chose), and **all** of
 `analysis_request`, not just the entry tagged `primary`.
 
 Budget ~72KB per question (~8MB for a 111-pair run). These contain org data;
-`judge/runs/` is gitignored.
+`release/` is gitignored.
 
 Failures are captured too: a failed query still writes a `pulse_raw` file
 holding the error, and logs a `pulse.error` event.

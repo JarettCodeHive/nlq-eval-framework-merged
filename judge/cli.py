@@ -12,7 +12,9 @@ See `docs/judge_runbook.md` for the full flag surface and a live-run walkthrough
       --input-csv <pairs.csv> --domain crm                # real platform API (HC-4)
   python -m judge.cli --mode per_dimension                # 4 judge prompts, no halo effect
 
-Writes judge/runs/<UTC-timestamp>/ — results.json + the §11 scorecard files.
+Writes release/<domain>/eval-runs/<UTC-timestamp>/ — results.json + the §11
+scorecard files. The root comes from `run_output_root` in config/judge/, so it
+sits alongside the dataset and Q&A release packages.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ import asyncio
 import json
 import statistics
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,9 +35,12 @@ from judge.config import (
     AzureSettings,
     FloodgateNarrativeSettings,
     FloodgateOIDCSettings,
+    JudgeConfig,
     MissingCredentials,
+    REPO_ROOT,
     load_judge_config,
     load_llm_settings,
+    trust_os_ca_store,
 )
 from judge.contracts import DIMENSIONS, JudgeRequest, JudgeVerdict
 from judge.exact_match import (
@@ -49,6 +55,7 @@ from judge.sql_pulse import SQLPulse
 from judge.openai_judge import OpenAIJudge
 from judge.prompts import prompt_version
 from scorecard.baseline import BaselineExists, establish_baseline, load_baseline
+from scorecard.config import report_output_dir
 from scorecard.report import write_scorecard_md, write_scorecard_pdf
 from scorecard.summary import (
     RunContext,
@@ -64,7 +71,21 @@ from scorecard.summary import (
 _STANDIN_PULSE = {"sql"}
 
 MODULE_ROOT = Path(__file__).resolve().parent
-RUNS_DIR = MODULE_ROOT / "runs"
+
+
+def run_output_dir(domain: str, run_id: str, cfg: JudgeConfig) -> Path:
+    """Resolve where one scoring run writes, from config rather than code.
+
+    Mirrors the dataset and Q&A stages, which both take their release path from
+    a config file so it can move without a code change. `{domain}` is
+    interpolated and the result is anchored at the repository root, so a run
+    launched from a subdirectory still lands in the same place.
+    """
+
+    root = cfg.run_output_root.format(domain=domain)
+    return REPO_ROOT / root / run_id
+
+
 # Measured against org 4104 on the crm_dataset_v2 full profile.
 SECONDS_PER_QUESTION = 140.0
 
@@ -254,38 +275,66 @@ class PlatformError(RuntimeError):
     """
 
 
-async def _collect_requests(
+async def _collect_and_score(
     pairs: list[dict],
     pulse: object,
+    judge: JudgeClient,
     *,
-    concurrency: int,
-) -> list[tuple[dict, JudgeRequest, str | None]]:
-    """Query the platform for every pair, concurrently, isolating failures.
+    pulse_concurrency: int,
+    judge_concurrency: int,
+) -> list[tuple[dict, JudgeRequest, str | None, JudgeVerdict | Exception | None]]:
+    """Pipeline the platform and judge legs instead of running them in sequence.
 
-    Returns (pair, JudgeRequest, platform_error) per pair — one slow or failing
-    question never aborts the batch. `pulse.query` is sync, so it runs in a
-    worker thread under a bounded semaphore.
+    Each pair flows fetch -> score as one task, so scoring starts on the first
+    answer while later questions are still being fetched. The judge leg —
+    roughly 12s per answer, ~8 minutes across a domain — then hides inside the
+    platform wait rather than being added to it.
+
+    The two resources hold SEPARATE semaphores. Sharing one would serialise the
+    very overlap this exists to create: a task holding the platform slot while
+    waiting on the judge would block the next fetch.
+
+    Failures stay isolated per pair and per stage. A platform error skips
+    scoring (there is nothing to score) and is returned with `verdict=None`; a
+    judge error is returned as the exception, exactly as `judge_many` does.
+    Returns input order.
     """
-    limit = max(1, concurrency)
-    if getattr(pulse, "mode", "").startswith("sql"):
-        limit = 1  # SQLPulse shares one DuckDB connection — not thread-safe
-    sem = asyncio.Semaphore(limit)
-    total = len(pairs)
-    progress = {"done": 0}
-    progress_lock = asyncio.Lock()
 
-    async def one(pair: dict) -> tuple[dict, JudgeRequest, str | None]:
-        async with sem:
+    pulse_limit = max(1, pulse_concurrency)
+    if getattr(pulse, "mode", "").startswith("sql"):
+        pulse_limit = 1  # SQLPulse shares one DuckDB connection — not thread-safe
+    pulse_sem = asyncio.Semaphore(pulse_limit)
+    judge_sem = asyncio.Semaphore(max(1, judge_concurrency))
+
+    total = len(pairs)
+    counts = {"fetched": 0, "scored": 0}
+    lock = asyncio.Lock()
+
+    async def one(
+        pair: dict,
+    ) -> tuple[dict, JudgeRequest, str | None, JudgeVerdict | Exception | None]:
+        async with pulse_sem:
+            started = time.perf_counter()
             try:
                 resp = await asyncio.to_thread(pulse.query, pair["question_id"])
                 answer, sql, err = resp.answer_text, resp.generated_sql, None
             except Exception as exc:  # noqa: BLE001 — isolate, record, continue
                 answer, sql, err = "", None, f"{type(exc).__name__}: {exc}"
-            async with progress_lock:
-                progress["done"] += 1
-                n = progress["done"]
-                if total >= 25 and (n % 10 == 0 or n == total):
-                    print(f"[judge] platform {n}/{total}", file=sys.stderr)
+            elapsed = time.perf_counter() - started
+            async with lock:
+                counts["fetched"] += 1
+                n = counts["fetched"]
+            # One line per question as it lands. A live question costs ~30s and a
+            # full domain is tens of minutes; batching this leaves the operator
+            # unable to tell a slow run from a hung one.
+            print(
+                f"[judge] platform {n:>4}/{total}  {elapsed:6.1f}s  "
+                f"{'ERROR' if err else 'ok':<5} {pair['question_id']}",
+                file=sys.stderr,
+            )
+            if err:
+                print(f"[judge]            {err[:160]}", file=sys.stderr)
+
         req = JudgeRequest(
             question=pair["natural_language_question"],
             expected_answer=pair["expected_answer"],
@@ -295,7 +344,27 @@ async def _collect_requests(
             domain=pair["domain"],  # resolved in _run, never silently "crm"
             question_id=pair["question_id"],
         )
-        return pair, req, err
+        if err:
+            return pair, req, err, None
+
+        async with judge_sem:
+            try:
+                verdict: JudgeVerdict | Exception = await judge.judge(req)
+            except Exception as exc:  # noqa: BLE001 — surfaced per-row
+                verdict = exc
+        async with lock:
+            counts["scored"] += 1
+            m = counts["scored"]
+        detail = (
+            f"ERROR {type(verdict).__name__}: {verdict}"[:90]
+            if isinstance(verdict, Exception)
+            else f"overall={verdict.overall_score:.2f}"
+        )
+        print(
+            f"[judge] scored   {m:>4}/{total}  {detail:<28} {pair['question_id']}",
+            file=sys.stderr,
+        )
+        return pair, req, None, verdict
 
     return await asyncio.gather(*(one(p) for p in pairs))
 
@@ -537,8 +606,11 @@ def _write_run(
         tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchOutcome]
     ],
     summary: dict,
+    out_dir: Path,
 ) -> Path:
-    out_dir = RUNS_DIR / run_id
+    # Passed in, not re-derived: the caller created this directory up front so a
+    # run that dies mid-way still leaves its logs behind, and two different
+    # derivations of the same path is how artifacts end up split across two dirs.
     out_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "run_id": run_id,
@@ -611,7 +683,7 @@ async def _run(args: argparse.Namespace) -> int:
     now = datetime.now(timezone.utc)
     run_id = now.strftime("%Y%m%dT%H%M%SZ")
     run_timestamp_iso = now.isoformat()
-    out_dir = RUNS_DIR / run_id
+    out_dir = run_output_dir(args.domain, run_id, load_judge_config(args.domain))
     # Created up front, not at write-time: a run that dies mid-way must keep
     # whatever it already fetched, and must leave a log saying what it was doing.
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -706,6 +778,7 @@ async def _run(args: argparse.Namespace) -> int:
             PulseClient,
             check_token_headroom,
             load_pulse_settings,
+            load_pulse_token_provider,
         )
 
         try:
@@ -713,11 +786,29 @@ async def _run(args: argparse.Namespace) -> int:
         except MissingPulseCredentials as exc:
             print(f"[judge] {exc}", file=sys.stderr)
             return 2
-        # A Pulse token lives ~1 hour and a question costs ~2 minutes. Say so
-        # before spending the run, not after it 401s halfway through.
+        # None unless PULSE_REFRESH_* is configured, in which case the client
+        # re-mints its own token instead of dying when the hour runs out.
+        token_provider = load_pulse_token_provider(pulse_settings)
+
+        # A Pulse token lives ~1 hour and a question costs ~30s. Say so before
+        # spending the run, not after it 401s halfway through — unless refresh is
+        # configured, in which case outliving the token is no longer fatal and
+        # refusing to start would block a run that can heal itself.
         est_s = (len(pairs) / max(1, args.pulse_concurrency)) * SECONDS_PER_QUESTION
         warning = check_token_headroom(pulse_settings, est_s)
-        if warning:
+        if warning and token_provider is not None:
+            print(
+                f"[judge] note: {warning}\n"
+                "[judge] PULSE_REFRESH_* is configured, so the token will be "
+                "re-minted during the run — continuing.",
+                file=sys.stderr,
+            )
+            run_log.event(
+                "pulse.token_warning_suppressed",
+                warning=warning,
+                est_run_s=round(est_s),
+            )
+        elif warning:
             print(f"[judge] ⚠ {warning}", file=sys.stderr)
             run_log.event(
                 "pulse.token_warning", warning=warning, est_run_s=round(est_s)
@@ -725,7 +816,8 @@ async def _run(args: argparse.Namespace) -> int:
             if not args.ignore_token_expiry:
                 print(
                     "[judge] Refusing to start. Pass --ignore-token-expiry to run "
-                    "anyway (partial results are still logged).",
+                    "anyway (partial results are still logged), or configure "
+                    "PULSE_REFRESH_* so the run can re-mint its own token.",
                     file=sys.stderr,
                 )
                 return 2
@@ -735,6 +827,7 @@ async def _run(args: argparse.Namespace) -> int:
             pairs,
             raw_dir=out_dir / "pulse_raw",
             run_log=run_log,
+            token_provider=token_provider,
         )
         pulse_label = f"live (org_id={pulse_settings.org_id})"
         run_log.event("pulse.settings", **pulse_settings.redacted)
@@ -758,21 +851,43 @@ async def _run(args: argparse.Namespace) -> int:
     )
     print(f"[judge] provider provenance: {json.dumps(provenance)}")
 
+    print(
+        f"[judge] pipelining {len(pairs)} pair(s): platform "
+        f"concurrency={args.pulse_concurrency}, judge concurrency={args.concurrency} "
+        "— scoring starts as soon as the first answer lands",
+        file=sys.stderr,
+    )
+    run_log.event(
+        "pipeline.start",
+        pairs=len(pairs),
+        pulse_concurrency=args.pulse_concurrency,
+        judge_concurrency=args.concurrency,
+        mode=args.mode,
+    )
     try:
-        collected = await _collect_requests(
-            pairs, pulse, concurrency=args.pulse_concurrency
+        collected = await _collect_and_score(
+            pairs,
+            pulse,
+            judge,
+            pulse_concurrency=args.pulse_concurrency,
+            judge_concurrency=args.concurrency,
         )
     finally:
         if hasattr(pulse, "close"):
             pulse.close()
+        await judge.aclose()
 
-    platform_errors = {pair["question_id"]: err for pair, _, err in collected if err}
+    platform_errors = {pair["question_id"]: err for pair, _, err, _ in collected if err}
+    judge_errors_n = sum(
+        1 for _, _, err, v in collected if not err and isinstance(v, Exception)
+    )
     run_log.event(
-        "pulse.phase_complete",
+        "pipeline.complete",
         collected=len(collected),
         answered=len(collected) - len(platform_errors),
-        errors=len(platform_errors),
+        platform_errors=len(platform_errors),
         error_ids=sorted(platform_errors),
+        judge_errors=judge_errors_n,
     )
     if platform_errors:
         print(
@@ -784,36 +899,17 @@ async def _run(args: argparse.Namespace) -> int:
         for qid, err in list(platform_errors.items())[:5]:
             print(f"[judge]   {qid}: {err}", file=sys.stderr)
 
-    # Only score the questions the platform actually answered.
-    to_judge = [(pair, req) for pair, req, err in collected if not err]
-    run_log.event(
-        "judge.phase_start",
-        to_judge=len(to_judge),
-        concurrency=args.concurrency,
-        mode=args.mode,
-    )
-    verdicts = await judge.judge_many(
-        [req for _, req in to_judge], concurrency=args.concurrency
-    )
-    judge_errors = sum(1 for v in verdicts if isinstance(v, Exception))
-    run_log.event(
-        "judge.phase_complete", verdicts=len(verdicts), judge_errors=judge_errors
-    )
-    await judge.aclose()
-    verdict_by_qid = {
-        pair["question_id"]: v for (pair, _), v in zip(to_judge, verdicts, strict=True)
-    }
-
     # Deterministic exact-match runs alongside the judge, not through it.
     results: list[
         tuple[dict, JudgeRequest, JudgeVerdict | Exception, ExactMatchOutcome]
     ] = []
-    for pair, req, err in collected:
+    for pair, req, err, scored in collected:
         if err:
             outcome = ExactMatchOutcome(ExactMatchResult.ERROR, str(err))
             verdict: JudgeVerdict | Exception = PlatformError(err)
         else:
-            verdict = verdict_by_qid[pair["question_id"]]
+            assert scored is not None  # a non-error row always carries a verdict
+            verdict = scored
             outcome = evaluate_answer(
                 req.expected_answer, req.platform_answer, policy=policy
             )
@@ -926,15 +1022,19 @@ async def _run(args: argparse.Namespace) -> int:
         ],
     )
     out_dir = _write_run(
-        run_id, args.judge, args.mode, args.pulse, ctx, results, summary
+        run_id, args.judge, args.mode, args.pulse, ctx, results, summary, out_dir
     )
 
     # A PREVIEW run still shows a delta if a baseline happens to exist — it just
     # never establishes or updates one, and its flag is advisory.
     baseline = load_baseline(args.platform_version) if args.platform_version else None
 
+    # The §11 deliverables go to their own root, configured by the scorecard
+    # module. Same `run_id`, so a scorecard is always traceable to the run
+    # artifacts that produced it — see scorecard/config.py for why they split.
+    report_dir = report_output_dir(args.domain, run_id)
     regression_detected = _finalise_scorecard(
-        out_dir, results, ctx, baseline=baseline, provisional_pulse=provisional_pulse
+        report_dir, results, ctx, baseline=baseline, provisional_pulse=provisional_pulse
     )
 
     print("\n=== SUMMARY =========================================")
@@ -1134,7 +1234,7 @@ async def _calibrate(domain: str, concurrency: int = 4) -> int:
         f"calibration-{domain}-"
         f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     )
-    calibration_log = RUNS_DIR / judge_run_id / "prompts_log.jsonl"
+    calibration_log = run_output_dir(domain, judge_run_id, cfg) / "prompts_log.jsonl"
     judge = _make_llm_judge(
         settings,
         cfg,
@@ -1205,6 +1305,103 @@ async def _calibrate(domain: str, concurrency: int = 4) -> int:
 def run_calibrate_from_domain(domain: str, concurrency: int = 4) -> int:
     _trust_os_ca_store()
     return asyncio.run(_calibrate(domain, concurrency=concurrency))
+
+
+def run_check_auth(domain: str = "crm") -> int:
+    """Validate both credentials in seconds instead of 18 minutes into a run.
+
+    A scoring run authenticates twice — to the judge provider and to the
+    platform — and until now the first thing that proved either worked was a
+    real run. On a fresh machine that turns a missing credential into a puzzle.
+
+    Returns 0 only if both sides are usable. Mints a real judge token rather
+    than just reading config, because an AppleConnect session that has lapsed
+    looks identical to a working one until you ask it for a token.
+    """
+
+    _trust_os_ca_store()
+    ok = True
+
+    print("[check-auth] judge provider")
+    try:
+        settings = load_llm_settings()
+        cfg = load_judge_config(domain)
+        print(f"  provider : {settings.provider}")
+        print(f"  model    : {_model_version(settings, cfg)}")
+        if isinstance(settings, FloodgateOIDCSettings):
+            from judge.floodgate_judge import appleconnect_token
+
+            token = appleconnect_token(settings.appleconnect_path)
+            print(f"  auth     : appleconnect-oidc OK ({len(token)} char token minted)")
+        elif isinstance(settings, FloodgateNarrativeSettings):
+            for label, path in (
+                ("cert", settings.cert_path),
+                ("key", settings.key_path),
+            ):
+                if not Path(path).is_file():
+                    print(f"  auth     : FAIL — narrative {label} not found at {path}")
+                    ok = False
+            if ok:
+                print("  auth     : narrative-mtls cert + key present")
+        else:
+            # OpenAI/Azure authenticate with a key; there is nothing to mint, and
+            # spending a real completion just to prove it would cost money.
+            print("  auth     : API key present (not exercised)")
+    except Exception as exc:
+        print(f"  FAIL     : {type(exc).__name__}: {exc}")
+        ok = False
+
+    print("[check-auth] platform (Pulse)")
+    try:
+        from judge.pulse_client import (
+            load_pulse_settings,
+            load_pulse_token_provider,
+            token_expiry,
+        )
+
+        pulse = load_pulse_settings()
+        print(f"  base_url : {pulse.base_url}")
+        print(f"  org_id   : {pulse.org_id}")
+
+        # Whether the run can re-mint its own token changes what an expired one
+        # means: a blocker without refresh, a non-event with it.
+        try:
+            can_refresh = load_pulse_token_provider(pulse) is not None
+        except Exception as exc:  # noqa: BLE001 — misconfigured refresh, not fatal
+            can_refresh = False
+            print(f"  refresh  : MISCONFIGURED — {exc}")
+        else:
+            print(f"  refresh  : {'configured' if can_refresh else 'not configured'}")
+
+        exp = token_expiry(pulse.auth_token)
+        if exp is None:
+            print("  token    : no readable `exp` claim — cannot verify freshness")
+        else:
+            left = (exp - datetime.now(timezone.utc)).total_seconds()
+            if left <= 0 and can_refresh:
+                print(
+                    f"  token    : expired {-left / 60:.0f} min ago — will be "
+                    "re-minted at the first request"
+                )
+            elif left <= 0:
+                print(
+                    f"  token    : EXPIRED {-left / 60:.0f} min ago ({exp.isoformat()})"
+                )
+                ok = False
+            else:
+                print(f"  token    : valid for {left / 60:.0f} min ({exp.isoformat()})")
+                est_min = 160 * 27 / 4 / 60  # the measured 160-pair estimate
+                if left / 60 < est_min and not can_refresh:
+                    print(
+                        f"  note     : a full 160-pair run needs about "
+                        f"{est_min:.0f} min — refresh before starting one"
+                    )
+    except Exception as exc:
+        print(f"  FAIL     : {type(exc).__name__}: {exc}")
+        ok = False
+
+    print(f"\n[check-auth] {'OK — both credentials usable' if ok else 'NOT READY'}")
+    return 0 if ok else 2
 
 
 def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
@@ -1324,16 +1521,13 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
 
 
 def _trust_os_ca_store() -> None:
-    """Corp machines TLS-inspect with a private root CA the OS store knows but
-    certifi doesn't. Do this once, before any HTTP client (judge or Pulse) is
-    built, so both the LLM gateway and the platform API verify cleanly.
-    """
-    try:
-        import truststore
+    """Trust the OS CA store once, before any HTTP client is built.
 
-        truststore.inject_into_ssl()
-    except ImportError:
-        pass
+    Delegates to the shared helper so the judge gateway and the platform client
+    cannot drift apart on TLS — they previously each had their own copy.
+    """
+
+    trust_os_ca_store()
 
 
 def run_from_args(args: argparse.Namespace) -> int:

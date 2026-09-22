@@ -262,6 +262,151 @@ release/crm/qa-pairs-v0.3.0/
 release. The original scripts under `qa_pairs/generator/` remain available for
 backward compatibility, but `main.py` is the preferred project entry point.
 
+### Judge and Scorecard Workflow
+
+Scoring runs through `main.py` as well. There is no separate scorecard command:
+a scoring run writes the scorecard artifacts itself, because §11.3 requires
+exact-match accuracy and judge scores to be reported side by side from the same
+run.
+
+First join the Q&A release into a single judge input. The §9.3 contract file
+carries no identifiers and the companion carries no answers, so the judge needs
+them joined on `natural_language_question`:
+
+```bash
+python main.py judge-build-input --profile full
+```
+
+That writes `<qa-release>/crm_judge_input.csv`. Then score. `score` owns its own
+flag surface — everything after it goes to the judge's parser:
+
+```bash
+python main.py score --help          # the judge's full flag surface
+```
+
+An offline run, executing each pair's `reference_sql` in DuckDB instead of
+calling the platform. Use this for CI and for validating the pipeline:
+
+```bash
+python main.py score \
+  --judge heuristic \
+  --pulse sql \
+  --input-csv release/crm/qa-pairs-v0.3.0/crm_judge_input.csv \
+  --pulse-data release/crm/dataset-v1.0.0 \
+  --limit 3 \
+  --allow-uncalibrated
+```
+
+A real run against the platform, scored by the LLM judge. Requires the
+`PULSE_*` and provider credentials in `judge/.env` — copy `judge/.env.example`
+and fill it in:
+
+```bash
+python main.py score --judge llm --pulse live \
+  --input-csv release/crm/qa-pairs-v0.3.0/crm_judge_input.csv \
+  --allow-uncalibrated
+```
+
+Each run writes two directories under `release/<domain>/`, sharing one
+`run_id` so a scorecard is always traceable to the evidence behind it:
+
+```text
+release/crm/
+├── dataset-v1.0.0/            sealed, one version
+├── qa-pairs-v0.3.0/           sealed, one version
+├── scorecards/<run_id>/       the §11 deliverables
+│   ├── scorecard.pdf          stakeholder summary (§11.3)
+│   ├── scorecard.md           GitHub-renderable summary
+│   ├── scorecard_summary.csv  §11.1 per domain + per tier
+│   └── question_results.csv   §11.2 one row per question
+└── eval-runs/<run_id>/        provenance for that scorecard
+    ├── results.json           question-level drill-down
+    ├── run_manifest.json      git commit, input hash, argv
+    ├── run_log.jsonl          timestamped event stream
+    ├── prompts_log.jsonl      full judge prompt/response log
+    └── pulse_raw/             untouched platform payloads (live runs)
+```
+
+The two roots are configured as `report_output_root` in `config/scorecard/` and
+`run_output_root` in `config/judge/`, so either can move without a code change.
+They are split because the scorecard is the deliverable §13.1 wants versioned in
+`release/`, while `pulse_raw/` is ~72KB per question of raw org data that should
+not be tracked.
+
+Unlike the dataset and Q&A packages, both are append-only rather than a sealed
+single version — each scoring pass adds a directory and never rewrites an
+earlier one.
+
+`--allow-uncalibrated` is required until calibration passes. Every run without
+it is refused, and an uncalibrated run is always labelled `PREVIEW`: it cannot
+establish a baseline or certify a release (§10.2, §11.3).
+
+Before a long run on a new machine, preflight both credentials — the judge
+provider and the platform — rather than discovering a missing one 18 minutes in:
+
+```bash
+python main.py check-auth --domain crm
+```
+
+It mints a real judge token (an expired AppleConnect session looks identical to a
+working one until you ask it for one) and reports how much life the Pulse token
+has left against the estimated run length. Exit code 2 if either side is unusable.
+
+On a corporate network this is also the fastest TLS/proxy check: both paths are
+exercised. If it fails with `CERTIFICATE_VERIFY_FAILED` or an instant `403`, see
+**§3a Corporate network: TLS and proxies** in `docs/judge_runbook.md` — TLS is
+configured with `PULSE_CA_BUNDLE` / `FLOODGATE_CA_BUNDLE`, while proxies are
+inherited from the standard environment variables and are deliberately not
+configured in this project.
+
+The Pulse token lasts one hour and has no refresh by default, so a run longer
+than its remaining life is refused up front. Setting `PULSE_REFRESH_*` in
+`judge/.env` lets the client re-mint its own token during a run and removes that
+ceiling — see `judge/.env.example`, and note the endpoint is not yet confirmed.
+
+```bash
+python main.py calibrate --domain crm
+```
+
+Calibration scores the human-agreed anchors in `judge/anchors/<domain>.json`
+and writes the `judge/.calibration` marker when agreement passes. It currently
+fails by design — the CRM anchors are quarantined as `crm.provisional.json`
+pending the §10.2 Platform Owner session, so no run is release-eligible yet.
+
+```bash
+python main.py rubric
+```
+
+Renders the §14.1 rubric PDF deliverable from the same Jinja templates the
+judge runs against, so the document cannot drift from the scored prompt.
+
+The judge model comes from `config/judge/<domain>.json`, which outranks
+`FLOODGATE_MODEL` / `OPENAI_MODEL` / `LLM_MODEL` in the environment, which in
+turn outranks `config/judge/default.json`. Pinning it per domain is what keeps a
+run's provenance reproducible from committed config rather than from whoever's
+machine it ran on. Only credentials belong in `judge/.env`.
+
+## Tests
+
+```bash
+python -m pytest                      # everything
+python -m pytest judge/tests tests/scorecard   # judge + scorecard only (199)
+```
+
+Suites live next to what they cover: `judge/tests/` and `qa_pairs/tests/` inside
+their packages, generator and schema suites under `tests/`.
+
+Six failures are **pre-existing and unrelated to scoring**, so a clean checkout
+does not start green. Know them before assuming a change broke something:
+
+| Failing | Cause |
+|---|---|
+| `tests/generators/crm/test_config_compatibility_baseline.py` (5) | `CRM_Config_Simplification_Pre_Migration_Baseline.json` is not in the repo — the test reads it from the root and gets `FileNotFoundError` |
+| `qa_pairs/tests/test_sqlfluff.py::test_authoritative_ddl_is_sqlfluff_clean` | sqlfluff has no configured dialect; needs `--dialect` or a `.sqlfluff` config |
+
+Both belong to the generator and Q&A side. `judge/tests` and `tests/scorecard`
+are green.
+
 ## First Build Track
 
 CRM is the reference implementation. Build and freeze the CRM schema and
