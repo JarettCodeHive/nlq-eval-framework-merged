@@ -336,19 +336,16 @@ dataset itself.
 
 #### Development Q&A Profile
 
-First generate the imperfect dev CSVs, then run the Q&A stages in order:
+First generate the imperfect dev CSVs, then run the complete production Q&A
+workflow:
 
 ```bash
 python main.py build-dataset --domain crm --profile dev
-python main.py qa-stage-dataset --domain crm --profile dev
-python main.py qa-validate-dataset --domain crm --profile dev
-python main.py qa-author-fixtures --domain crm --profile dev
-python main.py qa-generate-pairs --domain crm --profile dev
-python main.py qa-generate-rephrases --domain crm --profile dev
+python main.py qa-build --domain crm --profile dev
 ```
 
-The 160 final dev pairs, companion CSV, verification logs, and rephrase
-artifacts are written under:
+The 160 final dev pairs, companion CSV, and verification logs are written
+under:
 
 ```text
 tmp/generated/crm/dev/qa_pairs/
@@ -357,14 +354,10 @@ tmp/generated/crm/dev/qa_pairs/
 #### Full Q&A Profile
 
 The full Q&A pipeline reads the frozen CRM dataset from
-`release/crm/dataset-v1.0.0`. Generate and validate that dataset first, then run:
+`release/crm/dataset-v1.0.0`. After the dataset release is available, run:
 
 ```bash
-python main.py qa-stage-dataset --domain crm --profile full
-python main.py qa-validate-dataset --domain crm --profile full
-python main.py qa-author-fixtures --domain crm --profile full
-python main.py qa-generate-pairs --domain crm --profile full
-python main.py qa-generate-rephrases --domain crm --profile full
+python main.py qa-build --domain crm --profile full
 ```
 
 The final full pair package is written to the independently versioned Q&A
@@ -374,10 +367,32 @@ release directory configured in `qa_pairs/generator/config.json`:
 release/crm/qa-pairs-v1.0.0/
 ```
 
-`qa-author-fixtures` writes review-only seed fixtures under
-`qa_pairs/fixtures/<profile>/`; these fixtures are not part of the 160-pair
-release. The original scripts under `qa_pairs/generator/` remain available for
-backward compatibility, but `main.py` is the preferred project entry point.
+`qa-build` stages the selected generated dataset, validates it, and generates
+the complete SQL-verified pair set. It does not create review fixtures or
+rephrase variants.
+
+#### Advanced Q&A Commands
+
+Use the individual commands only when troubleshooting a specific production
+stage:
+
+```bash
+python main.py qa-stage-dataset --domain crm --profile dev
+python main.py qa-validate-dataset --domain crm --profile dev
+python main.py qa-generate-pairs --domain crm --profile dev
+```
+
+The following optional commands produce testing/review artifacts and are not
+part of `qa-build`:
+
+```bash
+python main.py qa-author-fixtures --domain crm --profile dev
+python main.py qa-generate-rephrases --domain crm --profile dev
+```
+
+Replace `dev` with `full` when troubleshooting the full profile. The original
+scripts under `qa_pairs/generator/` remain available for backward compatibility,
+but `main.py` is the preferred project entry point.
 
 ## First Build Track
 

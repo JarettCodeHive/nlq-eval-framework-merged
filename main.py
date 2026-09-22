@@ -419,6 +419,26 @@ def run_qa_stage_dataset(args: argparse.Namespace) -> None:
     stage_qa_dataset(args.profile)
 
 
+def run_qa_build(args: argparse.Namespace) -> None:
+    """Stage, validate, and generate the production CRM Q&A pair set."""
+
+    _ensure_crm(args.domain)
+    progress = ProgressReporter()
+
+    progress.report("Step 1/3: Stage the generated CRM dataset for Q&A authoring")
+    stage_qa_dataset(args.profile)
+
+    progress.report("Step 2/3: Validate the staged CRM dataset")
+    validate_qa_dataset(args.profile)
+
+    progress.report("Step 3/3: Generate and verify the CRM Q&A pair set")
+    generate_pairs(args.profile)
+
+    print("CRM Q&A pair build passed")
+    print(f"domain: {args.domain}")
+    print(f"profile: {args.profile}")
+
+
 def run_qa_validate_dataset(args: argparse.Namespace) -> None:
     """Validate the staged CRM dataset and required Q&A join behavior."""
 
@@ -502,6 +522,7 @@ COMMANDS: dict[str, CommandHandler] = {
     "generate-manifest": run_generate_manifest,
     "generate-schema-sql": run_generate_schema_sql,
     "qa-author-fixtures": run_qa_author_fixtures,
+    "qa-build": run_qa_build,
     "qa-generate-pairs": run_qa_generate_pairs,
     "qa-generate-rephrases": run_qa_generate_rephrases,
     "qa-stage-dataset": run_qa_stage_dataset,
