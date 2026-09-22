@@ -100,6 +100,12 @@ class RunContext:
     judge_seed_enforced: bool = True
     # §9.5 rephrase-group findings, rendered in the human-readable scorecard.
     rephrase_findings: tuple[str, ...] | list[str] = ()
+    # Free-text note about how this scorecard was assembled — e.g. a merge of a
+    # full run and a partial re-run. Rendered plainly in the header. Kept
+    # separate from `rephrase_findings` because that field means one specific
+    # §9.5 check, and putting provenance there makes the scorecard claim a
+    # rephrase finding that was never made.
+    provenance_note: str = ""
 
 
 @dataclass

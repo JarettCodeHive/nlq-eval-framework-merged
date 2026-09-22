@@ -72,7 +72,9 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
     _require_unique(companion, companion_path)
 
     by_question = {row[JOIN_KEY]: row for row in contract}
-    missing = [row["question_id"] for row in companion if row[JOIN_KEY] not in by_question]
+    missing = [
+        row["question_id"] for row in companion if row[JOIN_KEY] not in by_question
+    ]
     if missing:
         raise SystemExit(
             f"{len(missing)} companion row(s) have no contract match, "
@@ -83,7 +85,14 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
             f"row count mismatch: {len(contract)} contract vs {len(companion)} companion"
         )
 
-    fieldnames = ["question_id", "domain", "tier", "family", "scoring_mode", *CONTRACT_FIELDS]
+    fieldnames = [
+        "question_id",
+        "domain",
+        "tier",
+        "family",
+        "scoring_mode",
+        *CONTRACT_FIELDS,
+    ]
     rows = []
     for comp in companion:
         pair = by_question[comp[JOIN_KEY]]

@@ -53,6 +53,7 @@ import base64
 import json
 import os
 import re
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -62,6 +63,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from judge.config import load_env  # shared .env autodetection
+from judge.config import trust_os_ca_store
 from judge.contracts import PulseResponse
 
 __all__ = [
@@ -78,6 +80,12 @@ MODULE_ROOT = Path(__file__).resolve().parent
 DEFAULT_CHAT_PATH = "/api-proxy/org/{org_id}/ai-svc/v2/tco/chat"
 DEFAULT_MODEL_NAME = "claude-sonnet-5"
 DEFAULT_FEATURES = "TCOApiV2Feature"
+
+# Re-mint this far ahead of expiry. A Pulse question takes ~30s and has been
+# observed at 170s, so a token with less headroom than the slowest question can
+# die mid-flight and lose an answer that a slightly earlier refresh would have
+# saved. Only consulted when a token provider is configured.
+TOKEN_REFRESH_MARGIN_S = 300.0
 
 # CONFIRM-SCHEMA: candidate keys for the natural-language answer, best first.
 _ANSWER_KEYS: tuple[str, ...] = (
@@ -278,8 +286,14 @@ class PulseClient:
         client: Any | None = None,  # httpx.Client — injectable for tests
         raw_dir: Any | None = None,  # Path — dump every raw response here
         run_log: Any | None = None,  # judge.run_log.RunLog
+        token_provider: Any | None = None,  # Callable[[], str] — mint a fresh JWT
     ) -> None:
         self._settings = settings
+        # The live token, which may outlive `settings.auth_token` once refreshed.
+        # Settings stay immutable so the run manifest still records what started
+        # the run rather than whatever the last refresh produced.
+        self._token = settings.auth_token
+        self._token_provider = token_provider
         self._raw_dir = Path(raw_dir) if raw_dir else None
         if self._raw_dir:
             self._raw_dir.mkdir(parents=True, exist_ok=True)
@@ -297,20 +311,10 @@ class PulseClient:
         else:
             import httpx
 
-            verify = settings.httpx_verify()
-            if verify is True:
-                # Corp machines often TLS-inspect with a private root CA that
-                # only the OS store knows about. Use it when available.
-                try:
-                    import truststore
-
-                    truststore.inject_into_ssl()
-                except ImportError:
-                    pass
             self._client = httpx.Client(
                 base_url=settings.base_url,
                 timeout=settings.timeout_s,
-                verify=verify,
+                verify=resolve_tls_verify(settings),
             )
             self._owns_client = True
 
@@ -446,9 +450,64 @@ class PulseClient:
             "stream_thinking": False,
         }
 
-    def _build_headers(self) -> dict[str, str]:
+    def _current_token(self, *, force_refresh: bool = False) -> str:
+        """Return a usable token, re-minting it when it is about to expire.
+
+        Without a provider this is just the configured token — the caller was
+        already refused up front by `check_token_headroom` if it could not cover
+        the run. With one, a long run stops being bounded by the token's hour.
+
+        Refreshing early rather than on expiry matters: a Pulse question takes
+        ~30s and can take 170s, so a token with 60s left will die mid-question
+        and the answer is lost, not merely delayed.
+        """
+
+        if self._token_provider is None:
+            return self._token
+
+        if not force_refresh:
+            exp = token_expiry(self._token)
+            if exp is not None:
+                left = (exp - datetime.now(timezone.utc)).total_seconds()
+                if left > TOKEN_REFRESH_MARGIN_S:
+                    return self._token
+            elif self._token:
+                # No readable expiry and nothing forcing a refresh — the token we
+                # have is the best information available.
+                return self._token
+
+        minted = (self._token_provider() or "").strip()
+        if not minted:
+            raise PulseResponseError(
+                "Pulse token provider returned an empty token; cannot continue. "
+                "Refresh PULSE_AUTH_TOKEN in judge/.env by hand."
+            )
+        self._token = minted
+        exp = token_expiry(minted)
+        self._log.event(
+            "pulse.token_refreshed",
+            expires_at=exp.isoformat() if exp else None,
+            forced=force_refresh,
+        )
+        # Also on stderr: during a long run this is the one thing that happens
+        # without a question to attach it to, and an operator watching progress
+        # should see the credential roll rather than find it in the JSON log
+        # afterwards.
+        left = (
+            f"valid {(exp - datetime.now(timezone.utc)).total_seconds() / 60:.0f} min"
+            if exp
+            else "no readable expiry"
+        )
+        print(
+            f"[judge] token re-minted ({'after a 401' if force_refresh else 'near expiry'}"
+            f") — {left}",
+            file=sys.stderr,
+        )
+        return minted
+
+    def _build_headers(self, *, force_refresh: bool = False) -> dict[str, str]:
         headers = {
-            "Authorization": _bearer(self._settings.auth_token),
+            "Authorization": _bearer(self._current_token(force_refresh=force_refresh)),
             "Content-Type": "application/json",
             "X-Request-ID": str(uuid.uuid4()),
         }
@@ -466,28 +525,50 @@ class PulseClient:
             "message_session_id": body["message_session_id"],
         }
         headers = self._build_headers()
-        attempts = self._settings.max_retries + 1
+        last_retryable = self._settings.max_retries
         last_exc: Exception | None = None
+        auth_retried = False
+        attempt = 0
 
-        for attempt in range(attempts):
+        while True:
             try:
                 if self._settings.stream:
                     return self._chat_sse(body, headers), wire_ids
                 return self._chat_json(body, headers), wire_ids
+            except _AuthPulseError as exc:
+                # A 401 means the credential went stale, not that the platform is
+                # unhappy with the question. Re-mint once and retry immediately —
+                # no backoff, because waiting does not make a token fresher. This
+                # deliberately does NOT consume a retry from the budget: a token
+                # expiring on the last attempt would otherwise lose the answer
+                # even though a refresh would have saved it. One re-mint only: if
+                # the fresh token is also rejected, the credential source is the
+                # problem and retrying just burns tokens.
+                last_exc = exc
+                if auth_retried or self._token_provider is None:
+                    raise PulseResponseError(
+                        f"{exc} — PULSE_AUTH_TOKEN is not valid for org "
+                        f"{self._settings.org_id}. Refresh it in judge/.env."
+                    ) from exc
+                auth_retried = True
+                self._log.event("pulse.auth_retry", question_preview=question[:80])
+                headers = self._build_headers(force_refresh=True)
+                continue
             except _RetryablePulseError as exc:
                 last_exc = exc
-                if attempt == attempts - 1:
+                if attempt >= last_retryable:
                     raise PulseResponseError(str(exc)) from exc
                 self._sleep(attempt)
             except Exception as exc:  # transport error (timeout, connection)
                 last_exc = exc
-                if not _is_transient(exc) or attempt == attempts - 1:
+                if not _is_transient(exc) or attempt >= last_retryable:
                     if isinstance(exc, PulseResponseError):
                         raise
                     raise PulseResponseError(
                         f"Pulse request failed after {attempt + 1} attempt(s): {exc}"
                     ) from exc
                 self._sleep(attempt)
+            attempt += 1
         raise PulseResponseError(  # pragma: no cover
             f"Pulse request failed: {last_exc}"
         )
@@ -574,8 +655,154 @@ class PulseClient:
         time.sleep(delay)
 
 
+def _looks_like_id_token(value: str) -> bool:
+    """True for a JWT whose payload carries `token_use: id`.
+
+    Used to pick the right token out of a refresh response without needing to
+    know the response schema: an auth endpoint may return an access token, an
+    ID token and a refresh token together, and only the ID token is what Pulse
+    accepts. Signature is not verified — the platform does that.
+    """
+
+    parts = value.split(".")
+    if len(parts) != 3 or not value.startswith("ey"):
+        return False
+    try:
+        part = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(part))
+    except Exception:
+        return False
+    return claims.get("token_use") == "id"
+
+
+def _find_id_token(payload: Any) -> str | None:
+    """Walk a decoded JSON body and return the first ID token found."""
+
+    if isinstance(payload, str):
+        return payload if _looks_like_id_token(payload) else None
+    if isinstance(payload, dict):
+        for value in payload.values():
+            found = _find_id_token(value)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for value in payload:
+            found = _find_id_token(value)
+            if found:
+                return found
+    return None
+
+
+def load_pulse_token_provider(settings: "PulseSettings | None" = None) -> "Any | None":
+    """Build a token provider, or None when refresh is not configured.
+
+    Two shapes, checked in order:
+
+    1. `PULSE_REFRESH_TOKEN` — the real Claris flow: a Cognito refresh grant
+       followed by the `/auth/token` exchange that mints the `claris.com` ID
+       token Pulse accepts. See `judge/pulse_auth.py`; verify it end to end with
+       `python judge/pulse_auth.py --probe`.
+    2. `PULSE_REFRESH_URL` — a generic single-call endpoint, kept as an escape
+       hatch for a different environment or a future BFF-style refresh route.
+
+    Unset, this returns None and the client sends one token for the whole run,
+    guarded up front by `check_token_headroom`.
+    """
+
+    if (os.getenv("PULSE_REFRESH_TOKEN") or "").strip():
+        from judge.pulse_auth import build_cognito_provider
+
+        s = settings or load_pulse_settings()
+        return build_cognito_provider(s)
+
+    url = (os.getenv("PULSE_REFRESH_URL") or "").strip()
+    if not url:
+        return None
+
+    method = (os.getenv("PULSE_REFRESH_METHOD") or "GET").strip().upper()
+    cookie = (os.getenv("PULSE_REFRESH_COOKIE") or "").strip()
+    raw_body = (os.getenv("PULSE_REFRESH_BODY") or "").strip()
+    raw_headers = (os.getenv("PULSE_REFRESH_HEADERS") or "").strip()
+
+    headers: dict[str, str] = {"Accept": "application/json"}
+    if raw_headers:
+        try:
+            headers.update(json.loads(raw_headers))
+        except ValueError as exc:
+            raise MissingPulseCredentials(
+                f"PULSE_REFRESH_HEADERS is not valid JSON: {exc}"
+            ) from exc
+    if cookie:
+        headers["Cookie"] = cookie
+
+    body = None
+    if raw_body:
+        try:
+            body = json.loads(raw_body)
+        except ValueError as exc:
+            raise MissingPulseCredentials(
+                f"PULSE_REFRESH_BODY is not valid JSON: {exc}"
+            ) from exc
+
+    def provider() -> str:
+        import httpx
+
+        with httpx.Client(timeout=30.0) as client:
+            resp = client.request(method, url, headers=headers, json=body)
+        if resp.status_code != 200:
+            raise PulseResponseError(
+                f"Pulse token refresh failed: {resp.status_code} "
+                f"{resp.text[:200]!r} (PULSE_REFRESH_URL={url})"
+            )
+        try:
+            payload = resp.json()
+        except ValueError:
+            # Some endpoints hand back the bare token as text/plain.
+            candidate = resp.text.strip()
+            if _looks_like_id_token(candidate):
+                return candidate
+            raise PulseResponseError(
+                f"Pulse token refresh returned a non-JSON body with no ID token: "
+                f"{resp.text[:200]!r}"
+            ) from None
+        token = _find_id_token(payload)
+        if not token:
+            raise PulseResponseError(
+                "Pulse token refresh succeeded but no `token_use: id` JWT was "
+                f"found in the response: {str(payload)[:200]!r}"
+            )
+        return token
+
+    return provider
+
+
+def resolve_tls_verify(settings: "PulseSettings") -> "str | bool":
+    """The `verify` value for any client talking to the platform.
+
+    Every path that reaches `PULSE_BASE_URL` must agree on TLS, or one of them
+    breaks on a corp network while the others work — which is exactly how token
+    refresh failed with CERTIFICATE_VERIFY_FAILED while the chat client was
+    fine. Injecting truststore here is what makes the OS trust store (and the
+    inspection CA in it) visible to the ssl module.
+    """
+
+    verify = settings.httpx_verify()
+    if verify is True:
+        trust_os_ca_store()
+    return verify
+
+
 class _RetryablePulseError(RuntimeError):
     """Internal: a 429/5xx that the retry loop should back off and retry."""
+
+
+class _AuthPulseError(RuntimeError):
+    """Internal: a 401. Retryable exactly once, and only after re-minting.
+
+    Kept distinct from a 403: a 401 means the credential is stale, which a
+    refresh fixes, while a 403 means this identity is not allowed to do this —
+    refreshing just spends a second token on the same denial.
+    """
 
 
 def _raise_for_status(status_code: int, text: str) -> None:
@@ -584,6 +811,8 @@ def _raise_for_status(status_code: int, text: str) -> None:
     snippet = (text or "")[:500]
     if status_code == 429 or status_code >= 500:
         raise _RetryablePulseError(f"Pulse {status_code}: {snippet!r}")
+    if status_code == 401:
+        raise _AuthPulseError(f"Pulse 401: {snippet!r}")
     raise PulseResponseError(f"Pulse {status_code}: {snippet!r}")
 
 

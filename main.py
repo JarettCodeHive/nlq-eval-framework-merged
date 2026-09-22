@@ -19,11 +19,17 @@ from qa_pairs.generator.rephrase import generate_rephrases
 from qa_pairs.generator.scale_pairs import generate_pairs
 from qa_pairs.generator.validate_crm import validate as validate_qa_dataset
 
-# from judge.cli import build_argparser as build_judge_argparser
-# from judge.cli import run_from_args as run_judge_from_args
-
+from judge.build_input import build as build_judge_input
+from judge.cli import build_argparser as build_judge_argparser
+from judge.cli import run_calibrate_from_domain
+from judge.cli import run_check_auth as run_check_auth_for_domain
+from judge.cli import run_from_args as run_judge_from_args
+from qa_pairs.utils.output_paths import resolve_qa_output_dir
 
 CommandHandler = Callable[[argparse.Namespace], None]
+
+REPO_ROOT = Path(__file__).resolve().parent
+QA_ROOT = REPO_ROOT / "qa_pairs"
 
 
 def run_validate_config(args: argparse.Namespace) -> None:
@@ -492,20 +498,67 @@ def _ensure_crm(domain: str) -> None:
         )
 
 
-# def run_score(args: argparse.Namespace) -> None:
-#     """LLM-as-Judge scoring pass — see judge/README.md for the full flag surface.
+def run_judge_build_input(args: argparse.Namespace) -> None:
+    """Join the Q&A release contract + companion into one judge input CSV.
 
-#     All flags after the `score` subcommand are consumed by the judge subparser;
-#     the top-level --domain wins over any --domain in the leftover argv so a
-#     single invocation is unambiguous.
-#     """
+    The §9.3 contract file carries no identifiers and the companion carries no
+    answers, so the judge needs them joined. Reads whichever Q&A release the
+    selected profile points at, so it stays in step with `qa-generate-pairs`.
+    """
 
-#     judge_parser = build_judge_argparser(prog="main.py score")
-#     judge_args = judge_parser.parse_args(getattr(args, "command_argv", []))
-#     judge_args.domain = args.domain  # top-level --domain is authoritative
-#     exit_code = run_judge_from_args(judge_args)
-#     if exit_code != 0:
-#         raise SystemExit(exit_code)
+    _ensure_crm(args.domain)
+    qa_release = resolve_qa_output_dir(QA_ROOT, args.profile)
+    output = qa_release / f"{args.domain}_judge_input.csv"
+    build_judge_input(qa_release, args.domain, output)
+
+
+def run_score(args: argparse.Namespace) -> None:
+    """LLM-as-Judge scoring pass + regression scorecard — see judge/README.md
+    for the full flag surface.
+
+    All flags after the `score` subcommand are consumed by the judge subparser;
+    the top-level --domain wins over any --domain in the leftover argv so a
+    single invocation is unambiguous.
+    """
+
+    judge_parser = build_judge_argparser(prog="main.py score")
+    judge_args = judge_parser.parse_args(getattr(args, "command_argv", []))
+    judge_args.domain = args.domain  # top-level --domain is authoritative
+    exit_code = run_judge_from_args(judge_args)
+    if exit_code != 0:
+        raise SystemExit(exit_code)
+
+
+def run_check_auth(args: argparse.Namespace) -> None:
+    """Preflight both credentials — judge provider and platform — in seconds.
+
+    Worth running first on a new machine: a scoring run authenticates twice, and
+    without this the first thing that proves either works is a real run.
+    """
+
+    exit_code = run_check_auth_for_domain(args.domain)
+    if exit_code != 0:
+        raise SystemExit(exit_code)
+
+
+def run_calibrate(args: argparse.Namespace) -> None:
+    """§10.3 calibration protocol — score all anchors for --domain with the
+    live LLM judge and write the .calibration marker if agreement passes.
+    """
+
+    exit_code = run_calibrate_from_domain(args.domain)
+    if exit_code != 0:
+        raise SystemExit(exit_code)
+
+
+def run_rubric(args: argparse.Namespace) -> None:
+    """Render the LLM-as-Judge rubric PDF deliverable (§14.1)."""
+
+    from judge.rubric import main as rubric_main
+
+    exit_code = rubric_main(getattr(args, "command_argv", []))
+    if exit_code != 0:
+        raise SystemExit(exit_code)
 
 
 COMMANDS: dict[str, CommandHandler] = {
@@ -530,7 +583,11 @@ COMMANDS: dict[str, CommandHandler] = {
     "validate-fk": run_validate_fk,
     "validate-imperfection-rates": run_validate_imperfection_rates,
     "validate-join-paths": run_validate_join_paths,
-    # "score": run_score,
+    "check-auth": run_check_auth,
+    "judge-build-input": run_judge_build_input,
+    "score": run_score,
+    "calibrate": run_calibrate,
+    "rubric": run_rubric,
     "validate-relations": run_validate_relations,
     "validate-reproducibility": run_validate_reproducibility,
     "validate-row-caps": run_validate_row_caps,
@@ -579,20 +636,43 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-# def main() -> None:
-#     parser = build_parser()
-#     # Commands that need their own flag surface (e.g. `score`) consume the leftover
-#     # argv; other commands see no leftover and behave exactly as before.
-#     args, command_argv = parser.parse_known_args()
-#     args.command_argv = command_argv
-#     try:
-#         COMMANDS[args.command](args)
-#     except Exception as exc:
-#         print(f"ERROR: {exc}", file=sys.stderr)
-#         raise SystemExit(1) from exc
+# Commands that own their own flag surface and consume the leftover argv.
+# Everything else stays strict: an unrecognised flag on a generation command is
+# a typo, and silently ignoring it would hide a mis-run release step.
+PASSTHROUGH_COMMANDS: frozenset[str] = frozenset({"score", "rubric"})
+
+_HELP_FLAGS: frozenset[str] = frozenset({"-h", "--help"})
+
+
+def _forward_help(argv: list[str]) -> tuple[list[str], bool]:
+    """Route `main.py score --help` to the judge's parser, not this one.
+
+    argparse handles `-h` eagerly at the top level, so a passthrough command's
+    own flags — ~20 of them for `score` — would otherwise be undiscoverable
+    from the entry point we tell people to use. Pull the help flag out of the
+    top-level parse and hand it to the subparser instead.
+    """
+
+    command = next((arg for arg in argv if arg in COMMANDS), None)
+    if command not in PASSTHROUGH_COMMANDS:
+        return argv, False
+    after = argv[argv.index(command) + 1 :]
+    if not _HELP_FLAGS.intersection(after):
+        return argv, False
+    return [arg for arg in argv if arg not in _HELP_FLAGS], True
+
+
 def main() -> None:
+    argv, forward_help = _forward_help(sys.argv[1:])
     parser = build_parser()
-    args = parser.parse_args()
+    args, command_argv = parser.parse_known_args(argv)
+    if command_argv and args.command not in PASSTHROUGH_COMMANDS:
+        parser.error(
+            f"unrecognized arguments for {args.command!r}: {' '.join(command_argv)}"
+        )
+    if forward_help:
+        command_argv.append("--help")
+    args.command_argv = command_argv
     try:
         COMMANDS[args.command](args)
     except Exception as exc:

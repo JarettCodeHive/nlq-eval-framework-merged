@@ -584,8 +584,20 @@ def test_azure_still_wins_when_no_floodgate_credential_is_present(clean_env):
 
 
 def test_floodgate_model_takes_precedence_over_the_default_config(clean_env):
+    # `sales` declares no model of its own, so the environment (tier 2) is what
+    # outranks default.json (tier 3).
     clean_env.setenv("FLOODGATE_MODEL", "anthropic.claude-opus-5")
-    assert load_judge_config("crm").model == "anthropic.claude-opus-5"
+    assert load_judge_config("sales").model == "anthropic.claude-opus-5"
+
+
+def test_domain_config_model_outranks_the_environment(clean_env):
+    """Tier 1 beats tier 2: a pinned per-domain model ignores FLOODGATE_MODEL.
+
+    This is what stops a run's judge model depending on whose machine it ran on
+    — the run manifest must be reproducible from the committed config alone.
+    """
+    clean_env.setenv("FLOODGATE_MODEL", "anthropic.claude-opus-5")
+    assert load_judge_config("crm").model == "anthropic.claude-sonnet-4-6"
 
 
 # --- token minting ----------------------------------------------------

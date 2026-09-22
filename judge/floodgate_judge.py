@@ -49,6 +49,7 @@ from judge.config import (
     FloodgateSettings,
     JudgeConfig,
     MissingCredentials,
+    trust_os_ca_store,
 )
 from judge.llm_judge import BaseLLMJudge
 from judge.parsing import JudgeOutputError
@@ -204,14 +205,7 @@ class FloodgateJudge(BaseLLMJudge):
 
         verify = settings.httpx_verify()
         if verify is True:
-            # Corp machines TLS-inspect with a private root CA that only the OS
-            # store knows about — the same reason pulse_client.py does this.
-            try:
-                import truststore
-
-                truststore.inject_into_ssl()
-            except ImportError:
-                pass
+            trust_os_ca_store()
 
         self._http = httpx.AsyncClient(
             timeout=config.timeout_s,

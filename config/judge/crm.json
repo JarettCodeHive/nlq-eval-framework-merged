@@ -1,8 +1,5 @@
 {
   "_note": "Per-domain overrides for the CRM judge. Empty = inherit every field from default.json. Add fields here only when this domain legitimately differs (e.g. tighter concurrency, different mode).",
-  "_model_note": "Set explicitly so the config file — not a developer's judge/.env — decides the judge model. This is tier 1 of the precedence in judge/config.py: <domain>.json > FLOODGATE_MODEL/OPENAI_MODEL/LLM_MODEL > default.json. Sonnet 4.6 is the deliberate choice: it accepts temperature=0, where sonnet-5/opus-5 reject it outright and leave an Anthropic run with no determinism control at all (no seed on this provider).",
-  "model": "anthropic.claude-sonnet-4-6",
-  "_seed_note": "Explicitly null: Anthropic exposes no seed parameter, so default.json's 42 would never reach the provider and the judge warns about it. Determinism here rests on temperature=0 alone (§10.1 'where supported'). Restore a seed if this domain is ever repointed at an OpenAI/Azure deployment.",
-  "seed": null,
-  "temperature": 0.0
+  "_model_note": "Pinned here so the config file — not a developer's judge/.env — decides the judge model. This is tier 1 of the precedence in judge/config.py: <domain>.json > FLOODGATE_MODEL/OPENAI_MODEL/LLM_MODEL > default.json. Sonnet 4.6 is the deliberate choice: it accepts temperature=0, where sonnet-5/opus-5 reject it outright and leave an Anthropic run with no determinism control at all, since Anthropic exposes no seed.",
+  "model": "anthropic.claude-sonnet-4-6"
 }

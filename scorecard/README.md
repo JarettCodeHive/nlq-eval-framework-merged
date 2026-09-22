@@ -2,7 +2,7 @@
 
 Regression scorecard generation — Execution Spec §11.
 
-## Outputs (written per run into `judge/runs/<run_id>/`)
+## Outputs (written per run into `release/<domain>/scorecards/<run_id>/`)
 
 - **`scorecard_summary.csv`** (§11.1) — one row per domain plus a per-tier
   breakout within domain. Carries `run_id`, `run_timestamp_iso`,

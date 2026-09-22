@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Literal, Union
 
@@ -32,6 +33,44 @@ DEFAULT_DOMAIN_CONFIG = "default"
 # canonical name; the others exist so a user who dropped creds into a
 # differently-named file (e.g. `aurecreds.env`) doesn't have to rename it.
 _ENV_CANDIDATES: tuple[str, ...] = (".env", "aurecreds.env", "azurecreds.env")
+
+_TRUST_STORE_STATE: dict[str, bool] = {}
+
+
+def trust_os_ca_store() -> bool:
+    """Make Python trust the OS certificate store. Returns True if it took.
+
+    Every machine running this is corporate-managed, so the TLS-inspection proxy's
+    root CA is installed in the OS trust store by MDM — and `certifi`, which
+    Python uses by default, has never heard of it. `truststore` bridges that gap,
+    which is why no certificate has to be exported or configured by hand.
+
+    A missing `truststore` is therefore always a broken install on this fleet, not
+    a supported configuration. It used to be swallowed in three separate places,
+    so the symptom surfaced later as CERTIFICATE_VERIFY_FAILED from whichever
+    request happened to run first — which reads like a platform outage. Say it
+    once, plainly, at the point the fallback happens.
+
+    Idempotent and safe to call repeatedly; the warning is emitted once.
+    """
+
+    if "ok" in _TRUST_STORE_STATE:
+        return _TRUST_STORE_STATE["ok"]
+    try:
+        import truststore
+
+        truststore.inject_into_ssl()
+        _TRUST_STORE_STATE["ok"] = True
+    except ImportError:
+        print(
+            "[judge] WARNING: `truststore` is not installed, so TLS will be "
+            "verified against certifi and will FAIL behind a corporate "
+            "inspection proxy. Fix with `pip install -r requirements.txt`, or set "
+            "PULSE_CA_BUNDLE / FLOODGATE_CA_BUNDLE to the corp CA as a fallback.",
+            file=sys.stderr,
+        )
+        _TRUST_STORE_STATE["ok"] = False
+    return _TRUST_STORE_STATE["ok"]
 
 
 class MissingCredentials(RuntimeError):
@@ -184,6 +223,12 @@ class JudgeConfig(BaseModel):
     mode: str = "combined"  # combined | per_dimension
     json_mode: bool = True
     cache_enabled: bool = True
+    # Where a scoring run writes its artifacts, mirroring how the dataset and
+    # Q&A stages resolve their own release paths from config. `{domain}` is
+    # interpolated; the path is relative to the repository root. Run outputs are
+    # per-run and append-only, unlike the sealed single-version dataset and Q&A
+    # packages that sit beside them under release/.
+    run_output_root: str = "release/{domain}/eval-runs"
     # §10.1 wants temperature 0. Some deployments (GPT-5 / o1 family) only allow
     # the default temperature. When False, such a rejection degrades to
     # "model default + fixed seed" with a loud warning instead of failing the
