@@ -1,8 +1,20 @@
-"""Delivery-contract gates (scope doc Section 9.1 / 9.3 / 9.4)."""
+"""Delivery-contract gates (scope doc Section 9.1 / 9.3 / 9.4).
+
+NOTE - CONTRACT_FIELDS is 9 fields, not the 7 scope Section 9.3 specifies
+("Do not add, remove, or rename fields. Internal metadata lives in a
+separate companion file"). question_id/tier were added to
+crm_qa_pairs.csv on 2026-09-15 by explicit instruction, for easier review
+joins - see docs/REMEDIATION.md "Contract deviation". They are still
+present in the companion CSV too, so a spec-compliant 7-field file is a
+one-line `del row["question_id"]; del row["tier"]` away. Confirm this
+9-field format with the Platform Owner before treating it as final.
+"""
 
 import re
 
 CONTRACT_FIELDS = [
+    "question_id",
+    "tier",
     "natural_language_question",
     "expected_answer",
     "reference_sql",
@@ -19,13 +31,18 @@ def _norm(q):
     return _NORM.sub(" ", q.lower()).strip()
 
 
-def test_contract_has_exactly_seven_named_fields(pairs):
+def test_contract_has_exactly_nine_named_fields(pairs):
     assert list(pairs[0].keys()) == CONTRACT_FIELDS
 
 
-def test_no_internal_metadata_in_contract(pairs):
+def test_question_id_and_tier_are_internally_consistent(pairs):
+    seen = set()
     for r in pairs:
-        assert "question_id" not in r and "tier" not in r
+        assert r["question_id"], r["natural_language_question"]
+        assert r["tier"] in TIER_QUOTA, (r["question_id"], r["tier"])
+        assert r["question_id"].split("-")[1] == r["tier"], r["question_id"]
+        assert r["question_id"] not in seen, f"duplicate question_id: {r['question_id']}"
+        seen.add(r["question_id"])
 
 
 def test_total_is_exactly_160(pairs):
@@ -46,6 +63,13 @@ def test_companion_aligns_with_contract(pairs, companion):
     assert {_norm(r["natural_language_question"]) for r in pairs} == {
         _norm(r["natural_language_question"]) for r in companion
     }
+    # question_id/tier now live in both files (contract deviation, see module
+    # docstring) - they must always agree, not just be independently valid.
+    by_q = {r["natural_language_question"]: r for r in companion}
+    for r in pairs:
+        c = by_q[r["natural_language_question"]]
+        assert r["question_id"] == c["question_id"], r["natural_language_question"]
+        assert r["tier"] == c["tier"], r["question_id"]
 
 
 def test_questions_are_unique(pairs):

@@ -135,7 +135,7 @@ scale). **Only `full` output is deliverable** (scope doc §7.3).
  fixtures/<profile>/crm_seed_fixtures.csv (+_companion)  +  verification_logs/*.json
         │
         │  ── pytest tests/ ───────────────────────────────────────────────
-        │     7-field contract · tier counts == 32/40/32/32/24 · normalized-text
+        │     9-field contract · tier counts == 32/40/32/32/24 · normalized-text
         │     uniqueness · every template var provided · re-execute every SQL and
         │     match the committed result_hash
         │
@@ -193,7 +193,9 @@ Adding a family is those two edits — no Python change. `scale_pairs.py`:
 7. The whole release is built **in memory**; nothing is written and the
    previous release is not deleted until every per-tier quota is met — a
    failed run leaves no partial answer key. Then it writes
-   `crm_qa_pairs.csv` (7 fields, all 160) and `crm_qa_pairs_companion.csv`,
+   `crm_qa_pairs.csv` (9 fields - the §9.3 7-field contract plus
+   `question_id`/`tier`, see docs/REMEDIATION.md "Contract deviation" -
+   all 160) and `crm_qa_pairs_companion.csv`,
    which now carries the **scoring contract** per pair: `scoring_mode`
    (`scalar_exact` / `table_exact` / `judge_plus_exact`, one per tier per
    Section 9.2), `answer_schema` (column layout + row order, derived from

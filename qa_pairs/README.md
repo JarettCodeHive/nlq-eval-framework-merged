@@ -5,11 +5,23 @@ from "the CRM schema + the frozen golden dataset" to "a set of real,
 DuckDB-verified Q&A pairs" in one folder.
 
 The 5 tiers are generated to the full Section 9.1 quota — **160 pairs**
-in the delivered **7-field** contract format plus a keyed companion — for
-both `dev` and `full`. **32 seed fixtures** (one per family) exist for
-review and are *not* part of the 160. **16 rephrase groups** (~10% of the
-160) each pair a base release question with 1–2 reworded variants that
-share one `result_hash`. See [Status](#status).
+in a **9-field** delivery format (`question_id` + `tier` were added to the
+spec's frozen 7-field contract on 2026-09-15 by explicit instruction, for
+easier review joins — see "Contract deviation" in `docs/REMEDIATION.md`)
+plus a keyed companion — for both `dev` and `full`. **32 seed fixtures**
+(one per family) exist for review and are *not* part of the 160.
+**16 rephrase groups** (~10% of the 160) each pair a base release question
+with 1–2 reworded variants that share one `result_hash`. See
+[Status](#status).
+
+**Contract deviation (scope §9.3):** the spec freezes `crm_qa_pairs.csv`
+to exactly 7 named fields — *"Do not add, remove, or rename fields.
+Internal metadata lives in a separate companion file."* This file
+currently has **9** — `question_id` and `tier` prepended — because that's
+easier to browse/join in DBeaver during review. `question_id`/`tier` still
+live in the companion too, so regenerating a spec-compliant 7-field file
+is a one-line column drop. **Confirm this with the Platform Owner before
+treating it as the final delivery format.**
 
 This POC consumes the CRM generator outputs directly (six tables:
 `accounts`, `contacts`, `campaigns`, `contact_campaigns`, `interactions`,
@@ -95,7 +107,7 @@ full: ../release/crm/qa-pairs-v<qa_version>/
        crm_qa_pairs.csv (+_companion) + verification_logs/*.json
        rephrase/*.csv + rephrase/verification_logs/*.json
         |
-        v   pytest tests/                   7-field contract; tier counts == 32/40/32/32/24;
+        v   pytest tests/                   9-field contract; tier counts == 32/40/32/32/24;
         |                                   normalized-text uniqueness; every template var
         |                                   is provided; re-execute every SQL and match hash
         v
@@ -144,16 +156,18 @@ Browse in **DBeaver**: point a DuckDB connection at
 `dataset/crm_full.duckdb` (close it before re-running the scripts —
 DuckDB is single-writer).
 
-## The Q&A pair CSV — 7 fields (contracted, §9.3)
+## The Q&A pair CSV — 9 fields (§9.3 contract is 7 — see deviation above)
 
-`natural_language_question, expected_answer, reference_sql, reference_tables, reference_fields, judge_reference, derivation_rationale`
+`question_id, tier, natural_language_question, expected_answer, reference_sql, reference_tables, reference_fields, judge_reference, derivation_rationale`
 
-`question_id`, `tier`, and all other metadata live in
-`crm_qa_pairs_companion.csv` (columns: `question_id, tier, family,
+`question_id` and `tier` are joinable straight off this file now, but they
+are also carried in `crm_qa_pairs_companion.csv` — which is still where
+every other piece of metadata lives (columns: `question_id, tier, family,
 join_path_id, sql_source, scoring_mode, answer_schema, numeric_components,
 judge_rubric_version, judge_prompt_version, scorer_status, param_values,
-result_hash, natural_language_question`, sorted by `question_id`). Join it
-to the contract file on `natural_language_question`.
+result_hash, natural_language_question`, sorted by `question_id`). Join on
+`question_id` (or `natural_language_question`) — `test_contract.py`
+asserts the two files never disagree on either.
 
 **`scoring_mode`** (Section 9.2, one per tier) tells the downstream
 evaluator how to score each pair — and `utils/scoring.py` is the working

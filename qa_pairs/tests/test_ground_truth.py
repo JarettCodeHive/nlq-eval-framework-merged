@@ -6,8 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from utils.serialization import serialize
 from utils.output_paths import resolve_qa_output_dir
+from utils.serialization import serialize
 
 QA_ROOT = Path(__file__).resolve().parent.parent
 LOG_DIR = resolve_qa_output_dir(QA_ROOT, "full") / "verification_logs"
