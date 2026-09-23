@@ -200,19 +200,17 @@ A blocked host is an IT allowlist request, not a code change.
 
 ### Smoke test (3 questions)
 
-First build the judge input from the Q&A release — the §9.3 contract file and
-the companion have to be joined before the judge can read them:
+`judge` takes `--domain` and `--profile`, like `build-dataset` and `qa-build`.
+The pair CSV, the `--dataset-version` tag and the `--pulse sql` table directory
+all follow from those two and are echoed at the top of the run; pass the
+matching flag to override any of them. The §9.3 contract file and the companion
+are joined into the judge input automatically the first time a profile is
+scored.
 
 ```bash
-python main.py judge-build-input --profile full
-```
-
-```bash
-python main.py score \
+python main.py judge --domain crm --profile full \
   --judge llm \
   --pulse live \
-  --input-csv release/crm/qa-pairs-v0.3.0/crm_judge_input.csv \
-  --domain crm \
   --limit 3 \
   --pulse-concurrency 3 \
   --allow-uncalibrated
@@ -221,10 +219,8 @@ python main.py score \
 ### Full domain (PREVIEW)
 
 ```bash
-python main.py score \
+python main.py judge --domain crm --profile full \
   --judge llm --pulse live \
-  --input-csv release/crm/qa-pairs-v0.3.0/crm_judge_input.csv \
-  --domain crm \
   --pulse-concurrency 8 \
   --allow-uncalibrated
 ```
@@ -236,15 +232,18 @@ cannot cover the estimate; see §7.
 ### Official RELEASE run (once calibration + baseline are possible)
 
 ```bash
-python main.py score \
+python main.py judge --domain crm --profile full \
   --judge llm --pulse live \
-  --input-csv release/crm/qa-pairs-v0.3.0/crm_judge_input.csv \
-  --domain crm \
   --pulse-concurrency 8 \
   --release \
-  --platform-version pulse-2026.09 \
-  --dataset-version dataset-v1.0.0
+  --platform-version pulse-2026.09
 ```
+
+`--dataset-version` is derived as `<dataset-version>+<qa-package>`, e.g.
+`dataset-v1.0.0+qa-pairs-v0.3.0` — both move independently, so neither alone
+identifies what was scored. `--platform-version` is the one tag the repository
+cannot know; set `PLATFORM_VERSION` in `judge/.env` or `platform_version` in
+`config/judge/<domain>.json` to stop passing it by hand.
 
 `--release` needs: `--judge llm`, a calibration marker for the domain,
 `--platform-version`, `--dataset-version`. First release for a

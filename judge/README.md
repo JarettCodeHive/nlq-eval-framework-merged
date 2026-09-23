@@ -44,6 +44,7 @@ judge/
   cli.py                  Evaluation runner: python -m judge.cli  (see docs/judge_runbook.md)
   run_log.py              Structured per-run event log + credential redaction
   input_contract.py       CSV input contract for question/pair batches
+  resolve.py              Derives a run's paths from --domain + --profile alone
   sql_pulse.py            DuckDB reference_sql harness (§14.2 pair verification)
   pulse_client.py         Real platform API client (HC-4) — `--pulse live`
   templates/judge/        Jinja prompt templates (combined + per-dimension)
@@ -75,8 +76,9 @@ Platform (Pulse) source is chosen with `--pulse`:
   submitted in its own `chat_session_id` so answers stay independent, and the
   ids actually sent are what `pulse_raw/` records.
 - `sql` — executes each pair's `reference_sql` in DuckDB against a CSV dataset
-  (`--input-csv` + `--pulse-data`). This verifies that pairs and dataset agree
-  (§14.2); it never scores the platform, and its runs are PREVIEW-only.
+  (`--pulse-data`, derived from `--domain`/`--profile`). This verifies that pairs
+  and dataset agree (§14.2); it never scores the platform, and its runs are
+  PREVIEW-only.
 
 ## Section 10.1 guarantees
 
@@ -100,17 +102,21 @@ Platform (Pulse) source is chosen with `--pulse`:
 
 ## Quick start
 
+`--domain` and `--profile` are the whole required interface, the same pair
+`build-dataset` and `qa-build` take. `--input-csv`, `--dataset-version` and
+`--pulse-data` are derived from them in `judge/resolve.py` unless given
+explicitly, and the derived values are echoed at the top of every run.
+
 ```bash
 python -m pip install -r requirements.txt
-python -m judge.cli --judge heuristic --pulse sql \
-  --input-csv pairs.csv --pulse-data data/crm/
+python -m judge.cli --domain crm --profile full --judge heuristic --pulse sql
 ```
 
 For live LLM runs:
 
 ```bash
 cp judge/.env.example judge/.env   # then fill in AZURE_OPENAI_* or OPENAI_API_KEY
-python -m judge.cli --judge llm --pulse live --domain crm --input-csv pairs.csv
+python -m judge.cli --domain crm --profile full --judge llm --pulse live
 ```
 
 ## Judge provider
@@ -135,7 +141,7 @@ API key. Onboard once per model family at
 ```bash
 # local Mac — authenticates as you, via the AppleConnect CLI
 LLM_PROVIDER=floodgate FLOODGATE_MODEL=anthropic.claude-sonnet-4-6 \
-  python -m judge.cli --judge llm --pulse live --domain crm --input-csv pairs.csv
+  python -m judge.cli --judge llm --pulse live --domain crm --profile full
 
 # CI / servers — authenticates as a system account, via a Narrative certificate
 export FLOODGATE_NARRATIVE_CERT=/tls/tls.crt FLOODGATE_NARRATIVE_KEY=/tls/tls.key

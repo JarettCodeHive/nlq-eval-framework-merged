@@ -363,6 +363,7 @@ class PulseClient:
 
         answer = _extract_answer(data)
         sql = _extract_sql(data)
+        clarify = _extract_clarify(data)
         timing = data.get("timing") if isinstance(data, dict) else None
         self._log.event(
             "pulse.response",
@@ -370,11 +371,15 @@ class PulseClient:
             latency_s=round(elapsed, 3),
             answer_chars=len(answer or ""),
             sql_present=bool(sql),
+            clarify=clarify,
             server_timing=timing if isinstance(timing, dict) else None,
             record_counts=data.get("record_counts") if isinstance(data, dict) else None,
         )
         return PulseResponse(
-            question_id=question_id, answer_text=answer, generated_sql=sql
+            question_id=question_id,
+            answer_text=answer,
+            generated_sql=sql,
+            clarify=clarify,
         )
 
     def _dump_raw(
@@ -864,6 +869,27 @@ def _walk_strings(obj: Any, keys: tuple[str, ...]) -> str | None:
             if found:
                 return found
     return None
+
+
+def _extract_clarify(data: dict) -> bool:
+    """True when the platform declined to answer and asked instead.
+
+    The flag lives inside ``response``, which is a *stringified* JSON document —
+    so in the raw file on disk it appears escaped as ``\\"clarify\\": true``.
+    Matching the unescaped form against the raw text silently finds nothing,
+    which is exactly how the first pass at this check reported zero
+    clarifications on a run that had eleven (see `judge/compare_runs.py`). Parse,
+    then look.
+    """
+
+    if not isinstance(data, dict):
+        return False
+    payload = _maybe_json(data.get("response"))
+    if isinstance(payload, dict) and payload.get("clarify") is True:
+        return True
+    # Top level too: the field has been observed on the envelope as well as
+    # inside the stringified body, and either one means the same thing.
+    return data.get("clarify") is True
 
 
 def _extract_answer(data: dict) -> str:

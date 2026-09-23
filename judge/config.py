@@ -229,6 +229,12 @@ class JudgeConfig(BaseModel):
     # per-run and append-only, unlike the sealed single-version dataset and Q&A
     # packages that sit beside them under release/.
     run_output_root: str = "release/{domain}/eval-runs"
+    # §11.1 version tag for the platform under evaluation. Empty by default and
+    # overridden by PLATFORM_VERSION or --platform-version — unlike the model,
+    # this describes whichever deployment a machine is pointed at, so the
+    # environment outranks the checked-in file. A --release run still refuses
+    # when all three are empty.
+    platform_version: str = ""
     # §10.1 wants temperature 0. Some deployments (GPT-5 / o1 family) only allow
     # the default temperature. When False, such a rejection degrades to
     # "model default + fixed seed" with a loud warning instead of failing the

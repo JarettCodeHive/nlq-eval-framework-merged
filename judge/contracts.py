@@ -136,6 +136,59 @@ class PulseResponse(BaseModel):
     question_id: str
     answer_text: str
     generated_sql: str | None = None
+    # True when the platform declined to answer and asked a clarifying question
+    # instead (`clarify: true` in the TCO payload). A distinct outcome, not a
+    # wrong answer — see `ClarificationVerdict`. Only the live client can
+    # observe this; an offline reference_sql replay never clarifies.
+    clarify: bool = False
     # Other platform-side fields (timing, record_counts, reasoning, dashboard)
     # are preserved in the run's pulse_raw/ payload rather than here — they are
     # diagnostics, not scored inputs.
+
+
+# Fixed score for a declined answer, set by the Platform Owner. Deliberately a
+# constant rather than a config field: it is a scoring-policy decision that has
+# to read the same on every run and every scorecard, and a run that could quietly
+# use a different one would not be comparable to the baseline.
+CLARIFICATION_SCORE: float = 2.5
+
+
+class ClarificationVerdict(BaseModel):
+    """The platform asked a clarifying question instead of answering (§2e).
+
+    Deliberately NOT a `JudgeVerdict`. All four rubric dimensions anchor on an
+    answer — factual correctness against `expected_answer`, completeness and
+    format against `judge_reference` — and there is no answer here to anchor on.
+    Inventing four integer scores to average out at 2.5 would put numbers in the
+    scorecard that no rubric produced.
+
+    So the dimensions stay absent and `overall_score` is the fixed
+    `CLARIFICATION_SCORE`. No provider call is made: the score does not depend
+    on the model, so spending a judge call on it would buy nothing and cost
+    ~12s per clarification.
+
+    Read the consequence for the scorecard plainly: these rows are counted in
+    `mean_overall` and NOT in `mean_per_dimension`, so the two carry different
+    denominators. Both are reported.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str | None = None
+    # What the platform asked for instead. Kept so a reader can see whether the
+    # clarification was reasonable or, as in §2e, offered options none of which
+    # were correct.
+    clarification_text: str = ""
+
+    @property
+    def overall_score(self) -> float:
+        return CLARIFICATION_SCORE
+
+    @property
+    def rationale(self) -> str:
+        return (
+            "Platform declined to answer and requested clarification; scored at "
+            f"the fixed {CLARIFICATION_SCORE} rather than judged, because the "
+            "rubric dimensions anchor on an answer that was never given."
+        )
+

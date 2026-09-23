@@ -31,6 +31,9 @@ class ScorecardConfig(BaseModel):
     # Where the §11 deliverables land. `{domain}` is interpolated; the path is
     # relative to the repository root.
     report_output_root: str = "release/{domain}/scorecards"
+    # A combined scorecard spans domains, so it cannot live under one domain's
+    # directory. This is the §14.1 artefact: one baseline across all domains.
+    combined_report_root: str = "release/scorecards"
 
 
 def _load_json(path: Path) -> dict:
@@ -62,3 +65,15 @@ def report_output_dir(
 
     settings = cfg or load_scorecard_config(domain)
     return REPO_ROOT / settings.report_output_root.format(domain=domain) / run_id
+
+
+def combined_report_dir(run_id: str, cfg: ScorecardConfig | None = None) -> Path:
+    """Where a multi-domain scorecard is written.
+
+    Deliberately not under `release/<domain>/` — a scorecard covering five
+    domains filed under one of them would misrepresent what it is, and the
+    baseline it establishes is cross-domain by definition (§14.1).
+    """
+
+    settings = cfg or load_scorecard_config(DEFAULT_DOMAIN_CONFIG)
+    return REPO_ROOT / settings.combined_report_root / run_id

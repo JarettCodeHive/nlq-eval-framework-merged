@@ -212,6 +212,12 @@ class ExactMatchResult(str, Enum):
     FAIL = "fail"
     NOT_APPLICABLE = "not_applicable"  # nothing deterministic to compare
     ERROR = "error"  # the platform never answered — infra, not accuracy
+    # The platform answered, but with a question rather than an answer (§2e).
+    # Not a wrong answer and not an outage: there is no value to compare, so it
+    # sits outside the percentage like ERROR does — and is named in the summary
+    # rather than derived, because an exclusion that quietly raises accuracy is
+    # what §14.2 condition 4 warns about.
+    CLARIFICATION = "clarification"
 
 
 @dataclass(frozen=True)

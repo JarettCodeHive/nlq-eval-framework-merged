@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from judge.contracts import DIMENSIONS, JudgeVerdict
+from judge.contracts import DIMENSIONS, ClarificationVerdict, JudgeVerdict
 from judge.exact_match import ExactMatchOutcome, ExactMatchResult
 from scorecard.baseline import RegressionComparison, compare_to_baseline
 
@@ -41,12 +41,16 @@ SUMMARY_FIELDNAMES: list[str] = [
     # Named, not derived: an exclusion that quietly raises exact_match_pct is
     # exactly the failure §14.2 condition 4 warns about.
     "exact_match_not_applicable",
+    "exact_match_clarification",
     "expected_answer_off_contract",
     # §9.2 T3 diagnostic — reported beside the scores, never inside them.
     "null_handling_applicable",
     "null_handling_fail",
     *JUDGE_COLUMNS.keys(),
     "judge_overall",
+    # Denominator for judge_overall differs from the per-dimension columns by
+    # exactly this count — a clarification has an overall and no dimensions.
+    "judge_clarifications",
     "judge_errors",
     "platform_errors",
     "baseline_exact_match_pct",
@@ -100,6 +104,11 @@ class RunContext:
     judge_seed_enforced: bool = True
     # §9.5 rephrase-group findings, rendered in the human-readable scorecard.
     rephrase_findings: tuple[str, ...] | list[str] = ()
+    # §11.1 reports dataset_version per row, and a combined scorecard spans
+    # domains that were each built from their own dataset and Q&A release. Where
+    # this is populated it wins over `dataset_version` for that domain's rows;
+    # a single-domain run leaves it empty and nothing changes.
+    per_domain_dataset_version: dict[str, str] = field(default_factory=dict)
     # Free-text note about how this scorecard was assembled — e.g. a merge of a
     # full run and a partial re-run. Rendered plainly in the header. Kept
     # separate from `rephrase_findings` because that field means one specific
@@ -116,15 +125,22 @@ class GroupStats:
     exact_match_pass: int = 0
     exact_match_eligible: int = 0
     exact_match_not_applicable: int = 0
+    exact_match_clarification: int = 0
     expected_answer_off_contract: int = 0
     null_handling_applicable: int = 0
     null_handling_fail: int = 0
     judge_errors: int = 0
     platform_errors: int = 0
+    clarifications: int = 0
     _dim_sums: dict[str, float] = field(
         default_factory=lambda: dict.fromkeys(DIMENSIONS, 0.0)
     )
     _judged: int = 0
+    # judge_overall is accumulated per row rather than derived from _dim_sums:
+    # a clarification contributes an overall score with no dimensions behind it,
+    # so the two can no longer be computed from one another.
+    _overall_sum: float = 0.0
+    _overall_n: int = 0
 
     def add(self, verdict: object, em: ExactMatchOutcome, pair: dict) -> None:
         self.questions_total += 1
@@ -147,10 +163,21 @@ class GroupStats:
             self.exact_match_eligible += 1
         elif em.result == ExactMatchResult.NOT_APPLICABLE:
             self.exact_match_not_applicable += 1
+        elif em.result == ExactMatchResult.CLARIFICATION:
+            # Outside the denominator: the platform declined, so there is no
+            # answer that could have been right or wrong (§2e).
+            self.exact_match_clarification += 1
         if isinstance(verdict, JudgeVerdict):
             self._judged += 1
             for dim in DIMENSIONS:
                 self._dim_sums[dim] += getattr(verdict, dim)
+            self._overall_sum += verdict.overall_score
+            self._overall_n += 1
+        elif isinstance(verdict, ClarificationVerdict):
+            # Contributes to judge_overall, never to a per-dimension mean.
+            self.clarifications += 1
+            self._overall_sum += verdict.overall_score
+            self._overall_n += 1
         elif isinstance(verdict, Exception):
             self.judge_errors += 1
 
@@ -161,19 +188,21 @@ class GroupStats:
         return round(self.exact_match_pass / self.exact_match_eligible * 100.0, 4)
 
     def dim_mean(self, dim: str) -> float | None:
+        """Mean over JUDGED rows only — clarifications have no dimensions."""
         if self._judged == 0:
             return None
         return round(self._dim_sums[dim] / self._judged, 4)
 
     @property
     def judge_overall(self) -> float | None:
-        if self._judged == 0:
+        """Mean over judged rows AND clarifications, which carry a fixed score.
+
+        A larger denominator than `dim_mean` uses; `judge_clarifications` is on
+        the row so the difference is readable rather than surprising.
+        """
+        if self._overall_n == 0:
             return None
-        return round(
-            sum(self._dim_sums[d] for d in DIMENSIONS)
-            / (self._judged * len(DIMENSIONS)),
-            4,
-        )
+        return round(self._overall_sum / self._overall_n, 4)
 
 
 @dataclass
@@ -205,7 +234,9 @@ def _summary_row(
         "run_id": ctx.run_id,
         "run_timestamp_iso": ctx.run_timestamp_iso,
         "platform_version": ctx.platform_version,
-        "dataset_version": ctx.dataset_version,
+        "dataset_version": ctx.per_domain_dataset_version.get(
+            domain, ctx.dataset_version
+        ),
         "scorecard_mode": ctx.scorecard_mode,
         "comparison_policy": ctx.comparison_policy,
         "judge_temperature_enforced": ctx.judge_temperature_enforced,
@@ -217,10 +248,12 @@ def _summary_row(
         "exact_match_eligible": stats.exact_match_eligible,
         "exact_match_pct": stats.exact_match_pct,
         "exact_match_not_applicable": stats.exact_match_not_applicable,
+        "exact_match_clarification": stats.exact_match_clarification,
         "expected_answer_off_contract": stats.expected_answer_off_contract,
         "null_handling_applicable": stats.null_handling_applicable,
         "null_handling_fail": stats.null_handling_fail,
         "judge_overall": stats.judge_overall,
+        "judge_clarifications": stats.clarifications,
         "judge_errors": stats.judge_errors,
         "platform_errors": stats.platform_errors,
         # Baseline comparison is domain-level only (§11.3) and only meaningful
@@ -316,6 +349,10 @@ def _question_row(
     if isinstance(verdict, JudgeVerdict):
         for col, dim in JUDGE_COLUMNS.items():
             row[col] = getattr(verdict, dim)
+        row["judge_overall"] = round(verdict.overall_score, 4)
+        row["judge_rationale"] = verdict.rationale
+    elif isinstance(verdict, ClarificationVerdict):
+        # Dimension columns stay blank — no rubric scored them (§2e).
         row["judge_overall"] = round(verdict.overall_score, 4)
         row["judge_rationale"] = verdict.rationale
     elif em.result == ExactMatchResult.ERROR:

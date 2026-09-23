@@ -401,30 +401,33 @@ a scoring run writes the scorecard artifacts itself, because §11.3 requires
 exact-match accuracy and judge scores to be reported side by side from the same
 run.
 
-First join the Q&A release into a single judge input. The §9.3 contract file
-carries no identifiers and the companion carries no answers, so the judge needs
-them joined on `natural_language_question`:
+`judge` takes the same two arguments as `build-dataset` and `qa-build` —
+`--domain` and `--profile`. Everything those two already determine is resolved
+from config rather than retyped as a path: which Q&A package holds the pairs,
+the `--dataset-version` tag for the scorecard, and the table directory for
+`--pulse sql`. Any of them can still be overridden with its own flag.
 
 ```bash
-python main.py judge-build-input --profile full
+python main.py judge --domain crm --profile full
+python main.py judge --help          # the judge's full flag surface
 ```
 
-That writes `<qa-release>/crm_judge_input.csv`. Then score. `score` owns its own
-flag surface — everything after it goes to the judge's parser:
+The judge input CSV is joined on demand. The §9.3 contract file carries no
+identifiers and the companion carries no answers, so the judge needs them joined
+on `natural_language_question`; `judge` does that itself if the joined file is
+absent. Run it deliberately — to rebuild the file after the pairs change — with:
 
 ```bash
-python main.py score --help          # the judge's full flag surface
+python main.py judge-build-input --domain crm --profile full
 ```
 
 An offline run, executing each pair's `reference_sql` in DuckDB instead of
 calling the platform. Use this for CI and for validating the pipeline:
 
 ```bash
-python main.py score \
+python main.py judge --domain crm --profile full \
   --judge heuristic \
   --pulse sql \
-  --input-csv release/crm/qa-pairs-v0.3.0/crm_judge_input.csv \
-  --pulse-data release/crm/dataset-v1.0.0 \
   --limit 3 \
   --allow-uncalibrated
 ```
@@ -434,8 +437,8 @@ A real run against the platform, scored by the LLM judge. Requires the
 and fill it in:
 
 ```bash
-python main.py score --judge llm --pulse live \
-  --input-csv release/crm/qa-pairs-v0.3.0/crm_judge_input.csv \
+python main.py judge --domain crm --profile full \
+  --judge llm --pulse live \
   --allow-uncalibrated
 ```
 

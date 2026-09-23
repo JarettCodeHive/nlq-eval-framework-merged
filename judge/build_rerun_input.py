@@ -26,7 +26,7 @@ questions it is the cheapest information in the set.
     python judge/build_rerun_input.py --run <run_id> --include-ambiguous
 
 The output carries the same columns as the full input, so it drops straight into
-`main.py score --input-csv`.
+`main.py judge --input-csv`.
 """
 
 from __future__ import annotations

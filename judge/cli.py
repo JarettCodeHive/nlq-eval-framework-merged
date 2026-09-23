@@ -6,11 +6,16 @@ scorecard consumer can read the JSON without an adapter.
 
 See `docs/judge_runbook.md` for the full flag surface and a live-run walkthrough.
 
-  python -m judge.cli --input-csv pairs.csv                # live platform + LLM judge
-  python -m judge.cli --pulse regressed                   # regression signal against fixtures
-  python -m judge.cli --judge llm --pulse live \\
-      --input-csv <pairs.csv> --domain crm                # real platform API (HC-4)
-  python -m judge.cli --mode per_dimension                # 4 judge prompts, no halo effect
+`--domain` and `--profile` are the whole required interface — the same two
+arguments `build-dataset` and `qa-build` take. Everything they already determine
+(the pair CSV, the §11.1 dataset version tag, the `--pulse sql` table directory)
+is resolved in `judge/resolve.py`; pass the matching flag to override any of it.
+
+  python -m judge.cli --domain crm --profile full          # live platform + LLM judge
+  python -m judge.cli --domain crm --profile full \\
+      --judge heuristic --pulse sql                        # offline reference_sql replay
+  python -m judge.cli --mode per_dimension                 # 4 judge prompts, no halo effect
+  python -m judge.cli --input-csv pairs.csv                # an explicit pair set
 
 Writes release/<domain>/eval-runs/<UTC-timestamp>/ — results.json + the §11
 scorecard files. The root comes from `run_output_root` in config/judge/, so it
@@ -42,7 +47,13 @@ from judge.config import (
     load_llm_settings,
     trust_os_ca_store,
 )
-from judge.contracts import DIMENSIONS, JudgeRequest, JudgeVerdict
+from judge.contracts import (
+    CLARIFICATION_SCORE,
+    DIMENSIONS,
+    ClarificationVerdict,
+    JudgeRequest,
+    JudgeVerdict,
+)
 from judge.exact_match import (
     ComparisonPolicy,
     ExactMatchOutcome,
@@ -50,6 +61,7 @@ from judge.exact_match import (
     evaluate_answer,
 )
 from judge.input_contract import InputRow, load_input_csv
+from judge.resolve import ResolutionError, apply_resolved_defaults
 from judge.heuristic_judge import HeuristicJudge
 from judge.sql_pulse import SQLPulse
 from judge.openai_judge import OpenAIJudge
@@ -315,9 +327,11 @@ async def _collect_and_score(
     ) -> tuple[dict, JudgeRequest, str | None, JudgeVerdict | Exception | None]:
         async with pulse_sem:
             started = time.perf_counter()
+            clarify = False
             try:
                 resp = await asyncio.to_thread(pulse.query, pair["question_id"])
                 answer, sql, err = resp.answer_text, resp.generated_sql, None
+                clarify = resp.clarify
             except Exception as exc:  # noqa: BLE001 — isolate, record, continue
                 answer, sql, err = "", None, f"{type(exc).__name__}: {exc}"
             elapsed = time.perf_counter() - started
@@ -329,7 +343,8 @@ async def _collect_and_score(
             # unable to tell a slow run from a hung one.
             print(
                 f"[judge] platform {n:>4}/{total}  {elapsed:6.1f}s  "
-                f"{'ERROR' if err else 'ok':<5} {pair['question_id']}",
+                f"{'ERROR' if err else 'clarify' if clarify else 'ok':<7} "
+                f"{pair['question_id']}",
                 file=sys.stderr,
             )
             if err:
@@ -346,6 +361,27 @@ async def _collect_and_score(
         )
         if err:
             return pair, req, err, None
+
+        if clarify:
+            # No judge call: the score is fixed, so a provider round-trip would
+            # change nothing and cost ~12s. Counted as scored so the progress
+            # line still reaches total.
+            async with lock:
+                counts["scored"] += 1
+                m = counts["scored"]
+            print(
+                f"[judge] scored   {m:>4}/{total}  "
+                f"{f'clarification={CLARIFICATION_SCORE}':<28} {pair['question_id']}",
+                file=sys.stderr,
+            )
+            return (
+                pair,
+                req,
+                None,
+                ClarificationVerdict(
+                    question_id=pair["question_id"], clarification_text=answer
+                ),
+            )
 
         async with judge_sem:
             try:
@@ -394,6 +430,13 @@ def _print_row(
     if isinstance(verdict, PlatformError):
         print(f"PLATFORM ERROR: {verdict}  (not scored)")
         return
+    if isinstance(verdict, ClarificationVerdict):
+        print(
+            f"CLARIFICATION REQUEST — judge_overall fixed at "
+            f"{verdict.overall_score} (§2e; dimensions not scored)"
+        )
+        print(f"platform asked : {verdict.clarification_text[:220]}")
+        return
     if isinstance(verdict, Exception):
         print(f"JUDGE ERROR: {type(verdict).__name__}: {verdict}")
         return
@@ -425,6 +468,26 @@ def _summarise_null_handling(results: list) -> dict:
 
 def _report_checks(results: list, rephrase_findings: list) -> None:
     """Print the §9.2 / §9.5 diagnostics that are not part of either score."""
+    clarifications = [
+        pair
+        for pair, _req, v, _em in results
+        if isinstance(v, ClarificationVerdict)
+    ]
+    if clarifications:
+        # Said loudly because these rows LEAVE the exact-match denominator. A
+        # rise in pass_pct that comes from questions the platform declined is
+        # not a rise in accuracy (§14.2 condition 4).
+        print(
+            f"\n[judge] ⚠ CLARIFICATION REQUESTS ({len(clarifications)}/"
+            f"{len(results)}) — §2e: the platform asked a question instead of "
+            f"answering. Scored at a fixed {CLARIFICATION_SCORE}, dimensions not "
+            "scored, and EXCLUDED from the exact-match denominator — so "
+            "exact_match pass_pct is computed over fewer questions than were asked:",
+            file=sys.stderr,
+        )
+        for pair in clarifications[:10]:
+            print(f"[judge]   {pair.get('question_id')}", file=sys.stderr)
+
     null_failures = [
         pair
         for pair, _req, _v, _em in results
@@ -491,6 +554,13 @@ def _row_dict(
         row["prompt_version"] = verdict.prompt_version
         row["model_version"] = verdict.model_version
         row["cached"] = verdict.cached
+    elif isinstance(verdict, ClarificationVerdict):
+        # Dimensions stay null on purpose — no rubric produced them (§2e).
+        row["judge_scores"] = None
+        row["judge_overall"] = verdict.overall_score
+        row["judge_rationale"] = verdict.rationale
+        row["clarification_request"] = True
+        row["clarification_text"] = verdict.clarification_text
     elif isinstance(verdict, PlatformError):
         row["platform_error"] = str(verdict)
     else:
@@ -504,6 +574,9 @@ def _summarise(
     ],
 ) -> dict:
     verdicts = [v for _, _, v, _ in results if isinstance(v, JudgeVerdict)]
+    clarifications = [
+        v for _, _, v, _ in results if isinstance(v, ClarificationVerdict)
+    ]
     platform_errors = [v for _, _, v, _ in results if isinstance(v, PlatformError)]
     judge_errors = [
         v
@@ -512,15 +585,26 @@ def _summarise(
     ]
     em = [outcome.result for _, _, _, outcome in results]
     off_contract = sum(1 for _, _, _, o in results if o.off_contract)
-    _excluded = {ExactMatchResult.NOT_APPLICABLE, ExactMatchResult.ERROR}
+    _excluded = {
+        ExactMatchResult.NOT_APPLICABLE,
+        ExactMatchResult.ERROR,
+        ExactMatchResult.CLARIFICATION,
+    }
     em_eligible = [e for e in em if e not in _excluded]
     per_dim = {
         d: statistics.mean(getattr(v, d) for v in verdicts) if verdicts else None
         for d in DIMENSIONS
     }
+    # Clarifications carry a fixed overall and no dimensions, so the two judge
+    # means have DIFFERENT denominators. Both are named rather than left for a
+    # reader to infer from a total that no longer adds up.
+    overall_scores = [v.overall_score for v in verdicts] + [
+        c.overall_score for c in clarifications
+    ]
     return {
         "pairs_total": len(results),
         "judged": len(verdicts),
+        "clarifications": len(clarifications),
         "judge_errors": len(judge_errors),
         "platform_errors": len(platform_errors),
         # Deterministic side (§11.3): exact-match reported separately, NEVER blended.
@@ -533,6 +617,9 @@ def _summarise(
             "not_applicable": sum(
                 1 for e in em if e == ExactMatchResult.NOT_APPLICABLE
             ),
+            # Same reasoning: a declined answer leaves the denominator, and that
+            # raises pass_pct without anything having improved (§2e).
+            "clarification": sum(1 for e in em if e == ExactMatchResult.CLARIFICATION),
             "platform_error": sum(1 for e in em if e == ExactMatchResult.ERROR),
             "expected_answer_off_contract": off_contract,
             "pass_pct": (
@@ -546,9 +633,12 @@ def _summarise(
         # Judge side (§11.3): mean scores per dimension, never averaged with exact-match.
         "judge": {
             "mean_per_dimension": per_dim,
+            "dimension_scored": len(verdicts),  # denominator for the line above
             "mean_overall": (
-                statistics.mean(v.overall_score for v in verdicts) if verdicts else None
+                statistics.mean(overall_scores) if overall_scores else None
             ),
+            # Larger than `dimension_scored` by the clarification count.
+            "overall_scored": len(overall_scores),
         },
     }
 
@@ -631,6 +721,16 @@ def _write_run(
 
 
 async def _run(args: argparse.Namespace) -> int:
+    # --domain and --profile are the whole interface, as they are for
+    # `build-dataset` and `qa-build`; everything they already determine is
+    # filled in here. Done first, before the manifest and the run log are
+    # written, so both record the paths the run actually used.
+    try:
+        apply_resolved_defaults(args)
+    except ResolutionError as exc:
+        print(f"[judge] {exc}", file=sys.stderr)
+        return 2
+
     # §10.2 gate: uncalibrated scores never enter the scorecard. The gate
     # applies to LLM judges only — the test double is a heuristic, plainly
     # labelled, and never used for real scoring.
@@ -907,6 +1007,14 @@ async def _run(args: argparse.Namespace) -> int:
         if err:
             outcome = ExactMatchOutcome(ExactMatchResult.ERROR, str(err))
             verdict: JudgeVerdict | Exception = PlatformError(err)
+        elif isinstance(scored, ClarificationVerdict):
+            # The platform answered with a question. There is no value to
+            # compare, so this is neither a pass nor a fail (§2e).
+            verdict = scored
+            outcome = ExactMatchOutcome(
+                ExactMatchResult.CLARIFICATION,
+                "platform requested clarification instead of answering",
+            )
         else:
             assert scored is not None  # a non-error row always carries a verdict
             verdict = scored
@@ -1405,7 +1513,7 @@ def run_check_auth(domain: str = "crm") -> int:
 
 
 def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
-    """Judge argparser, callable from standalone `main()` or from main.py's `score` command."""
+    """Judge argparser, callable standalone or from main.py's `judge` command."""
     ap = argparse.ArgumentParser(prog=prog, description="judge end-to-end demo runner")
     ap.add_argument(
         "--judge",
@@ -1436,15 +1544,29 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
         "--pulse-data",
         default="",
         help="Directory of CSV tables for --pulse sql. Every *.csv is loaded as a table "
-        "named by its basename. Ignored for other --pulse modes.",
+        "named by its basename. Derived from --domain/--profile when omitted. "
+        "Ignored for other --pulse modes.",
     )
     ap.add_argument(
         "--input-csv",
         default="",
-        help="optional CSV input contract with question_id, domain, tier, nlq, expected_answer, judge_reference, reference_sql",
+        help="CSV input contract with question_id, domain, tier, nlq, "
+        "expected_answer, judge_reference, reference_sql. Optional: left empty, "
+        "it is derived from --domain and --profile (and joined from the Q&A "
+        "release package if the file does not exist yet).",
     )
     ap.add_argument(
         "--domain", default="crm", help="Q&A domain (used for calibration gate)"
+    )
+    ap.add_argument(
+        "--profile",
+        choices=["dev", "full"],
+        default="dev",
+        help="Which release of the domain to score — the same two-argument "
+        "interface as `build-dataset` and `qa-build`. dev = the disposable tmp "
+        "package, full = the versioned Q&A release. Selects --input-csv, "
+        "--dataset-version and (for --pulse sql) --pulse-data unless those are "
+        "given explicitly.",
     )
     ap.add_argument(
         "--allow-uncalibrated",
@@ -1533,7 +1655,7 @@ def _trust_os_ca_store() -> None:
 def run_from_args(args: argparse.Namespace) -> int:
     """Run the judge with a pre-parsed namespace. Returns the process exit code.
 
-    Same contract as `main()` minus the sys.exit — lets main.py's `score` command
+    Same contract as `main()` minus the sys.exit — lets main.py's `judge` command
     invoke the same runner and translate the return code into its own error path.
     """
     _trust_os_ca_store()

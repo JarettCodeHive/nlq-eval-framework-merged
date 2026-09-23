@@ -39,7 +39,7 @@ python judge/build_rerun_input.py --run "$BASE_RUN" --domain "$DOMAIN"
 
 echo
 echo "==> scoring (platform concurrency ${PULSE_CONC}, judge concurrency ${JUDGE_CONC})"
-python main.py score \
+python main.py judge \
   --judge llm \
   --pulse live \
   --domain "$DOMAIN" \

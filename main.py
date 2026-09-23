@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from generators.core.progress import ProgressReporter
@@ -24,12 +25,11 @@ from judge.cli import build_argparser as build_judge_argparser
 from judge.cli import run_calibrate_from_domain
 from judge.cli import run_check_auth as run_check_auth_for_domain
 from judge.cli import run_from_args as run_judge_from_args
-from qa_pairs.utils.output_paths import resolve_qa_output_dir
+from judge.resolve import qa_release_dir
 
 CommandHandler = Callable[[argparse.Namespace], None]
 
 REPO_ROOT = Path(__file__).resolve().parent
-QA_ROOT = REPO_ROOT / "qa_pairs"
 
 
 def run_validate_config(args: argparse.Namespace) -> None:
@@ -504,27 +504,159 @@ def run_judge_build_input(args: argparse.Namespace) -> None:
     The §9.3 contract file carries no identifiers and the companion carries no
     answers, so the judge needs them joined. Reads whichever Q&A release the
     selected profile points at, so it stays in step with `qa-generate-pairs`.
+
+    `judge` performs the same join on demand — this command exists to do it
+    deliberately, and to rebuild the file after the pairs change.
     """
 
     _ensure_crm(args.domain)
-    qa_release = resolve_qa_output_dir(QA_ROOT, args.profile)
+    qa_release = qa_release_dir(args.domain, args.profile)
     output = qa_release / f"{args.domain}_judge_input.csv"
     build_judge_input(qa_release, args.domain, output)
 
 
-def run_score(args: argparse.Namespace) -> None:
+def run_dataset_upload(args: argparse.Namespace) -> None:
+    """Upload a generated dataset to the Claris Studio platform.
+
+    Same two arguments as `build-dataset`: the CSVs come from whatever
+    --domain/--profile already resolves to, so what lands on the platform is by
+    construction the dataset the Q&A pairs were authored against.
+
+    Every batch is waited for and every table's row count is checked against
+    the CSV, because a bulk load is asynchronous and a job can report success
+    while having dropped rows. The entity ids are recorded so a later delete —
+    or a cleanup after a crash — does not have to rediscover them.
+    """
+
+    from studio.client import StudioClient
+    from studio.config import load_studio_settings
+    from studio.upload import describe_plan, summarise, upload_domain, write_manifest
+
+    settings = load_studio_settings()
+    print(f"platform: {settings.redacted}")
+    progress = ProgressReporter()
+
+    with StudioClient(settings, dry_run=args.dry_run) as client:
+        outcome = upload_domain(
+            args.domain,
+            args.profile,
+            client=client,
+            replace=args.replace,
+            progress=progress,
+        )
+        if args.dry_run:
+            print(describe_plan(client))
+            print("\n(dry run — nothing was sent)")
+            return
+
+    print()
+    print(summarise(outcome, action="Uploaded"))
+    manifest = write_manifest(
+        outcome,
+        REPO_ROOT / "release" / args.domain / "platform" / f"{args.profile}.json",
+    )
+    print(f"entity ids recorded: {manifest}")
+
+    # Exit non-zero when the rows are not provably there: a pipeline step that
+    # evaluates against a short table produces a number worse than no number.
+    unverified = [t.table for t in outcome.tables if t.rows and not t.loads_confirmed]
+    if unverified:
+        raise SystemExit(
+            f"upload finished but these tables are not verified: "
+            f"{', '.join(unverified)}. Do not evaluate against them."
+        )
+
+
+def run_dataset_delete(args: argparse.Namespace) -> None:
+    """Delete this domain/profile's tables from the Claris Studio platform.
+
+    Destructive and outward-facing — it removes real tables from a shared org
+    that other people query. So it prints the exact targets first and refuses
+    without --yes: the confirmation should be informed, not ritual.
+
+    Targets are resolved from the local CSVs, never from a listing of the org,
+    so this can only ever remove tables this pipeline is responsible for.
+    """
+
+    from studio.client import StudioClient
+    from studio.config import load_studio_settings
+    from studio.upload import (
+        _resolve_csv_dir,
+        delete_domain,
+        describe_plan,
+        summarise,
+        table_order,
+    )
+
+    settings = load_studio_settings()
+    targets = table_order(args.domain, _resolve_csv_dir(args.domain, args.profile))
+
+    print(f"platform: {settings.redacted}")
+    print(f"about to DELETE {len(targets)} table(s) from org {settings.org_id}:")
+    for table in targets:
+        print(f"  {table}")
+
+    if not (args.yes or args.dry_run):
+        raise SystemExit(
+            "refusing to delete without --yes. Re-run with --yes once the list "
+            "above is what you meant."
+        )
+
+    progress = ProgressReporter()
+    with StudioClient(settings, dry_run=args.dry_run) as client:
+        outcome = delete_domain(
+            args.domain, args.profile, client=client, progress=progress
+        )
+        if args.dry_run:
+            print(describe_plan(client))
+            print("\n(dry run — nothing was sent)")
+            return
+
+    print()
+    print(summarise(outcome, action="Deleted"))
+
+
+def run_judge(args: argparse.Namespace) -> None:
     """LLM-as-Judge scoring pass + regression scorecard — see judge/README.md
     for the full flag surface.
 
-    All flags after the `score` subcommand are consumed by the judge subparser;
-    the top-level --domain wins over any --domain in the leftover argv so a
-    single invocation is unambiguous.
+    Takes the same two arguments as `build-dataset` and `qa-build`: everything
+    --domain and --profile already determine (the pair CSV, the dataset version
+    tag, the `--pulse sql` table directory) is resolved in `judge/resolve.py`
+    rather than retyped as a path.
+
+    All other flags after the `judge` subcommand are consumed by the judge
+    subparser; the top-level --domain and --profile win over any copy in the
+    leftover argv so a single invocation is unambiguous.
     """
 
-    judge_parser = build_judge_argparser(prog="main.py score")
+    judge_parser = build_judge_argparser(prog="main.py judge")
     judge_args = judge_parser.parse_args(getattr(args, "command_argv", []))
-    judge_args.domain = args.domain  # top-level --domain is authoritative
+    # Top-level values are authoritative — they are what the rest of the
+    # pipeline was invoked with.
+    judge_args.domain = args.domain
+    judge_args.profile = args.profile
     exit_code = run_judge_from_args(judge_args)
+    if exit_code != 0:
+        raise SystemExit(exit_code)
+
+
+def run_score(args: argparse.Namespace) -> None:
+    """Combine per-domain `judge` runs into one regression scorecard (§14.1).
+
+    Separate from `judge` on purpose. `establish_baseline` is keyed on
+    `platform_version` and is write-once, so if each domain's run established
+    its own baseline the first one to finish would lock out the rest. A `judge`
+    run therefore stays PREVIEW, and this is the only step that may establish or
+    compare a baseline — which §14.1 requires to span all five domains anyway.
+
+    Owns its own flag surface; everything after `score` goes to its parser.
+    """
+
+    from scorecard.combine import build_argparser, run_from_args
+
+    parser = build_argparser(prog="main.py score")
+    exit_code = run_from_args(parser.parse_args(getattr(args, "command_argv", [])))
     if exit_code != 0:
         raise SystemExit(exit_code)
 
@@ -584,7 +716,10 @@ COMMANDS: dict[str, CommandHandler] = {
     "validate-imperfection-rates": run_validate_imperfection_rates,
     "validate-join-paths": run_validate_join_paths,
     "check-auth": run_check_auth,
+    "dataset-upload": run_dataset_upload,
+    "dataset-delete": run_dataset_delete,
     "judge-build-input": run_judge_build_input,
+    "judge": run_judge,
     "score": run_score,
     "calibrate": run_calibrate,
     "rubric": run_rubric,
@@ -622,6 +757,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write generated stage CSV previews for non-release profiles.",
     )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="dataset-upload: delete an existing table and re-upload it. Without "
+        "this an existing table is left alone, so a re-run cannot double-load.",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="dataset-delete: confirm deletion. Required — it removes real tables "
+        "from a shared org.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="dataset-upload / dataset-delete: print the requests that would be "
+        "sent and send none of them.",
+    )
     validation_source = parser.add_mutually_exclusive_group()
     validation_source.add_argument(
         "--generated",
@@ -639,16 +792,16 @@ def build_parser() -> argparse.ArgumentParser:
 # Commands that own their own flag surface and consume the leftover argv.
 # Everything else stays strict: an unrecognised flag on a generation command is
 # a typo, and silently ignoring it would hide a mis-run release step.
-PASSTHROUGH_COMMANDS: frozenset[str] = frozenset({"score", "rubric"})
+PASSTHROUGH_COMMANDS: frozenset[str] = frozenset({"judge", "score", "rubric"})
 
 _HELP_FLAGS: frozenset[str] = frozenset({"-h", "--help"})
 
 
 def _forward_help(argv: list[str]) -> tuple[list[str], bool]:
-    """Route `main.py score --help` to the judge's parser, not this one.
+    """Route `main.py judge --help` to the judge's parser, not this one.
 
     argparse handles `-h` eagerly at the top level, so a passthrough command's
-    own flags — ~20 of them for `score` — would otherwise be undiscoverable
+    own flags — ~20 of them for `judge` — would otherwise be undiscoverable
     from the entry point we tell people to use. Pull the help flag out of the
     top-level parse and hand it to the subparser instead.
     """

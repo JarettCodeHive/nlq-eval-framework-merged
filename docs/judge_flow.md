@@ -8,7 +8,7 @@ Each diagram uses Mermaid — GitHub renders these natively.
 ```mermaid
 flowchart LR
   subgraph invoke [Invocation]
-    A1[python main.py score]
+    A1[python main.py judge]
     A2[python -m judge.cli]
   end
   A1 --> B

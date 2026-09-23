@@ -28,7 +28,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from judge.contracts import JudgeRequest, JudgeVerdict
+from judge.contracts import ClarificationVerdict, JudgeRequest, JudgeVerdict
 from judge.exact_match import ExactMatchOutcome, ExactMatchResult
 from scorecard.config import report_output_dir
 from scorecard.report import write_scorecard_md, write_scorecard_pdf
@@ -87,6 +87,19 @@ def _rebuild(row: dict, judge_reference: str):
             model_version=row.get("model_version") or "",
             **scores,
         )
+    elif row.get("clarification_request") or (
+        row.get("exact_match_result") == ExactMatchResult.CLARIFICATION.value
+    ):
+        # A clarification also carries no dimension scores, but it is NOT a
+        # platform error — the platform answered, with a question. Rehydrating
+        # it as an error would drop its fixed score out of judge_overall and
+        # move it into the platform_errors count (§2e).
+        verdict = ClarificationVerdict(
+            question_id=row["question_id"],
+            clarification_text=row.get("clarification_text")
+            or row.get("actual_answer")
+            or "",
+        )
     else:
         # No scores means the platform never answered, so nothing was judged.
         verdict = PlatformError(row.get("exact_match_detail") or "platform error")
@@ -94,6 +107,10 @@ def _rebuild(row: dict, judge_reference: str):
     outcome = ExactMatchOutcome(
         ExactMatchResult(row["exact_match_result"]),
         row.get("exact_match_detail") or "",
+        # §9.3 shape violations are a property of the pair, not of the platform,
+        # and they are a named §11.1 column — dropping the flag on rehydration
+        # would silently zero it in every merged or combined scorecard.
+        off_contract=bool(row.get("expected_answer_off_contract")),
     )
     return pair, req, verdict, outcome
 
