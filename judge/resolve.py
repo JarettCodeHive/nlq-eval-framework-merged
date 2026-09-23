@@ -32,7 +32,7 @@ PROFILES: tuple[str, ...] = ("dev", "full")
 # config (`qa_pairs/utils/output_paths.py`, `qa_pairs/utils/dataset_source.py`).
 # The judge reads the SAME two files rather than restating the paths, so all
 # three stages move together when a release layout changes.
-_QA_CONFIG_PATH = Path("qa_pairs") / "generator" / "config.json"
+_QA_CONFIG_PATH = Path("qa_pairs") / "generator" / "crm" / "config.json"
 _GENERATION_CONFIG = Path("config") / "generation"
 
 
@@ -97,8 +97,11 @@ def qa_release_dir(
 
     Config first, exactly as `resolve_qa_output_dir` and `resolve_dataset_source`
     do for their own stages: the path template and the version both come from
-    `qa_pairs/generator/config.json`, so a release layout moves without a code
-    change here.
+    `qa_pairs/generator/crm/config.json`, so a release layout moves without a
+    code change here. Judge wiring is CRM-only today, so that fixed path is
+    the one domain this function actually resolves correctly; the filesystem
+    fallback below is what keeps a `full`-profile lookup for another domain
+    from silently returning the wrong (CRM) version.
 
     The filesystem is consulted only as a fallback, and only for `full`. That
     config declares ONE domain's Q&A version, so a domain it does not cover has

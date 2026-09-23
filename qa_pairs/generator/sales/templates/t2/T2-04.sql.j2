@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS quotation_count
+FROM quotations q
+INNER JOIN deals d ON q.deal_id = d.deal_id
+WHERE d.stage = {{ stage | sqlstr }};

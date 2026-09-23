@@ -8,8 +8,8 @@ import csv
 import json
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent.parent
-fams = json.loads((BASE / "generator" / "families.json").read_text())
+BASE = Path(__file__).resolve().parent.parent.parent
+fams = json.loads((BASE / "generator" / "crm" / "families.json").read_text())
 
 out = BASE / "taxonomy" / "crm_question_family_matrix.csv"
 with out.open("w", newline="", encoding="utf-8") as fh:

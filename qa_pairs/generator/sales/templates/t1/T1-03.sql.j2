@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS lead_count
+FROM leads
+WHERE lead_source = {{ lead_source | sqlstr }};

@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS quotation_count
+FROM quotations
+WHERE quote_status = {{ quote_status | sqlstr }};

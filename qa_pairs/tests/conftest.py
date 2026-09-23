@@ -7,16 +7,16 @@ import pytest
 
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))  # utils/
-sys.path.insert(0, str(BASE / "generator"))  # scale_pairs, gen_family_matrix
+sys.path.insert(0, str(BASE / "generator" / "crm"))  # scale_pairs, gen_family_matrix
 
 from utils.dataset_source import resolve_dataset_source  # noqa: E402
 from utils.output_paths import resolve_qa_output_dir  # noqa: E402
 
 PROFILE = "full"
-QA_DIR = resolve_qa_output_dir(BASE, PROFILE)
+QA_DIR = resolve_qa_output_dir(BASE, PROFILE, "crm")
 DB = BASE / "dataset" / f"crm_{PROFILE}.duckdb"
 
-SOURCE = resolve_dataset_source(BASE, PROFILE)
+SOURCE = resolve_dataset_source(BASE, PROFILE, "crm")
 AUTH_DDL = SOURCE.ddl_path
 LOAD_ORDER = [
     "accounts",

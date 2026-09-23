@@ -27,15 +27,18 @@ class DatasetSource:
         return self.csv_dir.relative_to(self.repo_root).as_posix()
 
 
-def resolve_dataset_source(qa_root: Path, profile: str) -> DatasetSource:
+def resolve_dataset_source(qa_root: Path, profile: str, generator_dir: str) -> DatasetSource:
     """Resolve a profile to generator-owned CSV and schema paths.
 
-    Paths in ``generator/config.json`` are relative to the repository root.
-    The dataset version comes from the canonical CRM release config and is
+    Paths in ``generator/<generator_dir>/config.json`` are relative to the
+    repository root. ``generator_dir`` names the domain's subfolder under
+    ``generator/`` (e.g. ``"crm"``, ``"sales"``) — required, not defaulted,
+    so this stays domain-agnostic rather than silently assuming one domain.
+    The dataset version comes from that domain's release config and is
     interpolated into the full-profile path without a Python code change.
     """
 
-    config_path = qa_root / "generator" / "config.json"
+    config_path = qa_root / "generator" / generator_dir / "config.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
     dataset = config["dataset"]
     sources = dataset["profile_sources"]

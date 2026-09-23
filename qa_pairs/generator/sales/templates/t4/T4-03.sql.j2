@@ -1,0 +1,8 @@
+SELECT p.category AS entity, COUNT(DISTINCT d.deal_id) AS metric
+FROM leads l
+INNER JOIN deals d ON l.lead_id = d.lead_id
+INNER JOIN quotations q ON d.deal_id = q.deal_id
+INNER JOIN products p ON q.product_id = p.product_id
+WHERE l.lead_source = {{ lead_source | sqlstr }}
+GROUP BY p.category
+ORDER BY metric DESC, entity ASC;

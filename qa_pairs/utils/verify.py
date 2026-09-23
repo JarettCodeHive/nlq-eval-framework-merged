@@ -20,7 +20,12 @@ from pathlib import Path
 from .output_paths import qa_version
 from .serialization import SerializationError, serialize
 
-QA_VERSION = qa_version(Path(__file__).resolve().parent.parent)
+# Historical default: this module predates the multi-domain split, and
+# `log_payload`'s `qa_version` field has always meant CRM's Q&A release
+# version. Other domains' verification logs inherit this same value today -
+# a known, low-severity metadata gap (it never affects scoring or hashing),
+# not something papered over with a silent per-domain default here.
+QA_VERSION = qa_version(Path(__file__).resolve().parent.parent, "crm")
 
 
 @dataclass

@@ -56,7 +56,7 @@ qa_pairs/
 │   ├── sql.py                  sqlstr() literal quoting + Jinja env factory
 │   ├── sampling.py             even_sample() + N-parameter combos()
 │   ├── duckdb_io.py            typed-DuckDB connect + distinct()
-│   └── labels.py               generic label lookup (CRM map: generator/labels.json)
+│   └── labels.py               generic label lookup (CRM map: generator/crm/labels.json)
 │
 ├── generator/                  CRM SPECIFICS - data files + thin drivers:
 │   ├── config.json             dataset sources, output paths, Q&A version, domain, quotas
@@ -154,7 +154,7 @@ scale). **Only `full` output is deliverable** (scope doc §7.3).
 
 ### 4a. The release — `scale_pairs.py` (160 pairs)
 
-A family is **one entry in `generator/families.json`** plus **one SQL
+A family is **one entry in `generator/crm/families.json`** plus **one SQL
 template**:
 
 ```json
@@ -248,7 +248,7 @@ pairs are in `crm_qa_pairs.csv`.
 | **OI-2** — numeric answer format | deterministic evaluator extracts the first number and compares numerically | golden answers stay plain numbers (no `$` / `,` / unit noun) — no code change |
 | **OI-3** — date answers | exact match, no tolerance | already the behaviour |
 
-Recorded in `generator/config.json` under `resolved_open_items`. Still
+Recorded in `generator/crm/config.json` under `resolved_open_items`. Still
 open: the list format the LLM Judge expects for the 24 `judge_plus_exact`
 answers, numeric tolerance = 0 for eval runs (spec change C2), and a
 **named** independent human reviewer (Section 15 — the author cannot
@@ -284,11 +284,11 @@ self-sign).
 ## 8. Extending it
 
 **Add a question to an existing family:** widen the family's entry in
-`generator/catalog.json` (or the data) so `SELECT DISTINCT` returns more
+`generator/crm/catalog.json` (or the data) so `SELECT DISTINCT` returns more
 values, or raise its `quota` in `families.json`. No code change.
 
 **Add a family:** write `templates/tN/TN-MM.sql.j2` (string values via
-`{{ x | sqlstr }}`), add one object to `generator/families.json`
+`{{ x | sqlstr }}`), add one object to `generator/crm/families.json`
 (`family, tier, template, params, quota, join_path, question, tables,
 fields, judge, rationale`), rebalance the tier so the `quota` sum still
 equals its §9.1 target, run `gen_family_matrix.py`, and add a seed to

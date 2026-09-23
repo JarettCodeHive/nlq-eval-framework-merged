@@ -1,0 +1,10 @@
+{
+  "_doc": "param name -> SQL that lists its allowed values (from the real data, never invented), or a literal list for non-column params.",
+  "lead_status": "SELECT DISTINCT lead_status FROM leads ORDER BY 1",
+  "lead_source": "SELECT DISTINCT lead_source FROM leads ORDER BY 1",
+  "territory": "SELECT DISTINCT territory FROM leads WHERE territory IS NOT NULL ORDER BY 1",
+  "stage": "SELECT DISTINCT stage FROM deals ORDER BY 1",
+  "category": "SELECT DISTINCT category FROM products WHERE category IS NOT NULL ORDER BY 1",
+  "quote_status": "SELECT DISTINCT quote_status FROM quotations ORDER BY 1",
+  "is_active": ["true", "false"]
+}

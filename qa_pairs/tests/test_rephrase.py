@@ -9,7 +9,7 @@ import pytest
 from utils.output_paths import resolve_qa_output_dir
 
 QA_ROOT = Path(__file__).resolve().parent.parent
-MAP = resolve_qa_output_dir(QA_ROOT, "full") / "rephrase" / "crm_rephrase_map.csv"
+MAP = resolve_qa_output_dir(QA_ROOT, "full", "crm") / "rephrase" / "crm_rephrase_map.csv"
 PAIRS = MAP.with_name("crm_rephrase_pairs.csv")
 
 pytestmark = pytest.mark.skipif(

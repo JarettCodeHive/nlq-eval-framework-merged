@@ -1,0 +1,15 @@
+WITH q AS (
+  SELECT
+    SUM(CASE WHEN d.close_date >= DATE '2026-01-01' AND d.close_date < DATE '2026-04-01' THEN d.deal_amount ELSE 0 END) AS q1_amount,
+    SUM(CASE WHEN d.close_date >= DATE '2026-04-01' AND d.close_date < DATE '2026-07-01' THEN d.deal_amount ELSE 0 END) AS q2_amount
+  FROM deals d
+  INNER JOIN leads l ON d.lead_id = l.lead_id
+  WHERE l.territory = {{ territory | sqlstr }} AND d.stage = 'Won'
+)
+SELECT
+  ROUND(q1_amount, 2) AS q1_amount,
+  ROUND(q2_amount, 2) AS q2_amount,
+  ROUND(q2_amount - q1_amount, 2) AS absolute_change,
+  ROUND(CASE WHEN q1_amount = 0 THEN NULL ELSE (q2_amount - q1_amount) / CAST(q1_amount AS DOUBLE) * 100 END, 2) AS pct_change,
+  CASE WHEN q2_amount > q1_amount THEN 'up' WHEN q2_amount < q1_amount THEN 'down' ELSE 'flat' END AS direction
+FROM q;

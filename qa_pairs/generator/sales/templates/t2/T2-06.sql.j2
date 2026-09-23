@@ -1,0 +1,7 @@
+SELECT p.category AS entity, ROUND(SUM(q.quantity * q.unit_price), 2) AS total_quoted_value
+FROM quotations q
+INNER JOIN products p ON q.product_id = p.product_id
+WHERE q.quote_status = {{ quote_status | sqlstr }}
+GROUP BY p.category
+ORDER BY total_quoted_value DESC, entity ASC
+LIMIT 1;

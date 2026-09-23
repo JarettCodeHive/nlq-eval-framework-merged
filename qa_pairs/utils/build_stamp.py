@@ -105,14 +105,29 @@ def _stamp_row(con):
     return con.execute(f"SELECT fingerprint, table_digests FROM {STAMP_TABLE}").fetchone()
 
 
-def require_fresh_db(con, manifest: dict, base_dir: Path, profile: str) -> None:
+def require_fresh_db(
+    con,
+    manifest: dict,
+    base_dir: Path,
+    profile: str,
+    generator_dir: str,
+    staged_dir: Path,
+) -> None:
     """Abort unless the open DuckDB, the manifest, and the authoritative
-    source bundle all agree - down to per-table content digests."""
+    source bundle all agree - down to per-table content digests.
+
+    ``generator_dir`` names the domain's subfolder under ``generator/`` whose
+    ``config.json`` / DDL / DBML are authoritative for this dataset (e.g.
+    ``"crm"``, ``"sales"``). ``staged_dir`` is where that domain's driver
+    script copies the source CSVs during staging (e.g. ``dataset/<profile>``
+    for CRM, ``dataset/sales/<profile>`` for Sales) - required rather than
+    assumed, since domains are free to lay their staged copies out
+    differently."""
 
     def die(msg: str):
         raise SystemExit(
             f"provenance check failed (profile '{profile}'): {msg} - "
-            f"rerun generator/generate_crm.py --profile {profile}"
+            f"rerun the generator/{generator_dir} stage script for --profile {profile}"
         )
 
     want = manifest.get("build_fingerprint")
@@ -138,12 +153,12 @@ def require_fresh_db(con, manifest: dict, base_dir: Path, profile: str) -> None:
         die("_build_stamp digests disagree with the manifest")
 
     # 2. generator-owned source and canonical schema files.
-    source = resolve_dataset_source(base_dir, profile)
+    source = resolve_dataset_source(base_dir, profile, generator_dir)
     if manifest["dataset_version"] != source.dataset_version:
         die("manifest dataset version differs from the configured source")
     for label, path, want_sha in (
-        ("canonical CRM DDL", source.ddl_path, manifest["schema_ddl_sha256"]),
-        ("canonical CRM DBML", source.dbml_path, manifest["schema_dbml_sha256"]),
+        ("canonical DDL", source.ddl_path, manifest["schema_ddl_sha256"]),
+        ("canonical DBML", source.dbml_path, manifest["schema_dbml_sha256"]),
     ):
         if not path.exists():
             die(f"{label} missing")
@@ -151,11 +166,10 @@ def require_fresh_db(con, manifest: dict, base_dir: Path, profile: str) -> None:
             die(f"{label} changed since the manifest was written")
 
     # 3. source CSVs and their staged copies.
-    staged = base_dir / "dataset" / profile
     for f in manifest["files"]:
         for label, csv_path in (
             (f"source {f['name']}", source.csv_dir / f["name"]),
-            (f"staged {f['name']}", staged / f["name"]),
+            (f"staged {f['name']}", staged_dir / f["name"]),
         ):
             if not csv_path.exists():
                 die(f"{label} missing")

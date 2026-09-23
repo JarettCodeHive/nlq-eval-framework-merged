@@ -31,13 +31,13 @@ import shutil
 import sys
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent.parent
+BASE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(BASE))
 from utils import build_stamp, verify  # noqa: E402
 from utils.duckdb_io import connect_typed  # noqa: E402
 from utils.output_paths import resolve_qa_output_dir  # noqa: E402
 
-ID_PREFIX = json.loads((BASE / "generator" / "config.json").read_text())["id_prefix"]
+ID_PREFIX = json.loads((BASE / "generator" / "crm" / "config.json").read_text())["id_prefix"]
 
 
 def _gid(group: str) -> str:
@@ -240,13 +240,15 @@ def generate_rephrases(profile: str) -> None:
     _mf = json.loads((BASE / "dataset" / f"manifest_{profile}.json").read_text())
     dv, domain = _mf["dataset_version"], _mf["domain"]
 
-    qa = resolve_qa_output_dir(BASE, profile)
+    qa = resolve_qa_output_dir(BASE, profile, "crm")
     companion = _read(qa / "crm_qa_pairs_companion.csv")
     contract = {r["natural_language_question"]: r for r in _read(qa / "crm_qa_pairs.csv")}
     by_family_param = {(r["family"], r["param_values"]): r for r in companion}
 
     con = connect_typed(BASE / "dataset" / f"crm_{profile}.duckdb")
-    build_stamp.require_fresh_db(con, _mf, BASE, profile)  # before touching output
+    build_stamp.require_fresh_db(
+        con, _mf, BASE, profile, "crm", BASE / "dataset" / profile
+    )  # before touching output
 
     # Build the whole set in memory; nothing on disk changes until every
     # base is found and every variant re-verifies to the base hash.

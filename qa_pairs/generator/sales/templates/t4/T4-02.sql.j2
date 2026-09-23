@@ -1,0 +1,7 @@
+SELECT d.stage AS entity, COUNT(*) AS metric
+FROM products p
+INNER JOIN quotations q ON p.product_id = q.product_id
+INNER JOIN deals d ON q.deal_id = d.deal_id
+WHERE p.category = {{ category | sqlstr }}
+GROUP BY d.stage
+ORDER BY metric DESC, entity ASC;

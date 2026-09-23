@@ -14,11 +14,14 @@ from generators.domain_registry import DATASET_DOMAINS
 from generators.domain_registry import dataset_domain
 from generators.finance.pipeline import FinanceDatasetPipeline
 from generators.sales.pipeline import SalesDatasetPipeline
-from qa_pairs.generator.author_qa_pairs import generate_seed_fixtures
-from qa_pairs.generator.generate_crm import build as stage_qa_dataset
-from qa_pairs.generator.rephrase import generate_rephrases
-from qa_pairs.generator.scale_pairs import generate_pairs
-from qa_pairs.generator.validate_crm import validate as validate_qa_dataset
+from qa_pairs.generator.crm.author_qa_pairs import generate_seed_fixtures
+from qa_pairs.generator.crm.generate_crm import build as stage_crm_qa_dataset
+from qa_pairs.generator.crm.rephrase import generate_rephrases
+from qa_pairs.generator.crm.scale_pairs import generate_pairs as generate_crm_pairs
+from qa_pairs.generator.crm.validate_crm import validate as validate_crm_qa_dataset
+from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
+from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
+from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
 
 from judge.build_input import build as build_judge_input
 from judge.cli import build_argparser as build_judge_argparser
@@ -418,38 +421,63 @@ def run_validate_reproducibility(args: argparse.Namespace) -> None:
         print(f"  PASS {result.check_name}: {result.message}")
 
 
-def run_qa_stage_dataset(args: argparse.Namespace) -> None:
-    """Stage generated CRM CSVs in DuckDB for Q&A authoring."""
+QA_STAGE: dict[str, CommandHandler] = {
+    "crm": stage_crm_qa_dataset,
+    "sales": stage_sales_qa_dataset,
+}
+QA_VALIDATE: dict[str, CommandHandler] = {
+    "crm": validate_crm_qa_dataset,
+    "sales": validate_sales_qa_dataset,
+}
+QA_GENERATE: dict[str, CommandHandler] = {
+    "crm": generate_crm_pairs,
+    "sales": generate_sales_pairs,
+}
 
-    _ensure_crm(args.domain)
-    stage_qa_dataset(args.profile)
+
+def _qa_domain_fn(mapping: dict[str, CommandHandler], domain: str) -> CommandHandler:
+    try:
+        return mapping[domain]
+    except KeyError as exc:
+        raise NotImplementedError(
+            f"Q&A commands currently support {sorted(mapping)}; got {domain!r}"
+        ) from exc
+
+
+def run_qa_stage_dataset(args: argparse.Namespace) -> None:
+    """Stage the generated dataset in DuckDB for Q&A authoring."""
+
+    _qa_domain_fn(QA_STAGE, args.domain)(args.profile)
 
 
 def run_qa_build(args: argparse.Namespace) -> None:
-    """Stage, validate, and generate the production CRM Q&A pair set."""
+    """Stage, validate, and generate the production Q&A pair set."""
 
-    _ensure_crm(args.domain)
+    stage = _qa_domain_fn(QA_STAGE, args.domain)
+    validate = _qa_domain_fn(QA_VALIDATE, args.domain)
+    generate = _qa_domain_fn(QA_GENERATE, args.domain)
     progress = ProgressReporter()
 
-    progress.report("Step 1/3: Stage the generated CRM dataset for Q&A authoring")
-    stage_qa_dataset(args.profile)
+    progress.report(
+        f"Step 1/3: Stage the generated {args.domain} dataset for Q&A authoring"
+    )
+    stage(args.profile)
 
-    progress.report("Step 2/3: Validate the staged CRM dataset")
-    validate_qa_dataset(args.profile)
+    progress.report(f"Step 2/3: Validate the staged {args.domain} dataset")
+    validate(args.profile)
 
-    progress.report("Step 3/3: Generate and verify the CRM Q&A pair set")
-    generate_pairs(args.profile)
+    progress.report(f"Step 3/3: Generate and verify the {args.domain} Q&A pair set")
+    generate(args.profile)
 
-    print("CRM Q&A pair build passed")
+    print(f"{args.domain} Q&A pair build passed")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
 
 
 def run_qa_validate_dataset(args: argparse.Namespace) -> None:
-    """Validate the staged CRM dataset and required Q&A join behavior."""
+    """Validate the staged dataset and required Q&A join behavior."""
 
-    _ensure_crm(args.domain)
-    validate_qa_dataset(args.profile)
+    _qa_domain_fn(QA_VALIDATE, args.domain)(args.profile)
 
 
 def run_qa_author_fixtures(args: argparse.Namespace) -> None:
@@ -460,10 +488,9 @@ def run_qa_author_fixtures(args: argparse.Namespace) -> None:
 
 
 def run_qa_generate_pairs(args: argparse.Namespace) -> None:
-    """Generate the complete verified CRM Q&A pair set."""
+    """Generate the complete verified Q&A pair set."""
 
-    _ensure_crm(args.domain)
-    generate_pairs(args.profile)
+    _qa_domain_fn(QA_GENERATE, args.domain)(args.profile)
 
 
 def run_qa_generate_rephrases(args: argparse.Namespace) -> None:

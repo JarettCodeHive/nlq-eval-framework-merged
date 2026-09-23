@@ -26,7 +26,7 @@ import shutil
 import sys
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent.parent
+BASE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(BASE))
 from utils import build_stamp, verify  # noqa: E402
 from utils.duckdb_io import connect_typed  # noqa: E402
@@ -433,7 +433,9 @@ def generate_seed_fixtures(profile: str) -> None:
     dataset_version = manifest["dataset_version"]
 
     con = connect_typed(BASE / "dataset" / f"crm_{profile}.duckdb")
-    build_stamp.require_fresh_db(con, manifest, BASE, profile)  # before touching output
+    build_stamp.require_fresh_db(
+        con, manifest, BASE, profile, "crm", BASE / "dataset" / profile
+    )  # before touching output
 
     # Build in memory; publish only if every fixture verified.
     fixtures, companion, blocked, log_entries = [], [], [], []

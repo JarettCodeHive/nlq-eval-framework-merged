@@ -1,0 +1,3 @@
+SELECT ROUND(SUM(deal_amount), 2) AS total_deal_amount
+FROM deals
+WHERE stage = {{ stage | sqlstr }};

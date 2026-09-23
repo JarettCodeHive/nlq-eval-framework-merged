@@ -11,17 +11,17 @@ REPO_ROOT = QA_ROOT.parent
 
 
 def test_dev_qa_output_is_disposable() -> None:
-    output = resolve_qa_output_dir(QA_ROOT, "dev")
+    output = resolve_qa_output_dir(QA_ROOT, "dev", "crm")
 
     assert output == REPO_ROOT / "tmp/generated/crm/dev/qa_pairs"
 
 
 def test_full_qa_output_is_independently_versioned() -> None:
-    output = resolve_qa_output_dir(QA_ROOT, "full")
+    output = resolve_qa_output_dir(QA_ROOT, "full", "crm")
 
-    assert output == REPO_ROOT / f"release/crm/qa-pairs-v{qa_version(QA_ROOT)}"
+    assert output == REPO_ROOT / f"release/crm/qa-pairs-v{qa_version(QA_ROOT, 'crm')}"
 
 
 def test_unknown_qa_output_profile_is_rejected() -> None:
     with pytest.raises(ValueError, match="Unsupported Q&A output profile"):
-        resolve_qa_output_dir(QA_ROOT, "preview")
+        resolve_qa_output_dir(QA_ROOT, "preview", "crm")

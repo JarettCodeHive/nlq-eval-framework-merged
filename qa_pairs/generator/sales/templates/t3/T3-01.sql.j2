@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS lead_count
+FROM leads l
+LEFT JOIN deals d ON l.lead_id = d.lead_id
+WHERE l.territory = {{ territory | sqlstr }} AND d.deal_id IS NULL;

@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS deal_count
+FROM deals d
+INNER JOIN leads l ON d.lead_id = l.lead_id
+WHERE l.lead_source = {{ lead_source | sqlstr }};

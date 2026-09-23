@@ -1,0 +1,7 @@
+SELECT l.lead_source AS entity, COUNT(*) AS metric
+FROM deals d
+INNER JOIN leads l ON d.lead_id = l.lead_id
+WHERE d.stage = {{ stage | sqlstr }}
+GROUP BY l.lead_source
+ORDER BY metric DESC, entity ASC
+LIMIT 1;

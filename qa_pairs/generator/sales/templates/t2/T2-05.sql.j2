@@ -1,0 +1,6 @@
+SELECT q.quote_status AS entity, COUNT(*) AS metric
+FROM quotations q
+INNER JOIN products p ON q.product_id = p.product_id
+WHERE p.category = {{ category | sqlstr }}
+GROUP BY q.quote_status
+ORDER BY metric DESC, entity ASC;

@@ -1,0 +1,17 @@
+WITH last_period AS (
+  SELECT period_start, period_end FROM targets ORDER BY period_end DESC LIMIT 1
+)
+SELECT t.rep_name AS entity, ROUND(t.quota_amount - COALESCE(SUM(d.deal_amount), 0), 2) AS shortfall_amount
+FROM targets t
+CROSS JOIN last_period lp
+LEFT JOIN deals d
+    ON d.rep_name = t.rep_name
+    AND d.close_date >= t.period_start
+    AND d.close_date < t.period_end
+    AND d.stage = 'Won'
+WHERE t.territory = {{ territory | sqlstr }}
+  AND t.period_start = lp.period_start
+  AND t.period_end = lp.period_end
+GROUP BY t.rep_name, t.quota_amount
+HAVING t.quota_amount - COALESCE(SUM(d.deal_amount), 0) > 0
+ORDER BY shortfall_amount DESC, entity ASC;

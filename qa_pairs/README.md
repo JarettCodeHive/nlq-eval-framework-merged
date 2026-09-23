@@ -56,19 +56,24 @@ qa_pairs/
 │   ├── sql.py                   <-   sqlstr() literal quoting + the Jinja env factory
 │   ├── sampling.py              <-   even_sample() + N-parameter combos()
 │   ├── duckdb_io.py             <-   typed-DuckDB connect + distinct()
-│   └── labels.py                <-   generic label lookup (CRM map lives in generator/labels.json)
-├── generator/                    <- CRM specifics: data files + thin drivers
-│   ├── config.json             <-   domain, dataset/output paths, Q&A version, quotas, resolved OIs
-│   ├── catalog.json            <-   param name -> SQL listing its allowed values
-│   ├── families.json           <-   32 question families (the source of truth)
-│   ├── labels.json             <-   CRM enum token -> business phrase (question text only)
-│   ├── generate_crm.py         <-   Step 1: stage generator output -> DuckDB + manifest
-│   ├── validate_crm.py         <-   Step 2: FK / join-path / imperfection gate
-│   ├── scale_pairs.py          <-   Step 3: 160 pairs from config+catalog+families+templates
-│   ├── author_qa_pairs.py      <-   Step 3b: 32 seed FIXTURES (review only)
-│   ├── rephrase.py             <-   Step 3c: 16 rephrase groups + map (§9.5 companion)
-│   ├── gen_family_matrix.py    <-   regenerate the taxonomy matrix CSV from families.json
-│   └── templates/t{1..5}/*.sql.j2  <- one SQL template per family ({{ x | sqlstr }})
+│   └── labels.py                <-   generic label lookup (CRM map lives in generator/crm/labels.json)
+├── generator/
+│   ├── crm/                     <- CRM specifics: data files + thin drivers
+│   │   ├── config.json             <-   domain, dataset/output paths, Q&A version, quotas, resolved OIs
+│   │   ├── catalog.json            <-   param name -> SQL listing its allowed values
+│   │   ├── families.json           <-   32 question families (the source of truth)
+│   │   ├── labels.json             <-   CRM enum token -> business phrase (question text only)
+│   │   ├── generate_crm.py         <-   Step 1: stage generator output -> DuckDB + manifest
+│   │   ├── validate_crm.py         <-   Step 2: FK / join-path / imperfection gate
+│   │   ├── scale_pairs.py          <-   Step 3: 160 pairs from config+catalog+families+templates
+│   │   ├── author_qa_pairs.py      <-   Step 3b: 32 seed FIXTURES (review only)
+│   │   ├── rephrase.py             <-   Step 3c: 16 rephrase groups + map (§9.5 companion)
+│   │   ├── gen_family_matrix.py    <-   regenerate the taxonomy matrix CSV from families.json
+│   │   └── templates/t{1..5}/*.sql.j2  <- one SQL template per family ({{ x | sqlstr }})
+│   └── sales/                   <- Sales specifics (same four-driver shape, no fixtures/rephrase yet)
+│       ├── config.json , catalog.json , families.json , labels.json
+│       ├── generate_sales.py , validate_sales.py , scale_pairs_sales.py
+│       └── templates/t{1..5}/*.sql.j2
 ├── tests/                       <- pytest: contract / templates / ground-truth / scoring / rephrase / sqlfluff
 ├── dataset/                     <- generated (git-ignored except manifests)
 │   └── <profile>/*.csv , crm_<profile>.duckdb , manifest_<profile>.json
@@ -83,17 +88,17 @@ qa_pairs/
 ../tmp/generated/crm/dev/imperfect/*.csv   (dev source)
 ../release/crm/<dataset_version>/*.csv     (full source)
         |
-        v   generator/generate_crm.py      resolve source from config; stage CSVs;
+        v   generator/crm/generate_crm.py      resolve source from config; stage CSVs;
         |                                   CREATE the canonical DDL in a fresh
         |                                   crm_<profile>.duckdb and COPY the CSVs into
         |                                   TYPED tables; write manifest (hashes, toolchain)
         v
 dataset/<profile>/  +  crm_<profile>.duckdb  +  manifest_<profile>.json
         |
-        v   generator/validate_crm.py       FK integrity; INNER paths non-empty;
+        v   generator/crm/validate_crm.py       FK integrity; INNER paths non-empty;
         |                                   LEFT paths have unmatched rows; imperfections present
         v
-generator/scale_pairs.py                    for each family:
+generator/crm/scale_pairs.py                    for each family:
         |    - explicit per-family quota; even_sample() if quota < available values
         |    - render templates/tN/TN-MM.sql.j2 with StrictUndefined (missing var = error)
         |    - execute against the TYPED crm_<profile>.duckdb  (decimals stay DECIMAL)
@@ -122,13 +127,13 @@ cd qa_pairs
 python3 -m pip install -r requirements.txt          # duckdb==0.10.3, jinja2, pytest, sqlfluff (pinned)
 
 for p in dev full; do
-  python3 generator/generate_crm.py    --profile $p
-  python3 generator/validate_crm.py    --profile $p
-  python3 generator/scale_pairs.py     --profile $p
-  python3 generator/author_qa_pairs.py --profile $p
-  python3 generator/rephrase.py        --profile $p     # after scale_pairs
+  python3 generator/crm/generate_crm.py    --profile $p
+  python3 generator/crm/validate_crm.py    --profile $p
+  python3 generator/crm/scale_pairs.py     --profile $p
+  python3 generator/crm/author_qa_pairs.py --profile $p
+  python3 generator/crm/rephrase.py        --profile $p     # after scale_pairs
 done
-python3 generator/gen_family_matrix.py                  # after editing families.json
+python3 generator/crm/gen_family_matrix.py                  # after editing families.json
 python3 -m pytest tests/ -q
 ```
 
@@ -143,7 +148,7 @@ python main.py apply-imperfections --profile dev --write-preview
 python main.py export-csvs --profile full
 ```
 
-`generator/config.json` controls both profile source templates. The full source
+`generator/crm/config.json` controls both profile source templates. The full source
 path interpolates the dataset version from `config/generation/crm/release.json`.
 It also controls the Q&A version and final profile output paths. Dev output is
 written to `tmp/generated/crm/dev/qa_pairs`; full output is written to the
@@ -264,3 +269,51 @@ Post-review remediation rounds 1 and 2 are done (`docs/REMEDIATION.md`).
 | — | Numeric tolerance = 0 for our runs | **Open** — eval-config setting; the spec mandates zero tolerance (change C2). |
 | — | Independent QA reviewer | **Open** — needs a person named to sign `taxonomy/crm_taxonomy_review_checklist.md`. |
 | — | CRM vs Sales question-boundary rule | **Open** — needed before Sales authoring. |
+
+## Sales Q&A (first cut, 2026-09-23)
+
+A parallel, independent Q&A pipeline for the Sales domain (`leads`, `deals`,
+`products`, `quotations`, `targets`), built the same way as the CRM POC and
+sharing its domain-agnostic `utils/` untouched. It is namespaced separately
+throughout so it can never collide with CRM's files in the same directories:
+
+- `generator/sales/config.json`, `catalog.json`, `families.json`, `labels.json`,
+  `templates/t{1..5}/*.sql.j2` — the declarative files, folder-namespaced
+  the same way `generator/crm/` is (mirrors CRM's own config/catalog/
+  families/labels, just without the domain suffix the folder now makes
+  redundant).
+- `generator/sales/generate_sales.py`, `validate_sales.py`,
+  `scale_pairs_sales.py` — the three driver scripts (mirrors
+  `generator/crm/generate_crm.py`/`validate_crm.py`/`scale_pairs.py`),
+  staging to `dataset/sales/<profile>/*.csv` + `dataset/sales_<profile>.duckdb`
+  + `dataset/manifest_sales_<profile>.json` rather than the CRM filenames.
+- Output: `sales_qa_pairs.csv` (+ `_companion`) to
+  `tmp/generated/sales/dev/qa_pairs/` (dev) or
+  `release/sales/qa-pairs-v0.1.0/` (full) — 9-field contract (question_id +
+  tier prepended, same deviation as CRM), no `rephrase_group_id` /
+  `is_release_160` yet since no rephrase groups exist for Sales.
+- Wired into the root CLI: `python main.py qa-build --domain sales --profile
+  full` runs stage → validate → generate, same as CRM.
+
+**104 pairs, 8 join paths (`sales_jp_001`–`sales_jp_008`, declared in
+`config/generation/sales/validation.json`), 5 tiers**: T1 21 / T2 36 / T3 15 /
+T4 18 / T5 14. Every pair was independently re-executed against a fresh
+connection after generation (answer, `result_hash`, and tier counts all
+matched; zero duplicate question text), and both profiles reproduce
+byte-identical output on a second run.
+
+Learning applied from the CRM T4/T5 first-eval-run feedback: every
+aggregation verb is explicit in the question text (`total quoted revenue`,
+never bare `revenue`; `total won-deal amount`, never bare `performance`), and
+T5-02's "most recently completed target period" is resolved by the SQL
+itself (`ORDER BY period_end DESC LIMIT 1`), not hand-picked, so the family
+is portable between `dev` (4 periods/rep) and `full` (8 periods/rep) without
+silently changing what the question means.
+
+**Not built in this first cut** (would mirror CRM's remaining Track B work):
+seed fixtures (`author_qa_pairs.py` equivalent), rephrase groups
+(`rephrase.py` equivalent), a `sales_qa_taxonomy_spec.md` / allowed-join-path
+/ answer-format-matrix doc set, and judge/scorecard wiring (`judge-build-input`
+and `judge` remain CRM-only in `main.py`). Adding a Sales family is the same
+one-JSON-entry-plus-one-template workflow as CRM (see "Extending it" in
+`docs/ARCHITECTURE.md`).

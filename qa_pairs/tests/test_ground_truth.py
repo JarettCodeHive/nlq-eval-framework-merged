@@ -10,7 +10,7 @@ from utils.output_paths import resolve_qa_output_dir
 from utils.serialization import serialize
 
 QA_ROOT = Path(__file__).resolve().parent.parent
-LOG_DIR = resolve_qa_output_dir(QA_ROOT, "full") / "verification_logs"
+LOG_DIR = resolve_qa_output_dir(QA_ROOT, "full", "crm") / "verification_logs"
 
 
 def _rows(con, r):

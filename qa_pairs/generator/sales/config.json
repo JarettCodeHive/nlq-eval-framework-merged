@@ -1,0 +1,34 @@
+{
+  "domain": "sales",
+  "id_prefix": "SALES",
+  "reference_today": "2026-08-01",
+  "dataset": {
+    "profile_sources": {
+      "dev": "tmp/generated/sales/dev/imperfect",
+      "full": "release/sales/{dataset_version}"
+    },
+    "base_config_path": "config/generation/base.json",
+    "release_config_path": "config/generation/sales/release.json",
+    "schema_ddl_path": "schemas/sales/sales_ddl.sql",
+    "schema_dbml_path": "schemas/sales/sales_er.dbml"
+  },
+  "qa_release": {
+    "version": "0.1.0",
+    "profile_outputs": {
+      "dev": "tmp/generated/{domain}/dev/qa_pairs",
+      "full": "release/{domain}/qa-pairs-v{qa_version}"
+    }
+  },
+  "tier_quota": {"T1": 21, "T2": 36, "T3": 15, "T4": 18, "T5": 14},
+  "tables": ["leads", "deals", "products", "quotations", "targets"],
+  "scoring": {
+    "numeric_tolerance": "0",
+    "judge_rubric_version": "sales-judge-rubric-v0-draft",
+    "judge_prompt_version": "sales-judge-prompt-v0-draft",
+    "scorer_status": "draft",
+    "_note": "scorer_status stays 'draft' until the Platform Owner confirms the judge input format and tolerance=0, mirroring the CRM open items; then it moves to 'approved', and to 'calibrated' after a judge calibration run."
+  },
+  "resolved_open_items": {
+    "_note": "Sales reuses the CRM-established rulings (OI-1..OI-4) rather than re-litigating them: T1 stays a single-table tier, golden numeric answers are plain numbers with no currency symbol or thousands separator, date answers are exact match with no tolerance, and an empty CSV field ingests as SQL NULL."
+  }
+}

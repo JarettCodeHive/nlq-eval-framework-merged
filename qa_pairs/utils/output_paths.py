@@ -6,20 +6,25 @@ import json
 from pathlib import Path
 
 
-def load_qa_config(qa_root: Path) -> dict:
-    """Load the declarative Q&A generator configuration."""
+def load_qa_config(qa_root: Path, generator_dir: str) -> dict:
+    """Load the declarative Q&A generator configuration for one domain.
 
-    config_path = qa_root / "generator" / "config.json"
+    ``generator_dir`` names the domain's subfolder under ``generator/``
+    (e.g. ``"crm"``, ``"sales"``) — required, not defaulted, so this stays
+    domain-agnostic rather than silently assuming one domain.
+    """
+
+    config_path = qa_root / "generator" / generator_dir / "config.json"
     return json.loads(config_path.read_text(encoding="utf-8"))
 
 
-def qa_version(qa_root: Path) -> str:
-    """Return the configured Q&A release version."""
+def qa_version(qa_root: Path, generator_dir: str) -> str:
+    """Return the configured Q&A release version for one domain."""
 
-    return str(load_qa_config(qa_root)["qa_release"]["version"])
+    return str(load_qa_config(qa_root, generator_dir)["qa_release"]["version"])
 
 
-def resolve_qa_output_dir(qa_root: Path, profile: str) -> Path:
+def resolve_qa_output_dir(qa_root: Path, profile: str, generator_dir: str) -> Path:
     """Resolve the final Q&A package directory for ``dev`` or ``full``.
 
     Dev artifacts remain disposable under ``tmp``. Full artifacts are written
@@ -27,7 +32,7 @@ def resolve_qa_output_dir(qa_root: Path, profile: str) -> Path:
     templates can change without requiring a new dataset version.
     """
 
-    config = load_qa_config(qa_root)
+    config = load_qa_config(qa_root, generator_dir)
     release = config["qa_release"]
     outputs = release["profile_outputs"]
     if profile not in outputs:
