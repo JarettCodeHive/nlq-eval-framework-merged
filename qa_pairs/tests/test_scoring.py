@@ -20,11 +20,18 @@ from utils.scoring import (
 ZERO = Decimal("0")
 
 
-def _mode_for(companion, q):
+def _mode_for(companion, r):
+    """The 160 release rows are keyed by question text directly in the
+    companion. The 19 rephrase variants aren't in the companion at all -
+    they share their base's scoring_mode, found via rephrase_group_id."""
     for c in companion:
-        if c["natural_language_question"] == q:
+        if c["natural_language_question"] == r["natural_language_question"]:
             return c["scoring_mode"]
-    raise KeyError(q)
+    if r["rephrase_group_id"]:
+        for c in companion:
+            if c["rephrase_group_id"] == r["rephrase_group_id"]:
+                return c["scoring_mode"]
+    raise KeyError(r["natural_language_question"])
 
 
 # ---- identity: the golden answer always scores itself as a pass ----------
@@ -32,7 +39,7 @@ def _mode_for(companion, q):
 
 def test_every_released_answer_passes_against_itself(pairs, companion):
     for r in pairs:
-        mode = _mode_for(companion, r["natural_language_question"])
+        mode = _mode_for(companion, r)
         v = score(mode, r["expected_answer"], r["expected_answer"], judge_verdict=True)
         assert v.passed, (r["natural_language_question"], mode, v.reason)
 
@@ -58,7 +65,7 @@ def test_numeric_change_fails_for_every_numeric_answer(pairs, companion):
         golden = r["expected_answer"]
         if not numbers(golden):
             continue
-        mode = _mode_for(companion, r["natural_language_question"])
+        mode = _mode_for(companion, r)
         tampered = _bump_first_number(golden)
         if tampered == golden:
             continue

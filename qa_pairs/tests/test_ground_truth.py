@@ -19,12 +19,19 @@ def _rows(con, r):
 
 
 def test_reference_sql_reproduces_expected_answer(pairs, companion, con):
+    """Re-executed for all 179 rows - the 160 release pairs AND the 19
+    rephrase variants (they reuse a base's reference_sql verbatim, but
+    re-verifying proves that hasn't drifted). The result_hash cross-check
+    against the companion is only meaningful for the 160 - the companion
+    does not carry rows for the variants."""
     comp = {c["natural_language_question"]: c for c in companion}
     for r in pairs:
         result, cols = _rows(con, r)
         assert result, f"zero rows now: {r['natural_language_question']}"
         answer = serialize(result, cols)
         assert answer == r["expected_answer"], f"answer drift: {r['natural_language_question']}"
+        if r["is_release_160"] != "true":
+            continue
         # result_hash = SHA-256 of the canonical serialized answer (portable)
         c = comp[r["natural_language_question"]]
         assert hashlib.sha256(answer.encode()).hexdigest() == c["result_hash"]
@@ -59,5 +66,7 @@ def test_reference_sql_reproduces_expected_answer_from_authoritative_source(
         assert (
             answer == r["expected_answer"]
         ), f"answer drift vs authoritative source: {r['natural_language_question']}"
+        if r["is_release_160"] != "true":
+            continue
         c = comp[r["natural_language_question"]]
         assert hashlib.sha256(answer.encode()).hexdigest() == c["result_hash"]

@@ -1,13 +1,14 @@
 """Delivery-contract gates (scope doc Section 9.1 / 9.3 / 9.4).
 
-NOTE - CONTRACT_FIELDS is 9 fields, not the 7 scope Section 9.3 specifies
+NOTE - CONTRACT_FIELDS is 11 fields, not the 7 scope Section 9.3 specifies
 ("Do not add, remove, or rename fields. Internal metadata lives in a
-separate companion file"). question_id/tier were added to
-crm_qa_pairs.csv on 2026-09-15 by explicit instruction, for easier review
-joins - see docs/REMEDIATION.md "Contract deviation". They are still
-present in the companion CSV too, so a spec-compliant 7-field file is a
-one-line `del row["question_id"]; del row["tier"]` away. Confirm this
-9-field format with the Platform Owner before treating it as final.
+separate companion file"). question_id/tier were added 2026-09-15;
+rephrase_group_id/is_release_160 were added 2026-09-21 so the eval tool
+sees the whole release (the 160 plus the 19 rephrase variants, flagged) in
+one file - see docs/REMEDIATION.md "Contract deviation". question_id/tier
+are still present in the companion CSV too, so a spec-compliant 7-field
+file is a few columns dropped away. Confirm this format with the Platform
+Owner before treating it as final.
 """
 
 import re
@@ -22,17 +23,34 @@ CONTRACT_FIELDS = [
     "reference_fields",
     "judge_reference",
     "derivation_rationale",
+    "rephrase_group_id",
+    "is_release_160",
 ]
 TIER_QUOTA = {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24}
 _NORM = re.compile(r"[^a-z0-9]+")
+_BASE_QID = re.compile(r"^[A-Z]+-(T[1-5])-\d{2}-\d{2}$")
+_VARIANT_QID = re.compile(r"^[A-Z]+-RG-\d{2}-V\d{2}$")
 
 
 def _norm(q):
     return _NORM.sub(" ", q.lower()).strip()
 
 
-def test_contract_has_exactly_nine_named_fields(pairs):
+def _base_rows(pairs):
+    """The 160 release rows - excludes the 19 rephrase variant rows."""
+    return [r for r in pairs if r["is_release_160"] == "true"]
+
+
+def test_contract_has_exactly_eleven_named_fields(pairs):
     assert list(pairs[0].keys()) == CONTRACT_FIELDS
+
+
+def test_release_row_count_is_160_plus_19_variants(pairs):
+    base = _base_rows(pairs)
+    variants = [r for r in pairs if r["is_release_160"] == "false"]
+    assert len(base) == 160, len(base)
+    assert len(variants) == 19, len(variants)
+    assert len(pairs) == 179
 
 
 def test_question_id_and_tier_are_internally_consistent(pairs):
@@ -40,13 +58,31 @@ def test_question_id_and_tier_are_internally_consistent(pairs):
     for r in pairs:
         assert r["question_id"], r["natural_language_question"]
         assert r["tier"] in TIER_QUOTA, (r["question_id"], r["tier"])
-        assert r["question_id"].split("-")[1] == r["tier"], r["question_id"]
+        if r["is_release_160"] == "true":
+            assert _BASE_QID.match(r["question_id"]), r["question_id"]
+            assert r["question_id"].split("-")[1] == r["tier"], r["question_id"]
+        else:
+            assert _VARIANT_QID.match(r["question_id"]), r["question_id"]
         assert r["question_id"] not in seen, f"duplicate question_id: {r['question_id']}"
         seen.add(r["question_id"])
 
 
+def test_rephrase_group_id_matches_release_row_count(pairs):
+    """35 rows carry a rephrase_group_id: 16 group-base rows (within the
+    160) + 19 variant rows. Every group has exactly one base."""
+    grouped = [r for r in pairs if r["rephrase_group_id"]]
+    assert len(grouped) == 35, len(grouped)
+    bases = [r for r in grouped if r["is_release_160"] == "true"]
+    variants = [r for r in grouped if r["is_release_160"] == "false"]
+    assert len(bases) == 16, len(bases)
+    assert len(variants) == 19, len(variants)
+    from collections import Counter
+
+    assert set(Counter(r["rephrase_group_id"] for r in bases).values()) == {1}
+
+
 def test_total_is_exactly_160(pairs):
-    assert len(pairs) == 160
+    assert len(_base_rows(pairs)) == 160
 
 
 def test_tier_counts_match_quota(companion):
@@ -57,19 +93,21 @@ def test_tier_counts_match_quota(companion):
 
 
 def test_companion_aligns_with_contract(pairs, companion):
-    assert len(companion) == len(pairs)
+    base = _base_rows(pairs)
+    assert len(companion) == len(base)
     ids = [r["question_id"] for r in companion]
     assert len(ids) == len(set(ids)), "duplicate question_id"
-    assert {_norm(r["natural_language_question"]) for r in pairs} == {
+    assert {_norm(r["natural_language_question"]) for r in base} == {
         _norm(r["natural_language_question"]) for r in companion
     }
-    # question_id/tier now live in both files (contract deviation, see module
-    # docstring) - they must always agree, not just be independently valid.
+    # question_id/tier/rephrase_group_id live in both files - they must
+    # always agree, not just be independently valid.
     by_q = {r["natural_language_question"]: r for r in companion}
-    for r in pairs:
+    for r in base:
         c = by_q[r["natural_language_question"]]
         assert r["question_id"] == c["question_id"], r["natural_language_question"]
         assert r["tier"] == c["tier"], r["question_id"]
+        assert r["rephrase_group_id"] == c["rephrase_group_id"], r["question_id"]
 
 
 def test_questions_are_unique(pairs):

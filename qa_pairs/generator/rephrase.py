@@ -7,7 +7,12 @@ This script looks that pair up in the delivered contract + companion,
 reuses its exact reference_sql / expected_answer / result_hash, and
 attaches reworded variants. ~16 of the 160 are group bases (~10%).
 
-Output (<resolved Q&A package>/rephrase/):
+Rewrites crm_qa_pairs.csv / crm_qa_pairs_companion.csv in place: fills
+rephrase_group_id on the 16 group-base rows and appends the 19 variant
+rows (is_release_160=false), so the eval tool sees the whole release -
+including rephrase groups - in one file.
+
+Also writes (<resolved Q&A package>/rephrase/), review-only:
   crm_rephrase_pairs.csv   7-field contract - the reworded variant rows only
   crm_rephrase_map.csv     pair_group_id -> question_id, is_base, class, hash
   verification_logs/*.json
@@ -49,10 +54,10 @@ GROUPS = {
         {"region": "Central"},
         "Temporal",
         [
-            "For Central-region accounts, compare engagement in the previous "
-            "quarter with the quarter before it.",
-            "How did engagement among Central-region accounts change from the "
-            "January-March 2026 period to the April-June 2026 period?",
+            "For Central-region accounts, compare total engagement points in the "
+            "previous quarter with the quarter before it.",
+            "How did total engagement points among Central-region accounts change "
+            "from the January-March 2026 period to the April-June 2026 period?",
         ],
     ),
     "RG-02": (
@@ -61,7 +66,7 @@ GROUPS = {
         "Lexical",
         [
             "Among Central-region accounts, which three campaign types generated "
-            "the most customer activity?",
+            "the most total engagement points?",
             "For Central-region accounts, name the top three campaign types by "
             "total engagement score.",
         ],
@@ -95,8 +100,9 @@ GROUPS = {
         {"customer_tier": "Preferred"},
         "Temporal",
         [
-            "Looking at preferred-tier accounts, which region's engagement held up "
-            "best between the January-March and April-June 2026 periods?"
+            "Looking at preferred-tier accounts, which region's total engagement "
+            "points held up best between the January-March and April-June 2026 "
+            "periods?"
         ],
     ),
     "RG-07": (
@@ -146,8 +152,8 @@ GROUPS = {
         {"industry": "Education"},
         "Rephrase",
         [
-            "Among education-industry accounts, which ones have a large unresolved "
-            "case backlog and no engagement in the last 60 days?"
+            "Among education-industry accounts, which ones have at least 3 open "
+            "support cases and no interaction in the last 60 days?"
         ],
     ),
     "RG-15": (
@@ -170,7 +176,7 @@ GROUPS = {
 # pronoun follow-up). That needs conversational context and is out of
 # scope for the single-question delivery format - documented, not faked.
 
-CONTRACT = [
+CONTRACT = [  # <qa>/rephrase/crm_rephrase_pairs.csv - review-only, variants only
     "natural_language_question",
     "expected_answer",
     "reference_sql",
@@ -178,6 +184,40 @@ CONTRACT = [
     "reference_fields",
     "judge_reference",
     "derivation_rationale",
+]
+# Must match generator/scale_pairs.py's CONTRACT / COMPANION exactly - this
+# script rewrites crm_qa_pairs*.csv in place, appending the variant rows and
+# filling rephrase_group_id, so the eval tool has one file for the whole
+# release instead of never seeing the rephrase corpus.
+FULL_CONTRACT = [
+    "question_id",
+    "tier",
+    "natural_language_question",
+    "expected_answer",
+    "reference_sql",
+    "reference_tables",
+    "reference_fields",
+    "judge_reference",
+    "derivation_rationale",
+    "rephrase_group_id",
+    "is_release_160",
+]
+COMPANION_FIELDS = [
+    "question_id",
+    "tier",
+    "family",
+    "join_path_id",
+    "sql_source",
+    "scoring_mode",
+    "answer_schema",
+    "numeric_components",
+    "judge_rubric_version",
+    "judge_prompt_version",
+    "scorer_status",
+    "param_values",
+    "result_hash",
+    "rephrase_group_id",
+    "natural_language_question",
 ]
 MAP = [
     "pair_group_id",
@@ -210,7 +250,7 @@ def generate_rephrases(profile: str) -> None:
 
     # Build the whole set in memory; nothing on disk changes until every
     # base is found and every variant re-verifies to the base hash.
-    variants, mapping, missing, log_entries = [], [], [], []
+    variants, full_variants, mapping, missing, log_entries = [], [], [], [], []
     for gid, (family, param, cls, rewordings) in GROUPS.items():
         key = (family, ";".join(f"{k}={v}" for k, v in param.items()))
         base_comp = by_family_param.get(key)
@@ -219,6 +259,10 @@ def generate_rephrases(profile: str) -> None:
             continue
         base = contract[base_comp["natural_language_question"]]
         gpref = _gid(gid)
+        # Mutates the same dict objects held in `contract` / `companion` -
+        # the base row's rephrase_group_id is filled in once validation passes.
+        base["rephrase_group_id"] = gpref
+        base_comp["rephrase_group_id"] = gpref
         mapping.append(
             {
                 "pair_group_id": gpref,
@@ -250,6 +294,15 @@ def generate_rephrases(profile: str) -> None:
                 )
             )
             variants.append({**{k: base[k] for k in CONTRACT}, "natural_language_question": q})
+            full_variants.append(
+                {
+                    **base,
+                    "question_id": qid,
+                    "natural_language_question": q,
+                    "rephrase_group_id": gpref,
+                    "is_release_160": "false",
+                }
+            )
             mapping.append(
                 {
                     "pair_group_id": gpref,
@@ -271,6 +324,16 @@ def generate_rephrases(profile: str) -> None:
     if bad:
         raise SystemExit(f"rephrase hash mismatch (nothing written): {bad}")
 
+    # Everything validated - now write. crm_qa_pairs.csv / _companion.csv are
+    # rewritten IN PLACE (not rmtree'd - the 160 rows' verification_logs/
+    # from scale_pairs.py live alongside them and must survive), gaining
+    # rephrase_group_id on the 16 group bases and the 19 variant rows
+    # appended (is_release_160=false) so the eval tool sees the whole
+    # release, including rephrase groups, in one file.
+    merged_pairs = list(contract.values()) + full_variants
+    _write(qa / "crm_qa_pairs.csv", FULL_CONTRACT, merged_pairs)
+    _write(qa / "crm_qa_pairs_companion.csv", COMPANION_FIELDS, companion)
+
     out = qa / "rephrase"
     if out.exists():
         shutil.rmtree(out)
@@ -285,7 +348,10 @@ def generate_rephrases(profile: str) -> None:
         f"[{profile}] rephrase: {bases} base pairs (of 160) + {len(variants)} "
         f"variants across {len(GROUPS)} groups"
     )
-    print(f"[{profile}] rephrase output: {out}")
+    print(
+        f"[{profile}] {qa / 'crm_qa_pairs.csv'} now has {len(merged_pairs)} rows "
+        f"(160 release + {len(full_variants)} rephrase variants)"
+    )
 
 
 def main() -> None:
