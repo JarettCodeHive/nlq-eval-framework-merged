@@ -4,7 +4,7 @@ qa_pairs/dataset/
 qa_pairs/qa_pairs/
 
 # Generated release outputs
-/release/
+release/
 
 # Secrets — never commit. judge/.env.example is the checked-in template.
 .env
