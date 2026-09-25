@@ -3,22 +3,8 @@ tmp/
 qa_pairs/dataset/
 qa_pairs/qa_pairs/
 
-# Generated release outputs. §13.1 wants release/ versioned (Git LFS); until that
-# is set up, the bulky and sensitive parts stay out and the §11 deliverables —
-# release/<domain>/scorecards/ — stay tracked, because a scorecard nobody can
-# check out is not a deliverable. eval-runs/ holds pulse_raw/, ~72KB per question
-# of real org data.
-release/*/dataset-*/
-release/*/qa-pairs-*/
-release/*/eval-runs/
-
-# Upload manifests from `dataset-upload`. These record the entity IDs a load
-# landed on in ONE Claris org, plus job IDs and absolute local paths — live
-# platform state, not a §11 deliverable. Committing them is actively unsafe:
-# `dataset-delete` reads a manifest to decide what to remove, and Claris reuses
-# entity IDs, so a stale checked-in manifest can name entities that now hold
-# somebody else's data. Each machine keeps its own.
-release/*/platform/
+# Generated release outputs
+/release/
 
 # Secrets — never commit. judge/.env.example is the checked-in template.
 .env
