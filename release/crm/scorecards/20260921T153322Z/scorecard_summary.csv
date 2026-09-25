@@ -1,7 +1,0 @@
-run_id,run_timestamp_iso,platform_version,dataset_version,scorecard_mode,comparison_policy,judge_temperature_enforced,judge_seed_enforced,domain,tier,questions_total,exact_match_pass,exact_match_eligible,exact_match_pct,exact_match_not_applicable,expected_answer_off_contract,null_handling_applicable,null_handling_fail,judge_factual,judge_completeness,judge_format,judge_sql,judge_overall,judge_errors,platform_errors,baseline_exact_match_pct,delta_pct,regression_flag
-20260921T153322Z,2026-09-21T15:33:22.568158+00:00,,,PREVIEW,numeric=value labels=required proximity=120,True,False,crm,ALL,55,27,55,49.0909,0,0,9,0,3.2545,3.5273,3.3455,3.8182,3.4864,0,0,,,
-20260921T153322Z,2026-09-21T15:33:22.568158+00:00,,,PREVIEW,numeric=value labels=required proximity=120,True,False,crm,T1,8,2,8,25.0,0,0,0,0,2.0,2.25,2.75,2.5,2.375,0,0,,,
-20260921T153322Z,2026-09-21T15:33:22.568158+00:00,,,PREVIEW,numeric=value labels=required proximity=120,True,False,crm,T2,26,16,26,61.5385,0,0,0,0,3.4231,3.6923,3.5,4.0385,3.6635,0,0,,,
-20260921T153322Z,2026-09-21T15:33:22.568158+00:00,,,PREVIEW,numeric=value labels=required proximity=120,True,False,crm,T3,9,9,9,100.0,0,0,9,0,5.0,5.0,4.3333,5.0,4.8333,0,0,,,
-20260921T153322Z,2026-09-21T15:33:22.568158+00:00,,,PREVIEW,numeric=value labels=required proximity=120,True,False,crm,T4,4,0,4,0.0,0,0,0,0,1.75,3.0,3.0,3.0,2.6875,0,0,,,
-20260921T153322Z,2026-09-21T15:33:22.568158+00:00,,,PREVIEW,numeric=value labels=required proximity=120,True,False,crm,T5,8,0,8,0.0,0,0,0,0,2.75,2.875,2.5,3.5,2.9062,0,0,,,
