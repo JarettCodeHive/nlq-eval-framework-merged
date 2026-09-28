@@ -12,6 +12,7 @@ from typing import Any
 from generators.core.base import DeterministicGenerator
 from generators.core.base import validate_column_contracts
 from generators.core.progress import ProgressReporter
+from generators.core.temporal import random_datetime_inclusive
 from generators.finance.config import load_base_config
 from generators.finance.config import load_finance_config
 from generators.finance.config import settings_for_profile
@@ -619,10 +620,7 @@ def _format_timestamp(value: datetime) -> str:
 
 
 def _random_datetime(rng: Any, start: datetime, end: datetime) -> datetime:
-    if end < start:
-        raise ValueError("Random timestamp range end cannot precede start")
-    seconds = int((end - start).total_seconds())
-    return start + timedelta(seconds=int(rng.integers(0, seconds + 1)))
+    return random_datetime_inclusive(rng, start, end)
 
 
 def _random_timestamp_strings(

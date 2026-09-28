@@ -1,0 +1,422 @@
+{
+  "tables": {
+    "carriers": {
+      "primary_key": "carrier_id",
+      "role": "reference",
+      "row_targets": {
+        "dev": 10,
+        "full": 50
+      },
+      "fields": [
+        {
+          "name": "carrier_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "carrier_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "business_mappings.synthetic_names.carrier_name"
+        },
+        {
+          "name": "service_level",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.service_levels"
+        },
+        {
+          "name": "carrier_type",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": true,
+          "synthetic_source": "domain_values.carrier_types",
+          "null_semantics": "Carrier type is not classified."
+        },
+        {
+          "name": "base_rate",
+          "type": "decimal",
+          "precision": 10,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "generation_rules.carriers.base_rate",
+          "null_semantics": "Carrier negotiates rates per shipment."
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.currency_code"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "generation_rules.carriers.active_probability"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "generation_rules.date_windows.entity_created_start"
+        }
+      ]
+    },
+    "warehouses": {
+      "primary_key": "warehouse_id",
+      "role": "reference",
+      "row_targets": {
+        "dev": 10,
+        "full": 100
+      },
+      "fields": [
+        {
+          "name": "warehouse_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "business_mappings.synthetic_names.warehouse_name"
+        },
+        {
+          "name": "region",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": true,
+          "synthetic_source": "domain_values.regions"
+        },
+        {
+          "name": "country_code",
+          "type": "char",
+          "max_length": 2,
+          "nullable": true,
+          "synthetic_source": "business_mappings.region_country_codes"
+        },
+        {
+          "name": "capacity_units",
+          "type": "integer",
+          "nullable": true,
+          "synthetic_source": "generation_rules.warehouses.capacity_units"
+        },
+        {
+          "name": "utilization_pct",
+          "type": "decimal",
+          "precision": 5,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "generation_rules.warehouses.utilization_pct"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "generation_rules.warehouses.active_probability"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "generation_rules.date_windows.entity_created_start"
+        }
+      ]
+    },
+    "orders": {
+      "primary_key": "order_id",
+      "role": "transaction_fact",
+      "row_targets": {
+        "dev": 1000,
+        "full": 100000
+      },
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "integer",
+          "nullable": true,
+          "key": "analytical",
+          "analytical_reference": {
+            "table": "warehouses",
+            "field": "warehouse_id",
+            "join_type": "left",
+            "physical_foreign_key": false
+          },
+          "synthetic_source": "generation_rules.orders.warehouse_assignment",
+          "imperfection_targets": [
+            "controlled_null",
+            "declared_orphan"
+          ],
+          "null_semantics": "Order has no assigned warehouse."
+        },
+        {
+          "name": "customer_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "business_mappings.synthetic_names.customer_name"
+        },
+        {
+          "name": "order_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.orders.date_range",
+          "imperfection_target": "coordinated_boundary_date"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.order_statuses"
+        },
+        {
+          "name": "order_priority",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.order_priorities"
+        },
+        {
+          "name": "total_amount",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": false,
+          "synthetic_source": "distributions.order_total",
+          "distribution": "pareto",
+          "imperfection_target": "numeric_outlier"
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.currency_code"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "generation_rules.orders.created_at_policy"
+        }
+      ]
+    },
+    "shipments": {
+      "primary_key": "shipment_id",
+      "role": "relationship_fact",
+      "row_targets": {
+        "dev": 1500,
+        "full": 150000
+      },
+      "fields": [
+        {
+          "name": "shipment_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "order_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "orders",
+            "field": "order_id"
+          }
+        },
+        {
+          "name": "carrier_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "carriers",
+            "field": "carrier_id"
+          }
+        },
+        {
+          "name": "tracking_number",
+          "type": "varchar",
+          "max_length": 128,
+          "nullable": false,
+          "synthetic_source": "business_mappings.tracking_number"
+        },
+        {
+          "name": "ship_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "business_mappings.shipment_status_dates",
+          "imperfection_target": "coordinated_boundary_date",
+          "null_semantics": "Shipment has not shipped."
+        },
+        {
+          "name": "delivery_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "business_mappings.shipment_status_dates",
+          "imperfection_target": "coordinated_boundary_date",
+          "null_semantics": "Shipment is not delivered."
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.shipment_statuses"
+        },
+        {
+          "name": "shipping_cost",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "generation_rules.shipments.shipping_cost",
+          "null_semantics": "Shipment cost is pending."
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.currency_code"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "generation_rules.shipments.created_at_policy"
+        }
+      ]
+    },
+    "inventory": {
+      "primary_key": "inventory_id",
+      "role": "snapshot_fact",
+      "row_targets": {
+        "dev": 500,
+        "full": 50000
+      },
+      "logical_unique_constraints": [
+        [
+          "warehouse_id",
+          "product_sku"
+        ]
+      ],
+      "fields": [
+        {
+          "name": "inventory_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "warehouses",
+            "field": "warehouse_id"
+          }
+        },
+        {
+          "name": "product_sku",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "synthetic_source": "business_mappings.product_sku"
+        },
+        {
+          "name": "product_category",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "domain_values.product_categories"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "integer",
+          "nullable": false,
+          "synthetic_source": "generation_rules.inventory.quantity_on_hand"
+        },
+        {
+          "name": "reorder_point",
+          "type": "integer",
+          "nullable": true,
+          "synthetic_source": "generation_rules.inventory.reorder_point"
+        },
+        {
+          "name": "last_updated_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "generation_rules.inventory.last_updated_at_policy"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "generation_rules.date_windows.entity_created_start"
+        }
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "orders",
+      "parent_field": "order_id",
+      "child_table": "shipments",
+      "child_field": "order_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "carriers",
+      "parent_field": "carrier_id",
+      "child_table": "shipments",
+      "child_field": "carrier_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "warehouses",
+      "parent_field": "warehouse_id",
+      "child_table": "inventory",
+      "child_field": "warehouse_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "analytical_orphanable",
+      "parent_table": "warehouses",
+      "parent_field": "warehouse_id",
+      "child_table": "orders",
+      "child_field": "warehouse_id",
+      "cardinality": "1:N",
+      "join_type": "left",
+      "enforced_as_foreign_key": false,
+      "allows_null": true,
+      "allows_declared_orphan": true
+    }
+  ]
+}

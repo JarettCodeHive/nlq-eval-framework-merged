@@ -13,6 +13,8 @@ from generators.crm.pipeline import CRMDatasetPipeline
 from generators.domain_registry import DATASET_DOMAINS
 from generators.domain_registry import dataset_domain
 from generators.finance.pipeline import FinanceDatasetPipeline
+from generators.logistics.pipeline import LogisticsDatasetPipeline
+from generators.project_management.pipeline import ProjectManagementDatasetPipeline
 from generators.sales.pipeline import SalesDatasetPipeline
 from qa_pairs.generator.crm.author_qa_pairs import generate_seed_fixtures
 from qa_pairs.generator.crm.generate_crm import build as stage_crm_qa_dataset
@@ -73,12 +75,14 @@ def run_build_dataset(args: argparse.Namespace) -> None:
         "crm": CRMDatasetPipeline,
         "finance": FinanceDatasetPipeline,
         "sales": SalesDatasetPipeline,
+        "logistics": LogisticsDatasetPipeline,
+        "project_management": ProjectManagementDatasetPipeline,
     }
     try:
         pipeline = pipelines[args.domain]
     except KeyError as exc:
         raise NotImplementedError(
-            "build-dataset currently supports only crm, finance, and sales; "
+            "build-dataset currently supports only crm, finance, sales, logistics, and project_management; "
             f"got {args.domain}"
         ) from exc
 

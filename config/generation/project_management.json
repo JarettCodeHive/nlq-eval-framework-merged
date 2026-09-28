@@ -1,0 +1,10 @@
+{
+  "config_schema_version": "1.0",
+  "domain": "project_management",
+  "components": {
+    "release": "project_management/release.json",
+    "schema": "project_management/schema.json",
+    "generation": "project_management/generation.json",
+    "validation": "project_management/validation.json"
+  }
+}

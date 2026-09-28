@@ -4,6 +4,40 @@ from pathlib import Path
 
 from generators.core.schema_contract import configured_unique_constraints
 from generators.core.schema_contract import ddl_constraints
+from generators.core.schema_contract import ddl_table_specs
+
+
+def test_ddl_table_specs_parses_nullable_column_before_inline_comment(
+    tmp_path: Path,
+) -> None:
+    """Keep nullable fields followed directly by comma/comments visible."""
+
+    ddl_path = tmp_path / "schema.sql"
+    ddl_path.write_text(
+        """
+        CREATE TABLE resources (
+            resource_id INTEGER NOT NULL,
+            location VARCHAR(128), -- noqa: RF04
+            CONSTRAINT pk_resources PRIMARY KEY (resource_id)
+        );
+        """,
+        encoding="utf-8",
+    )
+
+    assert ddl_table_specs(ddl_path) == {
+        "resources": {
+            "resource_id": {
+                "type": "INTEGER",
+                "nullable": False,
+                "default": None,
+            },
+            "location": {
+                "type": "VARCHAR(128)",
+                "nullable": True,
+                "default": None,
+            },
+        }
+    }
 
 
 def test_ddl_constraints_support_single_and_composite_unique_keys(
