@@ -4,6 +4,7 @@ from generators.core.imperfections import count_from_pct
 from generators.core.imperfections import inject_boundary_values
 from generators.core.imperfections import inject_integer_outliers
 from generators.core.imperfections import inject_nulls
+from generators.core.imperfections import select_disjoint_positions
 
 
 def test_count_from_pct() -> None:
@@ -71,3 +72,49 @@ def test_inject_integer_outliers_when_dependencies_are_installed() -> None:
 
     assert result["points"].between(50, 100).sum() == 5
     assert table["points"].tolist() == [1] * 100
+
+
+def test_select_disjoint_positions_is_deterministic_and_non_overlapping() -> None:
+    try:
+        import numpy as np
+    except ImportError:
+        return
+
+    first = select_disjoint_positions(
+        np.random.default_rng(42),
+        100,
+        {"nulls": 2.5, "orphans": 1.0},
+        protected_positions={0, 1},
+    )
+    second = select_disjoint_positions(
+        np.random.default_rng(42),
+        100,
+        {"nulls": 2.5, "orphans": 1.0},
+        protected_positions={0, 1},
+    )
+
+    assert first == second
+    assert len(first["nulls"]) == 3
+    assert len(first["orphans"]) == 1
+    assert set(first["nulls"]).isdisjoint(first["orphans"])
+    selected = set(first["nulls"]) | set(first["orphans"])
+    assert not ({0, 1} & selected)
+
+
+def test_select_disjoint_positions_rejects_insufficient_capacity() -> None:
+    try:
+        import numpy as np
+    except ImportError:
+        return
+
+    try:
+        select_disjoint_positions(
+            np.random.default_rng(42),
+            2,
+            {"first": 50.0, "second": 50.0},
+            protected_positions={0},
+        )
+    except ValueError as exc:
+        assert "insufficient eligible positions" in str(exc)
+    else:
+        raise AssertionError("capacity violation was not rejected")

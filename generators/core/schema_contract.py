@@ -82,7 +82,7 @@ def ddl_table_specs(schema_path: Path) -> dict[str, dict[str, dict[str, Any]]]:
     field_pattern = re.compile(
         r"^(\w+)\s+"
         r"(INTEGER|BOOLEAN|DATE|TIMESTAMP|VARCHAR\(\d+\)|CHAR\(\d+\)|"
-        r"DECIMAL\(\d+,\s*\d+\))(?=\s|$)(.*)$",
+        r"DECIMAL\(\d+,\s*\d+\))(?=\s|,|$)(.*)$",
         re.I,
     )
     default_pattern = re.compile(

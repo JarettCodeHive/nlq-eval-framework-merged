@@ -1,0 +1,530 @@
+{
+  "tables": {
+    "projects": {
+      "primary_key": "project_id",
+      "role": "dimension",
+      "row_targets": {
+        "dev": 10,
+        "full": 500
+      },
+      "fields": [
+        {
+          "name": "project_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "project_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "business_mappings.synthetic_names.project_name"
+        },
+        {
+          "name": "project_code",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": false,
+          "synthetic_source": "deterministic_project_code"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.project_statuses"
+        },
+        {
+          "name": "priority",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.project_priorities"
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.projects.date_range",
+          "imperfection_target": "coordinated_boundary_date"
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "generation_rules.projects.duration_days",
+          "imperfection_target": "controlled_null",
+          "null_semantics": "Project has no scheduled end."
+        },
+        {
+          "name": "budget_amount",
+          "type": "decimal",
+          "precision": 15,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "distributions.project_budget",
+          "distribution": "pareto",
+          "null_semantics": "Project has no approved budget."
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.currency_code"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "resources": {
+      "primary_key": "resource_id",
+      "role": "dimension",
+      "row_targets": {
+        "dev": 10,
+        "full": 100
+      },
+      "fields": [
+        {
+          "name": "resource_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "resource_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "deterministic_faker_name"
+        },
+        {
+          "name": "role",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.resource_roles"
+        },
+        {
+          "name": "department",
+          "type": "varchar",
+          "max_length": 64,
+          "nullable": true,
+          "synthetic_source": "domain_values.departments"
+        },
+        {
+          "name": "location",
+          "type": "varchar",
+          "max_length": 128,
+          "nullable": true,
+          "synthetic_source": "domain_values.locations"
+        },
+        {
+          "name": "hourly_rate",
+          "type": "decimal",
+          "precision": 10,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "generation_rules.resources.hourly_rate",
+          "null_semantics": "Resource has no configured billing rate."
+        },
+        {
+          "name": "currency_code",
+          "type": "char",
+          "max_length": 3,
+          "nullable": false,
+          "default": "USD",
+          "synthetic_source": "business_mappings.currency_code"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "generation_rules.resources.active_probability"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "tasks": {
+      "primary_key": "task_id",
+      "role": "work_item",
+      "row_targets": {
+        "dev": 100,
+        "full": 10000
+      },
+      "fields": [
+        {
+          "name": "task_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "project_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "projects",
+            "field": "project_id"
+          }
+        },
+        {
+          "name": "task_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "business_mappings.synthetic_names.task_name"
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.task_statuses"
+        },
+        {
+          "name": "task_type",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": true,
+          "synthetic_source": "domain_values.task_types"
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.tasks.date_range",
+          "imperfection_target": "coordinated_boundary_date"
+        },
+        {
+          "name": "due_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "generation_rules.tasks.duration_days",
+          "imperfection_target": "controlled_null",
+          "null_semantics": "Task is open-ended and is not overdue."
+        },
+        {
+          "name": "completed_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "business_mappings.task_status_dates",
+          "null_semantics": "Task is not completed."
+        },
+        {
+          "name": "estimate_hours",
+          "type": "decimal",
+          "precision": 8,
+          "scale": 2,
+          "nullable": true,
+          "synthetic_source": "generation_rules.tasks.estimate_hours",
+          "imperfection_target": "fixed_scale_outlier"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "task_resources": {
+      "primary_key": [
+        "task_id",
+        "resource_id"
+      ],
+      "role": "junction",
+      "row_targets": {
+        "dev": 300,
+        "full": 30000
+      },
+      "fields": [
+        {
+          "name": "task_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary_foreign",
+          "references": {
+            "table": "tasks",
+            "field": "task_id"
+          }
+        },
+        {
+          "name": "resource_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary_foreign",
+          "references": {
+            "table": "resources",
+            "field": "resource_id"
+          }
+        },
+        {
+          "name": "assignment_role",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": true,
+          "synthetic_source": "domain_values.assignment_roles"
+        },
+        {
+          "name": "allocation_pct",
+          "type": "decimal",
+          "precision": 5,
+          "scale": 2,
+          "nullable": false,
+          "default": 100,
+          "synthetic_source": "generation_rules.task_resources.allocation"
+        },
+        {
+          "name": "assigned_at",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.task_resources.assignment_window"
+        },
+        {
+          "name": "released_at",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "generation_rules.task_resources.release_probability",
+          "null_semantics": "Assignment remains active."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "milestones": {
+      "primary_key": "milestone_id",
+      "role": "child_dimension",
+      "row_targets": {
+        "dev": 25,
+        "full": 2500
+      },
+      "fields": [
+        {
+          "name": "milestone_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "project_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "projects",
+            "field": "project_id"
+          }
+        },
+        {
+          "name": "milestone_name",
+          "type": "varchar",
+          "max_length": 255,
+          "nullable": false,
+          "synthetic_source": "business_mappings.synthetic_names.milestone_name"
+        },
+        {
+          "name": "milestone_type",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": true,
+          "synthetic_source": "domain_values.milestone_types"
+        },
+        {
+          "name": "planned_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.milestones.date_range",
+          "imperfection_target": "coordinated_boundary_date"
+        },
+        {
+          "name": "actual_date",
+          "type": "date",
+          "nullable": true,
+          "synthetic_source": "business_mappings.milestone_completion",
+          "null_semantics": "Milestone is incomplete."
+        },
+        {
+          "name": "status",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.milestone_statuses"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    },
+    "time_entries": {
+      "primary_key": "entry_id",
+      "role": "fact",
+      "row_targets": {
+        "dev": 1500,
+        "full": 150000
+      },
+      "fields": [
+        {
+          "name": "entry_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "primary"
+        },
+        {
+          "name": "task_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "tasks",
+            "field": "task_id"
+          }
+        },
+        {
+          "name": "resource_id",
+          "type": "integer",
+          "nullable": false,
+          "key": "foreign",
+          "references": {
+            "table": "resources",
+            "field": "resource_id"
+          }
+        },
+        {
+          "name": "entry_date",
+          "type": "date",
+          "nullable": false,
+          "synthetic_source": "generation_rules.time_entries.assignment_window",
+          "imperfection_target": "coordinated_boundary_date"
+        },
+        {
+          "name": "hours",
+          "type": "decimal",
+          "precision": 6,
+          "scale": 2,
+          "nullable": false,
+          "synthetic_source": "generation_rules.time_entries.hours"
+        },
+        {
+          "name": "billable",
+          "type": "boolean",
+          "nullable": false,
+          "default": true,
+          "synthetic_source": "generation_rules.time_entries.billable_probability"
+        },
+        {
+          "name": "work_type",
+          "type": "varchar",
+          "max_length": 32,
+          "nullable": false,
+          "synthetic_source": "domain_values.work_types"
+        },
+        {
+          "name": "notes",
+          "type": "varchar",
+          "max_length": 1024,
+          "nullable": true,
+          "synthetic_source": "domain_values.time_entry_note_templates"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "nullable": false,
+          "synthetic_source": "deterministic_timestamp"
+        }
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "projects",
+      "parent_field": "project_id",
+      "child_table": "tasks",
+      "child_field": "project_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "tasks",
+      "parent_field": "task_id",
+      "child_table": "task_resources",
+      "child_field": "task_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "resources",
+      "parent_field": "resource_id",
+      "child_table": "task_resources",
+      "child_field": "resource_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "projects",
+      "parent_field": "project_id",
+      "child_table": "milestones",
+      "child_field": "project_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "tasks",
+      "parent_field": "task_id",
+      "child_table": "time_entries",
+      "child_field": "task_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "foreign_key",
+      "parent_table": "resources",
+      "parent_field": "resource_id",
+      "child_table": "time_entries",
+      "child_field": "resource_id",
+      "cardinality": "1:N",
+      "join_type": "inner"
+    },
+    {
+      "relationship_type": "semantic_composite_membership",
+      "parent_table": "task_resources",
+      "parent_fields": [
+        "task_id",
+        "resource_id"
+      ],
+      "child_table": "time_entries",
+      "child_fields": [
+        "task_id",
+        "resource_id"
+      ],
+      "cardinality": "1:N",
+      "join_type": "inner",
+      "enforced_as_foreign_key": false
+    }
+  ]
+}

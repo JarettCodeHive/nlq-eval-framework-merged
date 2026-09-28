@@ -1,11 +1,12 @@
 # Project Management CSV Header Spec
 
-Status: Draft v0.1 - pending sign-off
+Status: Contract v1.0 - frozen for implementation; external sign-off pending
 
 Source of truth:
 
 - ERD: `schemas/project_management/project_management_er.dbml`
 - DDL: `schemas/project_management/project_management_ddl.sql`
+- Semantics: `schemas/project_management/project_management_semantics.md`
 
 Purpose:
 
@@ -13,6 +14,15 @@ This document freezes the exact CSV file names, header names, and column order
 for the Project Management golden dataset. Generated CSV headers must be
 byte-identical to the columns below. Any header rename, reorder, addition, or
 removal requires schema review before data generation or Q&A authoring proceeds.
+
+Schema decision:
+
+- The v3 scope's five core business tables are retained.
+- `task_resources` is accepted as the explicit sixth-table junction contract
+  required to model the Task-to-Resource many-to-many relationship without
+  treating a time entry as proof of assignment.
+- `time_entries` must reference a valid `(task_id, resource_id)` assignment
+  semantically during generation and validation.
 
 ## CSV Contract
 
@@ -23,10 +33,35 @@ removal requires schema review before data generation or Q&A authoring proceeds.
 - Column order: exactly as listed in this spec.
 - NULL representation: empty CSV field.
 - Boolean representation: `true` / `false`.
-- Monetary precision: `DECIMAL(15, 2)`.
+- Project-budget precision: `DECIMAL(15, 2)`.
+- Resource-rate precision: `DECIMAL(10, 2)`.
+- Task-estimate precision: `DECIMAL(8, 2)`.
 - Work-hour precision: `DECIMAL(6, 2)` for `time_entries.hours`.
 - Allocation precision: `DECIMAL(5, 2)` for `task_resources.allocation_pct`.
+- Rounding: exact fixed-point `ROUND_HALF_UP`; calculate first and round once
+  at the contracted final scale.
+- Currency: `projects.currency_code` and `resources.currency_code` are fixed to
+  `USD`; Project Management has no FX conversion path.
 - Maximum rows per table: `250000`.
+
+## Date and Metric Semantics
+
+- The fixed `reference_today` comes from `config/generation/base.json`; Contract
+  v1.0 resolves it to `2026-08-01`.
+- Overdue means `due_date < reference_today AND completed_date IS NULL`.
+- In progress means `status = 'InProgress'` and is not inferred from dates.
+- This quarter is the half-open calendar interval containing
+  `reference_today`: `[2026-07-01, 2026-10-01)`.
+- An assignment is active when `assigned_at <= reference_today` and
+  (`released_at IS NULL OR released_at >= reference_today`). The release date
+  is therefore included as an active day.
+- NULL `projects.end_date`, `tasks.due_date`, and
+  `task_resources.released_at` values represent open-ended ranges.
+- A milestone is complete only when `actual_date IS NOT NULL`.
+- Milestone completion percentage is completed milestones divided by all
+  milestones, multiplied by 100 and rounded once to scale 2 using
+  `ROUND_HALF_UP`. Every generated project must have at least one milestone;
+  reference SQL must still protect the denominator with `NULLIF`.
 
 ## Tables
 

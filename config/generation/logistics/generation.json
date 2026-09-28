@@ -1,0 +1,394 @@
+{
+  "domain_values": {
+    "service_levels": [
+      "Standard",
+      "Express",
+      "Overnight"
+    ],
+    "carrier_types": [
+      "Parcel",
+      "Freight",
+      "Air",
+      "Ocean",
+      "Rail"
+    ],
+    "regions": [
+      "NA",
+      "EU",
+      "APAC",
+      "LATAM"
+    ],
+    "order_statuses": [
+      "Pending",
+      "Shipped",
+      "Delivered",
+      "Cancelled",
+      "Returned"
+    ],
+    "order_priorities": [
+      "Low",
+      "Medium",
+      "High",
+      "Urgent"
+    ],
+    "shipment_statuses": [
+      "Booked",
+      "InTransit",
+      "Delivered",
+      "Failed",
+      "Lost"
+    ],
+    "product_categories": [
+      "Software",
+      "Hardware",
+      "Supplies",
+      "FinishedGoods",
+      "RawMaterials"
+    ],
+    "carrier_name_prefixes": [
+      "Atlas",
+      "Beacon",
+      "Cedar",
+      "Horizon",
+      "Nova",
+      "Summit",
+      "Vertex",
+      "Vista"
+    ],
+    "warehouse_name_prefixes": [
+      "Central",
+      "Coastal",
+      "Gateway",
+      "Metro",
+      "Northern",
+      "Regional",
+      "Southern",
+      "Western"
+    ]
+  },
+  "generation_rules": {
+    "date_windows": {
+      "entity_created_start": "2022-01-01",
+      "order_activity_start": "2024-01-01",
+      "inventory_activity_start": "2025-01-01"
+    },
+    "carriers": {
+      "base_rate": {
+        "minimum_amount": 25,
+        "maximum_amount": 5000,
+        "scale": 2
+      },
+      "missing_base_rate_probability": 0.05,
+      "missing_type_probability": 0.03,
+      "active_probability": 0.9,
+      "require_service_level_coverage": true,
+      "require_carrier_type_coverage": true
+    },
+    "warehouses": {
+      "capacity_units": {
+        "minimum": 10000,
+        "maximum": 1000000
+      },
+      "utilization_pct": {
+        "minimum_units": 2500,
+        "maximum_units": 9800,
+        "scale": 2
+      },
+      "missing_region_probability": 0.02,
+      "missing_country_probability": 0.02,
+      "missing_capacity_probability": 0.02,
+      "missing_utilization_probability": 0.02,
+      "active_probability": 0.95,
+      "require_region_coverage": true
+    },
+    "orders": {
+      "date_range": {
+        "start_source": "generation_rules.date_windows.order_activity_start",
+        "end_source": "config/generation/base.json:reference_today"
+      },
+      "warehouse_assignment": "valid_parent_in_clean_stage",
+      "status_weights": {
+        "Pending": 0.15,
+        "Shipped": 0.2,
+        "Delivered": 0.45,
+        "Cancelled": 0.1,
+        "Returned": 0.1
+      },
+      "priority_weights": {
+        "Low": 0.15,
+        "Medium": 0.5,
+        "High": 0.25,
+        "Urgent": 0.1
+      },
+      "required_status_coverage": [
+        "Pending",
+        "Shipped",
+        "Delivered",
+        "Cancelled",
+        "Returned"
+      ],
+      "required_priority_coverage": [
+        "Low",
+        "Medium",
+        "High",
+        "Urgent"
+      ],
+      "unshipped_order_fraction": 0.1,
+      "created_at_policy": "not_after_end_of_order_date"
+    },
+    "shipments": {
+      "status_weights": {
+        "Booked": 0.12,
+        "InTransit": 0.2,
+        "Delivered": 0.56,
+        "Failed": 0.07,
+        "Lost": 0.05
+      },
+      "required_status_coverage": [
+        "Booked",
+        "InTransit",
+        "Delivered",
+        "Failed",
+        "Lost"
+      ],
+      "ship_lag_days": {
+        "minimum": 0,
+        "maximum": 14
+      },
+      "delivery_lag_days": {
+        "minimum": 1,
+        "maximum": 30
+      },
+      "shipping_cost": {
+        "minimum_amount": 5,
+        "maximum_amount": 25000,
+        "scale": 2
+      },
+      "missing_cost_probability": 0.03,
+      "created_at_policy": "not_after_first_populated_shipment_event",
+      "reconcile_to_row_target": true,
+      "preserve_unshipped_orders": true,
+      "require_multi_carrier_order": true,
+      "require_multi_order_carrier": true,
+      "clean_business_keys_unique": true
+    },
+    "inventory": {
+      "quantity_on_hand": {
+        "minimum": 0,
+        "maximum": 10000
+      },
+      "reorder_point": {
+        "minimum": 0,
+        "maximum": 2500
+      },
+      "missing_reorder_point_probability": 0.03,
+      "missing_category_probability": 0.03,
+      "last_updated_at_policy": "on_or_after_created_at_not_after_reference_today",
+      "reconcile_to_row_target": true,
+      "require_below_reorder_examples": true,
+      "require_above_reorder_examples": true,
+      "logical_pair_unique": true
+    }
+  },
+  "business_mappings": {
+    "currency_code": "USD",
+    "region_country_codes": {
+      "NA": [
+        "US",
+        "CA"
+      ],
+      "EU": [
+        "DE",
+        "FR",
+        "GB"
+      ],
+      "APAC": [
+        "AU",
+        "IN",
+        "JP"
+      ],
+      "LATAM": [
+        "BR",
+        "MX"
+      ]
+    },
+    "synthetic_names": {
+      "carrier_name": {
+        "prefixes_source": "domain_values.carrier_name_prefixes",
+        "format": "{prefix} Logistics {carrier_id:03d}"
+      },
+      "warehouse_name": {
+        "prefixes_source": "domain_values.warehouse_name_prefixes",
+        "format": "{prefix} Distribution Center {warehouse_id:03d}"
+      },
+      "customer_name": {
+        "source": "sanitized_faker_company",
+        "production_name_prohibited": true
+      }
+    },
+    "tracking_number": {
+      "format": "TRK{shipment_id:012d}",
+      "clean_stage_unique": true,
+      "duplicate_stage_shared_business_key": true
+    },
+    "product_sku": {
+      "format": "LSKU-{sku_id:08d}",
+      "synthetic_only": true,
+      "cross_domain_foreign_key": false
+    },
+    "shipment_status_dates": {
+      "Booked": {
+        "ship_date": "null",
+        "delivery_date": "null"
+      },
+      "InTransit": {
+        "ship_date": "required",
+        "delivery_date": "null"
+      },
+      "Delivered": {
+        "ship_date": "required",
+        "delivery_date": "required"
+      },
+      "Failed": {
+        "ship_date": "required",
+        "delivery_date": "null"
+      },
+      "Lost": {
+        "ship_date": "required",
+        "delivery_date": "null"
+      }
+    },
+    "order_status_evidence": {
+      "Pending": "shipment_optional",
+      "Shipped": "shipment_required",
+      "Delivered": "delivered_shipment_required",
+      "Cancelled": "shipment_optional",
+      "Returned": "shipment_history_required"
+    },
+    "shipment_many_to_many": {
+      "relationship_table": "shipments",
+      "left_entity": "orders",
+      "right_entity": "carriers",
+      "require_multi_carrier_order": true,
+      "require_multi_order_carrier": true
+    },
+    "inventory_snapshot": {
+      "physical_key": "inventory_id",
+      "logical_key": [
+        "warehouse_id",
+        "product_sku"
+      ],
+      "cross_domain_product_fk": false
+    }
+  },
+  "decimal_policy": {
+    "rounding_mode": "ROUND_HALF_UP",
+    "calculation_order": "calculate_first_round_once",
+    "binary_float_prohibited": true,
+    "stored_scale": 2,
+    "currency": "USD"
+  },
+  "distributions": {
+    "order_total": {
+      "preset": "pareto_amount",
+      "alpha": 1.16,
+      "min_amount": 25,
+      "max_amount": 500000,
+      "scale": 2
+    },
+    "shipment_frequency": {
+      "preset": "poisson_frequency",
+      "lambda": 1.5
+    },
+    "date_clustering": {
+      "preset": "gaussian_mixture_dates"
+    }
+  },
+  "distribution_targets": {
+    "order_total": {
+      "table": "orders",
+      "field": "total_amount",
+      "distribution": "pareto",
+      "settings_key": "order_total",
+      "currency": "USD"
+    },
+    "shipment_frequency": {
+      "table": "shipments",
+      "group_by": "order_id",
+      "dependent_fields": [
+        "carrier_id",
+        "status"
+      ],
+      "distribution": "poisson",
+      "settings_key": "shipment_frequency",
+      "reconcile_to_row_target": true,
+      "preserve_unshipped_orders": true
+    },
+    "date_clustering": {
+      "distribution": "gaussian_mixture",
+      "settings_key": "date_clustering",
+      "targets": [
+        "orders.order_date",
+        "shipments.ship_date",
+        "shipments.delivery_date",
+        "inventory.last_updated_at"
+      ],
+      "rebuild_dependent_chronology": true
+    }
+  },
+  "imperfection_targets": {
+    "near_duplicate_shipments": {
+      "table": "shipments",
+      "business_key_fields": [
+        "order_id",
+        "carrier_id",
+        "tracking_number"
+      ],
+      "variation_fields": [
+        "ship_date",
+        "status",
+        "shipping_cost"
+      ],
+      "rate_source": "config/generation/base.json:imperfections.duplicate_pct",
+      "exclude_boundary_rows": true,
+      "new_primary_key_required": true,
+      "byte_identical_copy_prohibited": true
+    },
+    "missing_order_warehouses": {
+      "table": "orders",
+      "field": "warehouse_id",
+      "rate_source": "config/generation/base.json:imperfections.null_pct",
+      "selection_group": "warehouse_nulls",
+      "disjoint_from": "warehouse_orphans"
+    },
+    "orphaned_order_warehouses": {
+      "table": "orders",
+      "field": "warehouse_id",
+      "rate_pct": 1.0,
+      "selection_group": "warehouse_orphans",
+      "disjoint_from": "warehouse_nulls",
+      "namespace_base": 900000000,
+      "id_formula": "namespace_base + order_id"
+    },
+    "order_total_outliers": {
+      "table": "orders",
+      "field": "total_amount",
+      "rate_source": "config/generation/base.json:imperfections.outlier_pct",
+      "minimum_value": 750000,
+      "maximum_value": 5000000,
+      "scale": 2
+    },
+    "coordinated_boundary_dates": {
+      "values_source": "config/generation/base.json:imperfections.boundary_dates",
+      "primary_target": "orders.order_date",
+      "dependent_targets": [
+        "orders.created_at",
+        "shipments.ship_date",
+        "shipments.delivery_date",
+        "shipments.created_at"
+      ],
+      "preserve_chronology": true,
+      "preserve_status_date_rules": true
+    }
+  }
+}

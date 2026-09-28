@@ -5,6 +5,9 @@
 //
 // STATUS: Draft v0.1
 //
+// Semantic contract:
+//   schemas/logistics/logistics_semantics.md
+//
 // Source alignment:
 //   v3 execution scope locks Logistics to:
 //     shipments, orders, carriers, warehouses, inventory
@@ -64,8 +67,8 @@ Table carriers {
   carrier_name varchar [not null]
   service_level varchar [not null, note: 'enum: Standard | Express | Overnight']
   carrier_type varchar [note: 'enum: Parcel | Freight | Air | Ocean | Rail']
-  base_rate decimal(10, 2) [note: 'Nullable; some carriers negotiate per-shipment']
-  currency_code char(3) [not null, default: 'USD']
+  base_rate decimal(10, 2) [note: 'Nullable; non-negative when populated']
+  currency_code char(3) [not null, default: 'USD', note: 'USD-only; enforced by canonical DDL']
   is_active boolean [not null, default: true]
   created_at timestamp [not null]
 
@@ -80,8 +83,8 @@ Table warehouses {
   warehouse_name varchar [not null]
   region varchar [note: 'enum: NA | EU | APAC | LATAM']
   country_code char(2) [note: 'Synthetic ISO-style country code']
-  capacity_units integer
-  utilization_pct decimal(5, 2) [note: 'Synthetic warehouse utilization percentage']
+  capacity_units integer [note: 'Nullable; non-negative when populated']
+  utilization_pct decimal(5, 2) [note: 'Nullable; constrained to 0.00 through 100.00']
   is_active boolean [not null, default: true]
   created_at timestamp [not null]
 
@@ -98,8 +101,8 @@ Table orders {
   order_date date [not null]
   status varchar [not null, note: 'enum: Pending | Shipped | Delivered | Cancelled | Returned']
   order_priority varchar [not null, note: 'enum: Low | Medium | High | Urgent']
-  total_amount decimal(15, 2) [not null]
-  currency_code char(3) [not null, default: 'USD']
+  total_amount decimal(15, 2) [not null, note: 'Positive fixed-point amount']
+  currency_code char(3) [not null, default: 'USD', note: 'USD-only; enforced by canonical DDL']
   created_at timestamp [not null]
 
   Note: 'Fact / transaction table - target 100,000 rows. Some warehouse_id values are NULL or orphaned by design to exercise Logistics LEFT JOIN behavior.'
@@ -116,8 +119,8 @@ Table shipments {
   ship_date date [note: 'Nullable; duplicates may vary this field']
   delivery_date date [note: 'Nullable; undelivered shipments have no delivery date']
   status varchar [not null, note: 'enum: Booked | InTransit | Delivered | Failed | Lost']
-  shipping_cost decimal(15, 2) [note: 'Nullable; cost may still be pending']
-  currency_code char(3) [not null, default: 'USD']
+  shipping_cost decimal(15, 2) [note: 'Nullable; non-negative when populated']
+  currency_code char(3) [not null, default: 'USD', note: 'USD-only; enforced by canonical DDL']
   created_at timestamp [not null]
 
   Note: 'Fact - target 150,000 rows. Duplicate-shipment imperfection focus (~1%) for COUNT vs COUNT DISTINCT semantics.'
@@ -131,8 +134,8 @@ Table inventory {
   warehouse_id integer [not null, ref: > warehouses.warehouse_id, note: 'INNER JOIN path - NOT NULL']
   product_sku varchar [not null, note: 'String identifier; no FK to Sales.products because cross-domain joins are out of scope']
   product_category varchar [note: 'enum: Software | Hardware | Supplies | FinishedGoods | RawMaterials']
-  quantity_on_hand integer [not null]
-  reorder_point integer [note: 'Inventory threshold for replenishment questions']
+  quantity_on_hand integer [not null, note: 'Non-negative snapshot quantity']
+  reorder_point integer [note: 'Nullable non-negative replenishment threshold']
   last_updated_at timestamp [not null]
   created_at timestamp [not null]
 

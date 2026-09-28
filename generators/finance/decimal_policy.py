@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP
 from decimal import localcontext
 from typing import TypeAlias
 
+from generators.core.fixed_point import allocate_integer_units
 from generators.finance.config import load_finance_config
 
 
@@ -99,26 +100,9 @@ def minor_units_to_money(value: int) -> Decimal:
 
 
 def allocate_minor_units(total_minor_units: int, part_count: int) -> list[int]:
-    """Split signed minor units exactly, placing remainders deterministically.
+    """Split signed Finance minor units through the shared exact allocator."""
 
-    The first ``abs(total) % part_count`` allocations receive one additional
-    unit. Parts therefore differ by at most one minor unit and always sum back
-    to the original total, including for negative values.
-    """
-
-    if not isinstance(total_minor_units, int) or isinstance(total_minor_units, bool):
-        raise TypeError("total_minor_units must be an integer")
-    if not isinstance(part_count, int) or isinstance(part_count, bool):
-        raise TypeError("part_count must be an integer")
-    if part_count <= 0:
-        raise ValueError("part_count must be positive")
-
-    sign = -1 if total_minor_units < 0 else 1
-    quotient, remainder = divmod(abs(total_minor_units), part_count)
-    return [
-        sign * (quotient + (1 if position < remainder else 0))
-        for position in range(part_count)
-    ]
+    return allocate_integer_units(total_minor_units, part_count)
 
 
 def allocate_money(value: DecimalInput, part_count: int) -> list[Decimal]:

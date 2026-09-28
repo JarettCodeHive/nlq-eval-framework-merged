@@ -60,6 +60,92 @@ from generators.finance.validators.reproducibility import (
     FinanceReproducibilityValidator,
 )
 from generators.finance.validators.row_caps import FinanceRowCapValidator
+from generators.logistics.config import (
+    settings_for_profile as logistics_settings_for_profile,
+)
+from generators.logistics.data_dictionary import LogisticsDataDictionaryGenerator
+from generators.logistics.distributions import LogisticsDistributionApplier
+from generators.logistics.export import LogisticsCSVExporter
+from generators.logistics.generator import LogisticsBaseEntityGenerator
+from generators.logistics.hashes import LogisticsHashComputer
+from generators.logistics.imperfections import LogisticsImperfectionInjector
+from generators.logistics.manifest import LogisticsManifestGenerator
+from generators.logistics.schema_sql import LogisticsSchemaSQLGenerator
+from generators.logistics.summary import (
+    print_distribution_summary as logistics_distribution_summary,
+)
+from generators.logistics.summary import (
+    print_imperfection_summary as logistics_imperfection_summary,
+)
+from generators.logistics.summary import (
+    print_relationship_summary as logistics_relationship_summary,
+)
+from generators.logistics.validators.config import validate_logistics_config
+from generators.logistics.validators.fk_integrity import (
+    LogisticsDuckDBFKValidator,
+)
+from generators.logistics.validators.imperfection_rates import (
+    LogisticsImperfectionRateValidator,
+)
+from generators.logistics.validators.join_paths import LogisticsJoinPathValidator
+from generators.logistics.validators.relational import LogisticsRelationalValidator
+from generators.logistics.validators.reproducibility import (
+    LogisticsReproducibilityValidator,
+)
+from generators.logistics.validators.row_caps import LogisticsRowCapValidator
+from generators.project_management.config import (
+    settings_for_profile as project_management_settings_for_profile,
+)
+from generators.project_management.data_dictionary import (
+    ProjectManagementDataDictionaryGenerator,
+)
+from generators.project_management.distributions import (
+    ProjectManagementDistributionApplier,
+)
+from generators.project_management.export import ProjectManagementCSVExporter
+from generators.project_management.generator import (
+    ProjectManagementBaseEntityGenerator,
+)
+from generators.project_management.hashes import ProjectManagementHashComputer
+from generators.project_management.imperfections import (
+    ProjectManagementImperfectionInjector,
+)
+from generators.project_management.manifest import (
+    ProjectManagementManifestGenerator,
+)
+from generators.project_management.schema_sql import (
+    ProjectManagementSchemaSQLGenerator,
+)
+from generators.project_management.summary import (
+    print_distribution_summary as project_management_distribution_summary,
+)
+from generators.project_management.summary import (
+    print_imperfection_summary as project_management_imperfection_summary,
+)
+from generators.project_management.summary import (
+    print_relationship_summary as project_management_relationship_summary,
+)
+from generators.project_management.validators.config import (
+    validate_project_management_config,
+)
+from generators.project_management.validators.fk_integrity import (
+    ProjectManagementDuckDBFKValidator,
+)
+from generators.project_management.validators.imperfection_rates import (
+    ProjectManagementImperfectionRateValidator,
+)
+from generators.project_management.validators.join_paths import (
+    ProjectManagementJoinPathValidator,
+)
+from generators.project_management.validators.relational import (
+    ProjectManagementRelationalValidator,
+)
+from generators.project_management.validators.reproducibility import (
+    ProjectManagementReproducibilityValidator,
+)
+from generators.project_management.validators.row_caps import (
+    ProjectManagementRowCapValidator,
+)
 from generators.sales.config import settings_for_profile as sales_settings_for_profile
 from generators.sales.data_dictionary import SalesDataDictionaryGenerator
 from generators.sales.distributions import SalesDistributionApplier
@@ -185,6 +271,52 @@ DATASET_DOMAINS = {
         print_relationship_summary=finance_relationship_summary,
         print_distribution_summary=finance_distribution_summary,
         print_imperfection_summary=finance_imperfection_summary,
+    ),
+    "project_management": DatasetDomainRuntime(
+        name="project_management",
+        display_name="Project Management",
+        validate_config=validate_project_management_config,
+        settings_for_profile=project_management_settings_for_profile,
+        base_generator=ProjectManagementBaseEntityGenerator,
+        distribution_applier=ProjectManagementDistributionApplier,
+        imperfection_injector=ProjectManagementImperfectionInjector,
+        relational_validator=ProjectManagementRelationalValidator,
+        csv_exporter=ProjectManagementCSVExporter,
+        row_cap_validator=ProjectManagementRowCapValidator,
+        fk_validator=ProjectManagementDuckDBFKValidator,
+        join_path_validator=ProjectManagementJoinPathValidator,
+        imperfection_rate_validator=ProjectManagementImperfectionRateValidator,
+        hash_computer=ProjectManagementHashComputer,
+        data_dictionary_generator=ProjectManagementDataDictionaryGenerator,
+        schema_sql_generator=ProjectManagementSchemaSQLGenerator,
+        reproducibility_validator=ProjectManagementReproducibilityValidator,
+        manifest_generator=ProjectManagementManifestGenerator,
+        print_relationship_summary=project_management_relationship_summary,
+        print_distribution_summary=project_management_distribution_summary,
+        print_imperfection_summary=project_management_imperfection_summary,
+    ),
+    "logistics": DatasetDomainRuntime(
+        name="logistics",
+        display_name="Logistics",
+        validate_config=validate_logistics_config,
+        settings_for_profile=logistics_settings_for_profile,
+        base_generator=LogisticsBaseEntityGenerator,
+        distribution_applier=LogisticsDistributionApplier,
+        imperfection_injector=LogisticsImperfectionInjector,
+        relational_validator=LogisticsRelationalValidator,
+        csv_exporter=LogisticsCSVExporter,
+        row_cap_validator=LogisticsRowCapValidator,
+        fk_validator=LogisticsDuckDBFKValidator,
+        join_path_validator=LogisticsJoinPathValidator,
+        imperfection_rate_validator=LogisticsImperfectionRateValidator,
+        hash_computer=LogisticsHashComputer,
+        data_dictionary_generator=LogisticsDataDictionaryGenerator,
+        schema_sql_generator=LogisticsSchemaSQLGenerator,
+        reproducibility_validator=LogisticsReproducibilityValidator,
+        manifest_generator=LogisticsManifestGenerator,
+        print_relationship_summary=logistics_relationship_summary,
+        print_distribution_summary=logistics_distribution_summary,
+        print_imperfection_summary=logistics_imperfection_summary,
     ),
 }
 
