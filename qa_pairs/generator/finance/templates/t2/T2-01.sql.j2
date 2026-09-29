@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS entry_count
+FROM ledger_entries le
+INNER JOIN transactions t ON le.transaction_id = t.transaction_id
+WHERE t.source_system = {{ source_system | sqlstr }};

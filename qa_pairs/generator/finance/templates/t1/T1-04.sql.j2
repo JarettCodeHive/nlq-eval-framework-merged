@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS entry_count
+FROM ledger_entries
+WHERE posting_type = {{ posting_type | sqlstr }};

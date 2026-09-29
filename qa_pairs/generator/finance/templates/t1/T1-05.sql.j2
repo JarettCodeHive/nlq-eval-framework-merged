@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS rate_count
+FROM fx_rates
+WHERE rate_source = {{ rate_source | sqlstr }};

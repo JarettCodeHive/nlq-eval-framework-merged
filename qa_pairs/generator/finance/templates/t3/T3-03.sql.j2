@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS account_count
+FROM accounts c
+LEFT JOIN accounts p ON c.parent_account_id = p.account_id
+WHERE c.account_type = {{ account_type | sqlstr }} AND p.account_id IS NULL;

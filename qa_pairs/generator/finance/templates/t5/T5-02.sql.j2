@@ -1,0 +1,25 @@
+WITH conv AS (
+    SELECT t.transaction_date, ROUND(le.debit_amount * f.rate, 4) AS debit_usd
+    FROM ledger_entries le
+    INNER JOIN transactions t ON le.transaction_id = t.transaction_id
+    INNER JOIN accounts a ON le.account_id = a.account_id
+    INNER JOIN fx_rates f
+        ON t.source_currency = f.from_currency
+        AND t.target_currency = f.to_currency
+        AND t.transaction_date = f.rate_date
+        AND f.rate IS NOT NULL
+    WHERE a.account_type = {{ account_type | sqlstr }} AND le.debit_amount IS NOT NULL
+),
+q AS (
+    SELECT
+        SUM(CASE WHEN transaction_date >= DATE '2026-01-01' AND transaction_date < DATE '2026-04-01' THEN debit_usd ELSE 0 END) AS q1_amount,
+        SUM(CASE WHEN transaction_date >= DATE '2026-04-01' AND transaction_date < DATE '2026-07-01' THEN debit_usd ELSE 0 END) AS q2_amount
+    FROM conv
+)
+SELECT
+    ROUND(q1_amount, 2) AS q1_amount,
+    ROUND(q2_amount, 2) AS q2_amount,
+    ROUND(q2_amount - q1_amount, 2) AS absolute_change,
+    ROUND(CASE WHEN q1_amount = 0 THEN NULL ELSE (q2_amount - q1_amount) / CAST(q1_amount AS DOUBLE) * 100 END, 2) AS pct_change,
+    CASE WHEN q2_amount > q1_amount THEN 'up' WHEN q2_amount < q1_amount THEN 'down' ELSE 'flat' END AS direction
+FROM q;
