@@ -59,7 +59,7 @@ from judge.exact_match import (
     evaluate_answer,
 )
 from judge.input_contract import InputRow, load_input_csv
-from judge.resolve import ResolutionError, apply_resolved_defaults
+from judge.resolve import ResolutionError, apply_resolved_defaults, judge_input_csv
 from judge.sql_pulse import SQLPulse
 from judge.prompts import prompt_version
 from scorecard.baseline import BaselineExists, establish_baseline, load_baseline
@@ -823,6 +823,19 @@ async def _run(args: argparse.Namespace) -> int:
     # Sales pair set with no `domain` column is silently scored, cached and
     # reported as CRM.
     pairs = _rows_from_input(load_input_csv(args.input_csv, default_domain=args.domain))
+    # Did this run deliberately score a SUBSET? --limit obviously does; so does an
+    # --input-csv pointing somewhere other than the package the domain resolves
+    # to. The scorecard needs to know, because the §9.1 quota comparison is only
+    # meaningful over a complete set — see RunContext.partial_run.
+    partial_run = bool(args.limit)
+    try:
+        resolved_input = judge_input_csv(args.domain, args.profile, build_if_missing=False)
+        if Path(args.input_csv).resolve() != resolved_input.resolve():
+            partial_run = True
+    except Exception:
+        # No resolvable package (an ad-hoc CSV, a judge-only domain): treat the
+        # run as a subset rather than asserting a quota it cannot be checked against.
+        partial_run = True
     if args.limit:
         pairs = pairs[: args.limit]
 
@@ -1022,6 +1035,10 @@ async def _run(args: argparse.Namespace) -> int:
 
     summary = _summarise(results)
     summary["calibrated"] = calibrated
+    # Recorded on the artifact, not just held in RunContext, because `score`
+    # reads results.json to build the combined card and has no other way to know
+    # this run was a subset.
+    summary["partial_run"] = partial_run
     summary["calibration"] = {
         "state": "calibrated" if calibrated else "uncalibrated",
         "reason": calibration.reason,
@@ -1107,6 +1124,7 @@ async def _run(args: argparse.Namespace) -> int:
             for f in rephrase_findings
             if f.is_platform_finding or f.is_dataset_finding
         ],
+        partial_run=partial_run,
     )
     out_dir = _write_run(
         run_id, args.judge, args.mode, args.pulse, ctx, results, summary, out_dir

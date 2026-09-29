@@ -95,6 +95,13 @@ class RunInput:
         return bool(self.summary.get("calibrated"))
 
     @property
+    def partial_run(self) -> bool:
+        """Absent on runs predating the flag; assume complete rather than invent
+        a subset, which would silently withhold the §9.1 comparison."""
+
+        return bool(self.summary.get("partial_run", False))
+
+    @property
     def comparison_is_default(self) -> bool:
         # Absent means an older run that predates the flag; assume the default
         # rather than inventing a blocker out of a missing field.
@@ -357,6 +364,8 @@ def combine(
         },
         scorecard_mode=mode,
         calibrated=all(r.calibrated for r in inputs),
+        # One subset input makes the whole card a subset for quota purposes.
+        partial_run=any(r.partial_run for r in inputs),
         comparison_policy=(
             inputs[0].comparison_policy or RunContext.comparison_policy
         ),

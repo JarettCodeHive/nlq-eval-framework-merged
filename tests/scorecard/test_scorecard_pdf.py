@@ -426,5 +426,31 @@ def test_the_new_sections_reach_the_pdf(tmp_path: Path) -> None:
     assert "Accuracy gate (§14.2)" in text
     assert "Exact-match by tier" in text
     assert "95% gate" in text
-    assert "§9.1 quota" in text
     assert "Where the failures are" in text
+
+
+def test_the_quota_section_is_withheld_on_a_partial_run(tmp_path: Path) -> None:
+    """A 10-question smoke reported all ten tiers SHORT — "a pair left the set" —
+    having lost nothing at all. Where the run is smaller than the package, the
+    comparison cannot tell a missing pair from an unscored one, so it is withheld
+    rather than stated wrongly."""
+
+    text = _text(tmp_path, _results(passes=6, fails=4), _ctx(partial_run=True))
+
+    assert "§9.1 quota" not in text
+
+
+def test_the_quota_section_appears_for_a_complete_run(tmp_path: Path) -> None:
+    """At the declared size the comparison is meaningful again, and a tier that
+    really is short must still be called out (§14.2 condition 4)."""
+
+    quota = report.domain_tier_quota("crm")
+    results = []
+    for tier, expected in quota.items():
+        # One tier deliberately one pair short — that is the thing being detected.
+        count = expected - 1 if tier == "T3" else expected
+        results += [_row(tier, ExactMatchResult.PASS, _verdict(5)) for _ in range(count)]
+    text = _text(tmp_path, results, _ctx())
+
+    assert "§9.1 quota" in text
+    assert "SHORT" in text

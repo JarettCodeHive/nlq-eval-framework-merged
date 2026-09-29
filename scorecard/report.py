@@ -21,10 +21,12 @@ from scorecard.summary import (
 # against it so a reader sees pass/fail rather than a number needing context.
 ACCURACY_GATE_PCT: float = 95.0
 
-# §9.1 tier quota per domain. Rendered against the actual counts because §14.2's
-# last line asserts them in CI, and condition 4 — the one the scope says "gets
-# quietly broken" — is precisely a pair disappearing from a tier.
-TIER_QUOTA: dict[str, int] = {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24}
+# §9.1's per-domain tier quota — the CONTRACT figure, 160 pairs per domain.
+# Used as the fallback when a domain declares no quota of its own, and as the
+# yardstick for whether a domain's own declared quota meets the contract.
+SPEC_TIER_QUOTA: dict[str, int] = {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24}
+# Kept as the historical name; several call sites and readers know it.
+TIER_QUOTA = SPEC_TIER_QUOTA
 
 # Status palette, taken as given from a validated reference instance rather than
 # chosen by eye. Light-surface contrast is 3.27 / 1.79 / 2.57 / 4.68 — warning
@@ -640,23 +642,69 @@ def gate_checklist(
     return checks
 
 
-def tier_quota_rows(rows: list[dict]) -> list[tuple[str, str, int, int, str]]:
-    """Actual questions per tier against the §9.1 quota.
+def domain_tier_quota(domain: str) -> dict[str, int]:
+    """The tier quota this domain actually declares, else the §9.1 contract.
 
-    §14.2's closing line asserts these counts in CI because a tier quietly
-    losing a pair raises the percentage without improving anything. Showing the
+    Read from the domain's own Q&A config through the judge's read-only pointer,
+    because the quota is the Q&A side's declaration and differs per domain: CRM
+    declares 32/40/32/32/24 (160) and Sales declares 21/36/15/18/14 (104). A
+    single hardcoded table reported all five Sales tiers as SHORT, which is not
+    what §14.2 condition 4 means — nothing left the Sales set, it was authored
+    smaller. That is a separate finding, surfaced by `quota_shortfall`.
+    """
+
+    try:
+        from judge.config import REPO_ROOT, load_judge_config
+
+        release = load_judge_config(domain).release
+        pointer = REPO_ROOT / release.qa_config_path.format(domain=domain)
+        if pointer.is_file():
+            import json
+
+            declared = json.loads(pointer.read_text(encoding="utf-8")).get("tier_quota")
+            if isinstance(declared, dict) and declared:
+                return {str(k): int(v) for k, v in declared.items()}
+    except Exception:
+        pass
+    return dict(SPEC_TIER_QUOTA)
+
+
+def quota_shortfall(domain: str) -> tuple[int, int]:
+    """`(declared total, §9.1 contract total)` for this domain.
+
+    Distinct from a tier losing a pair: a domain whose authored set is smaller
+    than the contract is a scope gap, not a §14.2 condition-4 breach.
+    """
+
+    return (sum(domain_tier_quota(domain).values()), sum(SPEC_TIER_QUOTA.values()))
+
+
+def tier_quota_rows(rows: list[dict]) -> list[tuple[str, str, int, int, str]]:
+    """Actual questions per tier against the quota that domain declares.
+
+    §14.2's closing line asserts these counts in CI because a tier quietly losing
+    a pair raises the percentage without improving anything. Showing the
     comparison here makes that visible to a reader, not just to CI.
+
+    Withheld for a PARTIAL run — see the caller, which passes `RunContext.partial_run`.
+    A 10-question smoke reported all ten tiers SHORT with "a pair left the set",
+    having lost nothing at all. Note this cannot be inferred from the counts: a run
+    one pair short of quota IS the condition-4 breach, so a size heuristic would
+    hide exactly what the section exists to show. The judge records whether it
+    scored a subset; that flag decides.
     """
 
     out: list[tuple[str, str, int, int, str]] = []
     for row in rows:
+        domain = str(row["domain"])
         tier = str(row["tier"])
-        if tier == "ALL" or tier not in TIER_QUOTA:
+        quota_by_tier = domain_tier_quota(domain)
+        if tier == "ALL" or tier not in quota_by_tier:
             continue
         actual = int(row.get("questions_total") or 0)
-        quota = TIER_QUOTA[tier]
+        quota = quota_by_tier[tier]
         verdict = "ok" if actual == quota else ("SHORT" if actual < quota else "over")
-        out.append((str(row["domain"]), tier, actual, quota, verdict))
+        out.append((domain, tier, actual, quota, verdict))
     return out
 
 
@@ -1052,7 +1100,7 @@ def write_scorecard_pdf(
         )
 
     # --- §9.1 quota, because condition 4 is about counts ------------------
-    quota = tier_quota_rows(rows)
+    quota = [] if ctx.partial_run else tier_quota_rows(rows)
     if quota:
         short = [q for q in quota if q[4] == "SHORT"]
         quota_table = Table(
