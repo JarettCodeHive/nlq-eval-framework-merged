@@ -1,0 +1,15 @@
+WITH q AS (
+    SELECT
+        SUM(CASE WHEN te.entry_date >= DATE '2026-01-01' AND te.entry_date < DATE '2026-04-01' THEN te.hours ELSE 0 END) AS q1_hours,
+        SUM(CASE WHEN te.entry_date >= DATE '2026-04-01' AND te.entry_date < DATE '2026-07-01' THEN te.hours ELSE 0 END) AS q2_hours
+    FROM time_entries te
+    INNER JOIN resources r ON te.resource_id = r.resource_id
+    WHERE r.role = {{ resource_role | sqlstr }}
+)
+SELECT
+    ROUND(q1_hours, 2) AS q1_hours,
+    ROUND(q2_hours, 2) AS q2_hours,
+    ROUND(q2_hours - q1_hours, 2) AS absolute_change,
+    ROUND(CASE WHEN q1_hours = 0 THEN NULL ELSE (q2_hours - q1_hours) / CAST(q1_hours AS DOUBLE) * 100 END, 2) AS pct_change,
+    CASE WHEN q2_hours > q1_hours THEN 'up' WHEN q2_hours < q1_hours THEN 'down' ELSE 'flat' END AS direction
+FROM q;

@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS task_count
+FROM tasks t
+INNER JOIN projects p ON t.project_id = p.project_id
+WHERE p.status = {{ project_status | sqlstr }};

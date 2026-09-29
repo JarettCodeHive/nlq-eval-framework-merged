@@ -1,0 +1,7 @@
+SELECT ROUND(
+    100.0 * SUM(CASE WHEN m.actual_date IS NOT NULL THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0),
+    2
+) AS completion_pct
+FROM milestones m
+INNER JOIN projects p ON m.project_id = p.project_id
+WHERE p.status = {{ project_status | sqlstr }};

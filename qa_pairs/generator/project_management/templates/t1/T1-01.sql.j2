@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS project_count
+FROM projects
+WHERE status = {{ project_status | sqlstr }};

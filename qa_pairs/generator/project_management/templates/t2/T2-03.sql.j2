@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS assignment_count
+FROM task_resources tr
+INNER JOIN tasks t ON tr.task_id = t.task_id
+WHERE t.status = {{ task_status | sqlstr }};
