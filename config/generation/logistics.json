@@ -1,0 +1,10 @@
+{
+  "config_schema_version": "1.0",
+  "domain": "logistics",
+  "components": {
+    "release": "logistics/release.json",
+    "schema": "logistics/schema.json",
+    "generation": "logistics/generation.json",
+    "validation": "logistics/validation.json"
+  }
+}

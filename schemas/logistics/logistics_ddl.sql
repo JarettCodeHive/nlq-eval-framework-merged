@@ -5,6 +5,7 @@
 -- Runs unmodified in DuckDB 0.10+.
 --
 -- Source ERD: schemas/logistics/logistics_er.dbml
+-- Semantic contract: schemas/logistics/logistics_semantics.md
 --
 -- NOT-NULL rules: never nullify a PK or INNER-JOIN FK.
 -- INNER-JOIN FKs: shipments.order_id, shipments.carrier_id,
@@ -25,8 +26,9 @@ CREATE TABLE carriers (
     carrier_name VARCHAR(255) NOT NULL,
     service_level VARCHAR(32) NOT NULL,
     carrier_type VARCHAR(32),
-    base_rate DECIMAL(10, 2),
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    base_rate DECIMAL(10, 2) CHECK (base_rate IS NULL OR base_rate >= 0),
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD'
+    CHECK (currency_code = 'USD'),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_carriers PRIMARY KEY (carrier_id)
@@ -37,8 +39,13 @@ CREATE TABLE warehouses (
     warehouse_name VARCHAR(255) NOT NULL,
     region VARCHAR(32),
     country_code CHAR(2),
-    capacity_units INTEGER,
-    utilization_pct DECIMAL(5, 2),
+    capacity_units INTEGER CHECK (
+        capacity_units IS NULL OR capacity_units >= 0
+    ),
+    utilization_pct DECIMAL(5, 2) CHECK (
+        utilization_pct IS NULL
+        OR utilization_pct BETWEEN 0 AND 100
+    ),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_warehouses PRIMARY KEY (warehouse_id)
@@ -51,8 +58,9 @@ CREATE TABLE orders (
     order_date DATE NOT NULL,
     status VARCHAR(32) NOT NULL,
     order_priority VARCHAR(32) NOT NULL,
-    total_amount DECIMAL(15, 2) NOT NULL,
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    total_amount DECIMAL(15, 2) NOT NULL CHECK (total_amount > 0),
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD'
+    CHECK (currency_code = 'USD'),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_orders PRIMARY KEY (order_id)
 );
@@ -65,8 +73,11 @@ CREATE TABLE shipments (
     ship_date DATE,
     delivery_date DATE,
     status VARCHAR(32) NOT NULL,
-    shipping_cost DECIMAL(15, 2),
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    shipping_cost DECIMAL(15, 2) CHECK (
+        shipping_cost IS NULL OR shipping_cost >= 0
+    ),
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD'
+    CHECK (currency_code = 'USD'),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_shipments PRIMARY KEY (shipment_id),
     CONSTRAINT fk_shipments_order
@@ -80,8 +91,10 @@ CREATE TABLE inventory (
     warehouse_id INTEGER NOT NULL,
     product_sku VARCHAR(64) NOT NULL,
     product_category VARCHAR(64),
-    quantity_on_hand INTEGER NOT NULL,
-    reorder_point INTEGER,
+    quantity_on_hand INTEGER NOT NULL CHECK (quantity_on_hand >= 0),
+    reorder_point INTEGER CHECK (
+        reorder_point IS NULL OR reorder_point >= 0
+    ),
     last_updated_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_inventory PRIMARY KEY (inventory_id),

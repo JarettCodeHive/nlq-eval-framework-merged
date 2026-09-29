@@ -24,9 +24,21 @@ DATASET_COMMANDS = tuple(
 
 
 def test_domain_registry_exposes_implemented_domain_components() -> None:
-    assert set(DATASET_DOMAINS) == {"crm", "sales", "finance"}
+    assert set(DATASET_DOMAINS) == {
+        "crm",
+        "sales",
+        "finance",
+        "logistics",
+        "project_management",
+    }
 
-    for domain in ("crm", "sales", "finance"):
+    for domain in (
+        "crm",
+        "sales",
+        "finance",
+        "logistics",
+        "project_management",
+    ):
         runtime = dataset_domain(domain)
         component_types = (
             runtime.base_generator,
@@ -50,7 +62,9 @@ def test_domain_registry_exposes_implemented_domain_components() -> None:
         )
 
 
-@pytest.mark.parametrize("domain", ("sales", "finance"))
+@pytest.mark.parametrize(
+    "domain", ("sales", "finance", "logistics", "project_management")
+)
 @pytest.mark.parametrize("command", DATASET_COMMANDS)
 def test_dataset_commands_accept_registered_domains(
     command: str,
@@ -66,9 +80,11 @@ def test_dataset_commands_accept_registered_domains(
 def test_unknown_dataset_domain_has_clear_error() -> None:
     with pytest.raises(
         NotImplementedError,
-        match="supported domains: crm, finance, sales",
+        match=(
+            "supported domains: crm, finance, logistics, project_management, sales"
+        ),
     ):
-        dataset_domain("logistics")
+        dataset_domain("human_resources")
 
 
 @pytest.mark.parametrize(
@@ -76,6 +92,12 @@ def test_unknown_dataset_domain_has_clear_error() -> None:
     (
         ("crm", "CRMDatasetPipeline", "CRM"),
         ("finance", "FinanceDatasetPipeline", "Finance"),
+        ("logistics", "LogisticsDatasetPipeline", "Logistics"),
+        (
+            "project_management",
+            "ProjectManagementDatasetPipeline",
+            "Project Management",
+        ),
         ("sales", "SalesDatasetPipeline", "Sales"),
     ),
 )
@@ -183,7 +205,7 @@ def test_finance_imperfections_run_through_root_handler(
     assert "transaction_boundary_dates: 4" in output
 
 
-@pytest.mark.parametrize("domain", ("sales", "finance"))
+@pytest.mark.parametrize("domain", ("sales", "finance", "logistics"))
 def test_qa_commands_remain_crm_only(domain: str) -> None:
     with pytest.raises(
         NotImplementedError, match="Q&A commands currently support only crm"

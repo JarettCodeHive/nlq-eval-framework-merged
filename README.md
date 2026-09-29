@@ -49,7 +49,7 @@ nlq-eval-framework/
 ### Generation Configuration
 
 `config/generation/base.json` contains shared deterministic defaults. CRM,
-Sales, and Finance use `config/generation/<domain>.json` as stable entry-point
+Sales, Finance, Project Management and Logistics use `config/generation/<domain>.json` as stable entry-point
 descriptors.
 Each descriptor assembles four focused component files:
 
@@ -97,9 +97,10 @@ deactivate
 ## CLI Workflows
 
 Run commands from the repository root with the Python environment activated.
-CRM, Sales, and Finance are implemented generation domains. Pass `--domain`
-explicitly in repeatable workflows. Omitting it continues to select CRM for
-backward compatibility.
+CRM, Sales, Finance, Project Management, and Logistics are implemented
+generation domains.
+Pass `--domain` explicitly in repeatable workflows. Omitting it continues to
+select CRM for backward compatibility.
 
 ### CRM Dataset Build
 
@@ -200,6 +201,78 @@ writes `manifest.json` last.
 Finance uses multiple source currencies and USD as its sole reporting currency.
 Its rates are deterministic synthetic test values generated locally. No live
 rate service or production financial data is read.
+
+### Project Management Dataset Build
+
+Project Management generates `projects`, `resources`, `tasks`,
+`task_resources`, `milestones`, and `time_entries`. The `task_resources` bridge
+models the Task-to-Resource many-to-many relationship, and every time entry
+must match a declared task/resource assignment.
+
+Development build:
+
+```bash
+python main.py build-dataset --domain project_management --profile dev
+```
+
+This writes `base/`, `distributed/`, and `imperfect/` under
+`tmp/generated/project_management/dev/`, then validates persisted row caps,
+DDL, foreign keys, assignment membership, join paths, date rules, and
+imperfection rates from `imperfect/*.csv`.
+
+Full release build:
+
+```bash
+python main.py build-dataset --domain project_management --profile full
+```
+
+This generates `release/project_management/dataset-v1.0.0/`, validates all
+persisted artifacts, computes SHA-256 hashes, writes the data dictionary and
+schema SQL, performs clean-room reproducibility, and writes `manifest.json`
+last. An existing manifest makes the release immutable.
+
+Both commands print numbered pipeline progress and table-level generation and
+export progress. Project Management is USD-only and has no FX conversion path.
+All relative date logic uses the fixed reference date `2026-08-01`: overdue
+means `due_date < reference_today AND completed_date IS NULL`; in progress
+means `status = 'InProgress'`; and this quarter uses an inclusive quarter start
+and exclusive next-quarter start.
+
+### Logistics Dataset Build
+
+Logistics generates `carriers`, `warehouses`, `orders`, `shipments`, and
+`inventory`. The `shipments` fact provides the Order-to-Carrier many-to-many
+path. `orders.warehouse_id` is an analytical LEFT JOIN key that deliberately
+allows both NULL assignments and declared orphan values, so it has no physical
+SQL foreign key.
+
+Development build:
+
+```bash
+python main.py build-dataset --domain logistics --profile dev
+```
+
+This writes `base/`, `distributed/`, and `imperfect/` under
+`tmp/generated/logistics/dev/`, then validates persisted row caps, DDL,
+physical foreign keys, the declared orphan exception, join paths, chronology,
+inventory grain, and imperfection rates from `imperfect/*.csv`.
+
+Full release build:
+
+```bash
+python main.py build-dataset --domain logistics --profile full
+```
+
+This generates `release/logistics/dataset-v1.0.0/`, validates all persisted
+artifacts, computes SHA-256 hashes, writes the data dictionary and schema SQL,
+performs two-build clean-room reproducibility, and writes `manifest.json` last.
+An existing manifest makes the release immutable.
+
+Both commands print numbered progress and table-level generation/export
+updates. Logistics is USD-only and has no FX conversion path. Near-duplicate
+shipment rows preserve their business identity, so queries must choose between
+physical rows with `COUNT(*)` and business shipments with
+`COUNT(DISTINCT tracking_number)`.
 
 ### Advanced CRM Commands
 
@@ -333,6 +406,92 @@ python main.py generate-manifest --domain finance --profile full
 
 The final command seals the Finance release and must remain last.
 
+### Advanced Project Management Commands
+
+Use these commands only to investigate an individual PM stage or validation
+gate. They are not required when `build-dataset` succeeds.
+
+Inspect configuration, write dev stages, or validate generated data:
+
+```bash
+python main.py validate-config --domain project_management --profile dev
+python main.py show-config --domain project_management --profile dev
+python main.py generate-base --domain project_management --profile dev --write-preview
+python main.py apply-distributions --domain project_management --profile dev --write-preview
+python main.py apply-imperfections --domain project_management --profile dev --write-preview
+python main.py validate-relations --domain project_management --profile dev
+python main.py validate-row-caps --domain project_management --profile dev --generated
+python main.py validate-fk --domain project_management --profile dev --generated
+python main.py validate-join-paths --domain project_management --profile dev --generated
+python main.py validate-imperfection-rates --domain project_management --profile dev --generated
+```
+
+Run or troubleshoot individual full-release stages before the manifest exists:
+
+```bash
+python main.py validate-config --domain project_management --profile full
+python main.py show-config --domain project_management --profile full
+python main.py validate-relations --domain project_management --profile full
+python main.py validate-row-caps --domain project_management --profile full
+python main.py validate-row-caps --domain project_management --profile full --generated
+python main.py export-csvs --domain project_management --profile full
+python main.py validate-row-caps --domain project_management --profile full --exported
+python main.py validate-fk --domain project_management --profile full
+python main.py validate-join-paths --domain project_management --profile full
+python main.py validate-imperfection-rates --domain project_management --profile full
+python main.py compute-sha256 --domain project_management --profile full
+python main.py generate-data-dictionary --domain project_management --profile full
+python main.py generate-schema-sql --domain project_management --profile full
+python main.py validate-reproducibility --domain project_management --profile full
+python main.py generate-manifest --domain project_management --profile full
+```
+
+The final command seals the Project Management release and must remain last.
+
+### Advanced Logistics Commands
+
+Use these commands only to investigate an individual Logistics stage or
+validation gate. They are not required when `build-dataset` succeeds.
+
+Inspect configuration, write dev stages, or validate generated data:
+
+```bash
+python main.py validate-config --domain logistics --profile dev
+python main.py show-config --domain logistics --profile dev
+python main.py generate-base --domain logistics --profile dev --write-preview
+python main.py apply-distributions --domain logistics --profile dev --write-preview
+python main.py apply-imperfections --domain logistics --profile dev --write-preview
+python main.py validate-relations --domain logistics --profile dev
+python main.py validate-row-caps --domain logistics --profile dev --generated
+python main.py validate-fk --domain logistics --profile dev --generated
+python main.py validate-join-paths --domain logistics --profile dev --generated
+python main.py validate-imperfection-rates --domain logistics --profile dev --generated
+```
+
+Run or troubleshoot individual full-release stages before the manifest exists:
+
+```bash
+python main.py validate-config --domain logistics --profile full
+python main.py show-config --domain logistics --profile full
+python main.py validate-relations --domain logistics --profile full
+python main.py validate-row-caps --domain logistics --profile full
+python main.py validate-row-caps --domain logistics --profile full --generated
+python main.py export-csvs --domain logistics --profile full
+python main.py validate-row-caps --domain logistics --profile full --exported
+python main.py validate-fk --domain logistics --profile full
+python main.py validate-join-paths --domain logistics --profile full
+python main.py validate-imperfection-rates --domain logistics --profile full
+python main.py compute-sha256 --domain logistics --profile full
+python main.py generate-data-dictionary --domain logistics --profile full
+python main.py generate-schema-sql --domain logistics --profile full
+python main.py validate-reproducibility --domain logistics --profile full
+python main.py generate-manifest --domain logistics --profile full
+```
+
+The final command seals the Logistics release and must remain last. The detailed
+column-level behavior is recorded in
+`Logistics_Distributions_and_Imperfections_Matrix.md`.
+
 ### Q&A Pair Workflow
 
 The root CLI also runs the CRM Q&A authoring pipeline. Each Q&A command consumes
@@ -405,6 +564,17 @@ Scoring runs through `main.py` as well. There is no separate scorecard command:
 a scoring run writes the scorecard artifacts itself, because §11.3 requires
 exact-match accuracy and judge scores to be reported side by side from the same
 run.
+
+To build the dataset, build its Q&A pairs, and run the judge sequentially with
+one command, pass only the shared domain and profile:
+
+```bash
+python main.py run-pipeline --domain crm --profile dev
+```
+
+This is equivalent to running `build-dataset`, `qa-build`, and `judge` in that
+order. The wrapper supplies `--allow-uncalibrated --limit 3` to `judge` only.
+The three individual commands and their existing options remain unchanged.
 
 `judge` takes the same two arguments as `build-dataset` and `qa-build` —
 `--domain` and `--profile`. Everything those two already determine is resolved
@@ -620,10 +790,10 @@ are green.
 
 ## First Build Track
 
-CRM remains the reference implementation. Sales and Finance reuse the shared
-deterministic core and release conventions while retaining their own business
-semantics. Finance adds fixed-point accounting, synthetic FX conversion, and
-double-entry integrity rules without placing those rules in the shared core.
+CRM remains the reference implementation. Sales, Finance, Project Management,
+and Logistics reuse the shared deterministic core and release conventions
+while retaining their own business semantics. Finance alone adds synthetic FX
+conversion; the other implemented domains are USD-only.
 
 ## Current Status
 
@@ -640,6 +810,8 @@ Finance is implemented through configuration, deterministic generation,
 fixed-point accounting and FX behavior, validation, release artifacts,
 reproducibility, root CLI dispatch, and its full automated test suite.
 
-Project Management and Logistics currently provide schema and design
-assets and will follow the shared conventions proven by CRM, Sales, and
-Finance.
+Project Management and Logistics are implemented through configuration,
+deterministic generation, distributions, controlled imperfections, persisted
+validation, release artifacts, clean-room reproducibility, root CLI dispatch,
+and domain-specific automated test suites. Their dev workflow verification and
+final release generation remain separate acceptance steps.

@@ -3,7 +3,10 @@
 // Paste directly into https://dbdiagram.io/
 // ============================================================
 //
-// STATUS: Draft v0.1
+// STATUS: Contract v1.0 - frozen for implementation
+//
+// Semantic contract:
+//   schemas/project_management/project_management_semantics.md
 //
 // Source alignment:
 //   v3 execution scope locks Project Management to:
@@ -16,6 +19,17 @@
 //   in_progress = tasks.status = 'InProgress'
 //   this_quarter = time_entries.entry_date in the current calendar quarter of
 //   the fixed reference date.
+//   active_assignment = assigned_at <= fixed TODAY AND
+//                       (released_at IS NULL OR released_at >= fixed TODAY)
+//   milestone_completion_pct = completed milestones / all milestones * 100,
+//                              rounded once to scale 2 with ROUND_HALF_UP.
+//   Every generated project has at least one milestone; reference SQL still
+//   protects the denominator with NULLIF.
+//
+// Decimal and currency rules:
+//   All decimals use exact fixed-point arithmetic and ROUND_HALF_UP.
+//   Calculated outputs round once at their contracted final scale.
+//   Project Management Contract v1.0 is USD-only.
 //
 // Join semantics annotated:
 //   INNER JOIN paths must produce non-empty results.
@@ -62,14 +76,14 @@
 // ------------------------------------------------------------
 Table projects {
   project_id integer [pk, not null, note: 'Unique project ID']
-  project_name varchar [not null]
-  project_code varchar [not null, note: 'Synthetic project code']
-  status varchar [not null, note: 'enum: Planning | Active | OnHold | Completed | Cancelled']
-  priority varchar [not null, note: 'enum: Low | Medium | High | Critical']
+  project_name varchar(255) [not null]
+  project_code varchar(64) [not null, note: 'Synthetic project code']
+  status varchar(32) [not null, note: 'enum: Planning | Active | OnHold | Completed | Cancelled']
+  priority varchar(32) [not null, note: 'enum: Low | Medium | High | Critical']
   start_date date [not null, note: 'Project start date']
   end_date date [note: 'Nullable; open-ended project imperfection focus']
   budget_amount decimal(15, 2) [note: 'Nullable; some projects are unbudgeted']
-  currency_code char(3) [not null, default: 'USD']
+  currency_code char(3) [not null, default: 'USD', note: 'Fixed value: USD']
   created_at timestamp [not null]
 
   Note: 'Dimension - target 500 rows. Projects are the parent for tasks and milestones; some projects must have zero tasks to exercise LEFT JOIN behavior.'
@@ -80,12 +94,12 @@ Table projects {
 // ------------------------------------------------------------
 Table resources {
   resource_id integer [pk, not null, note: 'Unique resource ID']
-  resource_name varchar [not null]
-  role varchar [not null, note: 'enum: Developer | Designer | PM | QA | Analyst']
-  department varchar [note: 'Delivery group for utilization and staffing questions']
-  location varchar [note: 'Synthetic work location or region']
+  resource_name varchar(255) [not null]
+  role varchar(32) [not null, note: 'enum: Developer | Designer | PM | QA | Analyst']
+  department varchar(64) [note: 'Delivery group for utilization and staffing questions']
+  location varchar(128) [note: 'Synthetic work location or region']
   hourly_rate decimal(10, 2) [note: 'Nullable; some contractors have no set rate']
-  currency_code char(3) [not null, default: 'USD']
+  currency_code char(3) [not null, default: 'USD', note: 'Fixed value: USD']
   is_active boolean [not null, default: true]
   created_at timestamp [not null]
 
@@ -98,9 +112,9 @@ Table resources {
 Table tasks {
   task_id integer [pk, not null, note: 'Unique task ID']
   project_id integer [not null, ref: > projects.project_id, note: 'INNER JOIN path - NOT NULL']
-  task_name varchar [not null]
-  status varchar [not null, note: 'enum: NotStarted | InProgress | Blocked | Completed']
-  task_type varchar [note: 'enum: Feature | Bug | Documentation | Testing | Deployment']
+  task_name varchar(255) [not null]
+  status varchar(32) [not null, note: 'enum: NotStarted | InProgress | Blocked | Completed']
+  task_type varchar(32) [note: 'enum: Feature | Bug | Documentation | Testing | Deployment']
   start_date date [not null, note: 'Boundary-date injection target']
   due_date date [note: 'Nullable; open-ended work. Overdue means due_date < TODAY and completed_date IS NULL']
   completed_date date [note: 'Nullable; NULL means task is not complete']
@@ -116,7 +130,7 @@ Table tasks {
 Table task_resources {
   task_id integer [pk, not null, ref: > tasks.task_id, note: 'INNER JOIN path - NOT NULL']
   resource_id integer [pk, not null, ref: > resources.resource_id, note: 'INNER JOIN path - NOT NULL']
-  assignment_role varchar [note: 'enum: Owner | Contributor | Reviewer | Approver']
+  assignment_role varchar(32) [note: 'enum: Owner | Contributor | Reviewer | Approver']
   allocation_pct decimal(5, 2) [not null, default: 100, note: 'Percent allocation for the task assignment']
   assigned_at date [not null, note: 'Date the resource was assigned to the task']
   released_at date [note: 'Nullable; active assignments have no release date']
@@ -131,11 +145,11 @@ Table task_resources {
 Table milestones {
   milestone_id integer [pk, not null, note: 'Unique milestone ID']
   project_id integer [not null, ref: > projects.project_id, note: 'INNER JOIN path - NOT NULL']
-  milestone_name varchar [not null]
-  milestone_type varchar [note: 'enum: Kickoff | Design | Build | UAT | Launch']
+  milestone_name varchar(255) [not null]
+  milestone_type varchar(32) [note: 'enum: Kickoff | Design | Build | UAT | Launch']
   planned_date date [not null]
   actual_date date [note: 'Nullable; milestone completion percentage counts actual_date IS NOT NULL over all milestones']
-  status varchar [not null, note: 'enum: Planned | AtRisk | Completed | Missed']
+  status varchar(32) [not null, note: 'enum: Planned | AtRisk | Completed | Missed']
   created_at timestamp [not null]
 
   Note: 'Dimension - target 2,500 rows, approximately 5 milestones per project. Supports milestone completion percentage questions.'
@@ -151,8 +165,8 @@ Table time_entries {
   entry_date date [not null, note: 'this_quarter filter uses this column']
   hours decimal(6, 2) [not null]
   billable boolean [not null, default: true]
-  work_type varchar [not null, note: 'enum: Delivery | Review | Meeting | Rework | Support']
-  notes varchar
+  work_type varchar(32) [not null, note: 'enum: Delivery | Review | Meeting | Rework | Support']
+  notes varchar(1024)
   created_at timestamp [not null]
 
   Note: 'Fact - target 150,000 rows. Supports 3-table Project to Task to Time_Entry aggregation and resource utilization questions.'

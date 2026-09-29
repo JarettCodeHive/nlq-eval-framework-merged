@@ -13,6 +13,8 @@ from generators.crm.pipeline import CRMDatasetPipeline
 from generators.domain_registry import DATASET_DOMAINS
 from generators.domain_registry import dataset_domain
 from generators.finance.pipeline import FinanceDatasetPipeline
+from generators.logistics.pipeline import LogisticsDatasetPipeline
+from generators.project_management.pipeline import ProjectManagementDatasetPipeline
 from generators.sales.pipeline import SalesDatasetPipeline
 from qa_pairs.generator.crm.author_qa_pairs import generate_seed_fixtures
 from qa_pairs.generator.crm.generate_crm import build as stage_crm_qa_dataset
@@ -73,12 +75,14 @@ def run_build_dataset(args: argparse.Namespace) -> None:
         "crm": CRMDatasetPipeline,
         "finance": FinanceDatasetPipeline,
         "sales": SalesDatasetPipeline,
+        "logistics": LogisticsDatasetPipeline,
+        "project_management": ProjectManagementDatasetPipeline,
     }
     try:
         pipeline = pipelines[args.domain]
     except KeyError as exc:
         raise NotImplementedError(
-            "build-dataset currently supports only crm, finance, and sales; "
+            "build-dataset currently supports only crm, finance, sales, logistics, and project_management; "
             f"got {args.domain}"
         ) from exc
 
@@ -668,6 +672,31 @@ def run_judge(args: argparse.Namespace) -> None:
         raise SystemExit(exit_code)
 
 
+def run_pipeline(args: argparse.Namespace) -> None:
+    """Build the dataset and Q&A pairs, then run a small judge pass.
+
+    This is the convenient end-to-end entry point.  The individual commands
+    remain available with their existing behavior; only this wrapper supplies
+    the judge-specific smoke-test flags.
+    """
+
+    pipeline_args = argparse.Namespace(domain=args.domain, profile=args.profile)
+
+    print("Pipeline step 1/3: build dataset")
+    run_build_dataset(pipeline_args)
+
+    print("Pipeline step 2/3: build Q&A pairs")
+    run_qa_build(pipeline_args)
+
+    print("Pipeline step 3/3: judge")
+    judge_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        command_argv=["--allow-uncalibrated", "--limit", "3"],
+    )
+    run_judge(judge_args)
+
+
 def run_score(args: argparse.Namespace) -> None:
     """Combine per-domain `judge` runs into one regression scorecard (§14.1).
 
@@ -787,6 +816,7 @@ COMMANDS: dict[str, CommandHandler] = {
     "dataset-delete": run_dataset_delete,
     "judge-build-input": run_judge_build_input,
     "judge": run_judge,
+    "run-pipeline": run_pipeline,
     "score": run_score,
     "calibrate": run_calibrate,
     "anchors-export": run_anchors_export,
