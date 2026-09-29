@@ -494,19 +494,83 @@ configured with `PULSE_CA_BUNDLE` / `FLOODGATE_CA_BUNDLE`, while proxies are
 inherited from the standard environment variables and are deliberately not
 configured in this project.
 
-The Pulse token lasts one hour and has no refresh by default, so a run longer
-than its remaining life is refused up front. Setting `PULSE_REFRESH_*` in
-`judge/.env` lets the client re-mint its own token during a run and removes that
-ceiling — see `judge/.env.example`, and note the endpoint is not yet confirmed.
+The Pulse token lasts one hour, so a run longer than its remaining life is
+refused up front. Setting `PULSE_REFRESH_*` in `.env` lets the client re-mint its
+own token during a run and removes that ceiling — the Cognito refresh token is
+long-lived (30 days by default), so this is what makes a 2-hour run possible at
+all. **How to obtain every credential is documented in `.env.example`**; the
+short version is below.
+
+### Getting the Pulse credentials
+
+There is no API-key page for this — every value is captured from a browser
+session against Claris Studio QA.
+
+1. Sign in to `https://studio-qa.platform.claris.com` in Chrome.
+2. Open DevTools → Network.
+3. **`PULSE_AUTH_TOKEN`** — from the `Authorization: Bearer …` header on any
+   request to `api-qa.platform.claris.com`. Strip `Bearer `, or leave it; the
+   client adds it if missing. This one expires in an hour.
+4. **`PULSE_ORG_ID`** — the integer in the request path,
+   `/api-proxy/org/<ORG_ID>/ai-svc/…` (QA is `4104`).
+5. **`PULSE_REFRESH_TOKEN`** — from the **request body** of Studio's
+   `POST /auth/token`. This is the credential worth having: it is long-lived, and
+   with it the client re-mints hour-long tokens by itself.
+6. Verify the chain before trusting it in a long run:
+
+```bash
+python judge/pulse_auth.py --probe
+```
+
+The refresh is a two-step chain, because the token Pulse accepts is not the
+Cognito token: `Cognito REFRESH_TOKEN_AUTH` → `POST {PULSE_BASE_URL}/auth/token`
+→ the `claris.com` token that goes on the wire. `PULSE_COGNITO_CLIENT_ID` and
+`PULSE_COGNITO_REGION` are the other half of step one and are pre-filled in
+`.env.example`. If `--probe` reports no matching token, the platform token comes
+from a third endpoint — check the `mag.uri` cookie and repoint
+`PULSE_AUTH_EXCHANGE_PATH`.
+
+> **Corporate network — three hosts must be reachable.** All three are separate
+> allowlist entries, and a missing one fails in a way that looks like something
+> else: the token mint dies with `ProxyError: 403 Forbidden` naming a host you
+> did not know was involved, and a blocked `studio-qa` in particular surfaces
+> only at the token-exchange step, after Cognito has already succeeded.
+>
+> | Host | Used for |
+> |---|---|
+> | `cognito-idp.us-west-2.amazonaws.com` | refreshing the Cognito token |
+> | `studio-qa.platform.claris.com` | exchanging it for the `claris.com` token |
+> | `api-qa.platform.claris.com` | the chat endpoint the run actually calls |
+>
+> `floodgate.g.apple.com` is needed for the judge, separately.
 
 ```bash
 python main.py calibrate --domain crm
 ```
 
 Calibration scores the human-agreed anchors in `judge/anchors/<domain>.json`
-and writes the `judge/.calibration` marker when agreement passes. It currently
-fails by design — the CRM anchors are quarantined as `crm.provisional.json`
-pending the §10.2 Platform Owner session, so no run is release-eligible yet.
+and writes the `judge/.calibration` marker when agreement passes. Anchors are
+produced by the two commands below — it currently fails by design, because the
+CRM anchors are quarantined as `crm.provisional.json` pending the §10.2 Platform
+Owner session, so no run is release-eligible yet.
+
+### Authoring calibration anchors
+
+§10.2 needs ≥10 human-graded anchors per domain, spanning the score range.
+Export candidates from a scored run, grade them, import them back:
+
+```bash
+python main.py anchors-export --domain crm --profile full
+# fill the human_* columns, reconcile between BOTH graders, then:
+python main.py anchors-import --domain crm --sheet <the filled sheet>
+```
+
+The sheet carries the question, the platform's answer and its SQL — and
+deliberately none of the judge's own scores, because a grader shown the judge's 4
+hands back a 4 and the measurement is agreement between two independent
+opinions. Candidates are stratified across exact-match outcome and tier so the
+graders see wrong answers, not a page of easy passes. Import refuses a set that a
+constant-scoring judge would pass, before any provider budget is spent.
 
 ```bash
 python main.py rubric

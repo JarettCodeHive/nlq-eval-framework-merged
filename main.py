@@ -710,6 +710,46 @@ def run_calibrate(args: argparse.Namespace) -> None:
         raise SystemExit(exit_code)
 
 
+def run_anchors_export(args: argparse.Namespace) -> None:
+    """Propose candidate anchors from a scored run as a CSV the graders fill in.
+
+    §10.2 needs human-graded anchors and nothing in the pipeline produced any —
+    which is why calibration, and therefore every release scorecard, has been
+    blocked. Sheet carries the evidence and none of the judge's own scores: a
+    grader shown the judge's 4 hands back a 4, and the measurement is agreement
+    between two independent opinions.
+    """
+
+    from judge.anchors_io import export_candidates
+
+    export_candidates(
+        args.domain,
+        run_id=args.run or None,
+        profile=args.profile,
+        count=args.count or None,
+        output=Path(args.sheet) if args.sheet else None,
+    )
+
+
+def run_anchors_import(args: argparse.Namespace) -> None:
+    """Ingest a filled grading sheet into judge/anchors/<domain>.json.
+
+    Grades must be RECONCILED between both graders before this runs — the
+    calibration module has no notion of per-grader votes. The set is checked for
+    §10.2 strength before it is written, so a set a constant-scoring judge would
+    pass is refused here rather than after a provider budget has been spent.
+    """
+
+    from judge.anchors_io import import_grades
+
+    import_grades(
+        args.domain,
+        Path(args.sheet),
+        output=Path(args.out) if args.out else None,
+        force=args.force,
+    )
+
+
 def run_rubric(args: argparse.Namespace) -> None:
     """Render the LLM-as-Judge rubric PDF deliverable (§14.1)."""
 
@@ -749,6 +789,8 @@ COMMANDS: dict[str, CommandHandler] = {
     "judge": run_judge,
     "score": run_score,
     "calibrate": run_calibrate,
+    "anchors-export": run_anchors_export,
+    "anchors-import": run_anchors_import,
     "rubric": run_rubric,
     "validate-relations": run_validate_relations,
     "validate-reproducibility": run_validate_reproducibility,
@@ -778,6 +820,37 @@ def build_parser() -> argparse.ArgumentParser:
         default="dev",
         choices=("dev", "full"),
         help="Generation profile to use. Defaults to dev.",
+    )
+    parser.add_argument(
+        "--run",
+        default="",
+        help="anchors-export: run id to propose anchors from. Defaults to the "
+        "most recent scored run for the domain.",
+    )
+    parser.add_argument(
+        "--sheet",
+        default="",
+        help="anchors-export: where to write the grading sheet (defaults to the "
+        "run directory). anchors-import: the filled sheet to ingest — required.",
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=0,
+        help="anchors-export: how many candidates to propose. Defaults to two "
+        "above the domain's min_anchors, so a rejected anchor leaves headroom.",
+    )
+    parser.add_argument(
+        "--out",
+        default="",
+        help="anchors-import: write the anchor set here instead of the "
+        "calibration.anchors_path configured for the domain.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="anchors-import: write an anchor set that fails the §10.2 strength "
+        "test anyway, as a work in progress. Calibration will still refuse it.",
     )
     parser.add_argument(
         "--write-preview",
