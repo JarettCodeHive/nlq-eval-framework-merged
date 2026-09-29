@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import time
 
+import pytest
+
 from judge.cli import PlatformError, _collect_and_score
-from judge.heuristic_judge import HeuristicJudge
+from judge.tests.stub_judge import StubJudge
 from judge.exact_match import ExactMatchOutcome, ExactMatchResult
 from judge.contracts import PulseResponse
 from scorecard.summary import RunContext, aggregate, build_summary_rows
@@ -53,7 +55,7 @@ def _run(pairs, pulse, *, pulse_concurrency=4, judge_concurrency=4, judge=None):
         _collect_and_score(
             pairs,
             pulse,
-            judge or HeuristicJudge(),
+            judge or StubJudge(),
             pulse_concurrency=pulse_concurrency,
             judge_concurrency=judge_concurrency,
         )
@@ -82,7 +84,7 @@ def test_one_platform_failure_does_not_abort_the_batch():
 def test_a_judge_failure_is_isolated_per_row():
     """A bad verdict must not discard the platform answers already paid for."""
 
-    class _BoomJudge(HeuristicJudge):
+    class _BoomJudge(StubJudge):
         async def judge(self, req):
             if req.question_id == "q2":
                 raise RuntimeError("judge exploded")
@@ -110,7 +112,7 @@ def test_scoring_overlaps_fetching():
     """The whole point of the pipeline: the judge leg hides inside the platform
     wait instead of being added to it."""
 
-    class _SlowJudge(HeuristicJudge):
+    class _SlowJudge(StubJudge):
         async def judge(self, req):
             await asyncio.sleep(0.1)
             return await super().judge(req)
@@ -243,21 +245,14 @@ def test_release_accepts_live_when_everything_else_is_satisfied():
     assert blockers == []
 
 
-def test_heuristic_judge_is_never_release_eligible():
-    from judge.cli import _resolve_scorecard_mode, build_argparser
+def test_a_non_llm_judge_cannot_even_be_requested():
+    """Floodgate is the only backend, so this guarantee now holds one step
+    earlier: argparse refuses the value rather than `_resolve_scorecard_mode`
+    reporting it as a release blocker. The artifact-level check still exists for
+    runs recorded before the test double was removed — see
+    tests/scorecard/test_combine.py.
+    """
+    from judge.cli import build_argparser
 
-    args = build_argparser().parse_args(
-        [
-            "--release",
-            "--judge",
-            "heuristic",
-            "--pulse",
-            "live",
-            "--platform-version",
-            "v1",
-            "--dataset-version",
-            "d1",
-        ]
-    )
-    _, blockers = _resolve_scorecard_mode(args, calibrated=True)
-    assert any("--judge llm" in b for b in blockers)
+    with pytest.raises(SystemExit):
+        build_argparser().parse_args(["--judge", "heuristic"])

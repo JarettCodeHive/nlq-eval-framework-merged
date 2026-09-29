@@ -43,7 +43,7 @@ in the chain). Set ``PULSE_CA_BUNDLE`` to the corp CA file, or install the
 ``truststore`` package (auto-used) to trust the OS store, or last-resort
 ``PULSE_VERIFY_TLS=false``.
 
-Setup: copy ``judge/.env.example`` → ``judge/.env`` and fill the ``PULSE_*`` vars.
+Setup: copy ``.env.example`` → ``.env`` and fill the ``PULSE_*`` vars.
 Staging/QA only (HC-6).
 """
 
@@ -200,7 +200,7 @@ def load_pulse_settings(env_file: Path | None = None) -> PulseSettings:
         raise MissingPulseCredentials(
             "live Pulse requires: "
             + ", ".join(missing)
-            + "\nFill the PULSE_* block in judge/.env — QA base URL "
+            + "\nFill the PULSE_* block in .env — QA base URL "
             "https://api-qa.platform.claris.com, the Authorization token from "
             "Chrome DevTools, and the integer org id. See docs/judge_runbook.md."
         )
@@ -264,13 +264,13 @@ def check_token_headroom(settings: PulseSettings, needed_s: float) -> "str | Non
     left = (exp - datetime.now(timezone.utc)).total_seconds()
     if left <= 0:
         return (
-            f"PULSE_AUTH_TOKEN expired {-left / 60:.0f} min ago — refresh judge/.env."
+            f"PULSE_AUTH_TOKEN expired {-left / 60:.0f} min ago — refresh .env."
         )
     if left < needed_s:
         return (
             f"PULSE_AUTH_TOKEN has {left / 60:.0f} min left but this run needs about "
             f"{needed_s / 60:.0f} min. It will expire mid-run and later questions "
-            f"will fail with 401. Refresh judge/.env first."
+            f"will fail with 401. Refresh .env first."
         )
     return None
 
@@ -485,7 +485,7 @@ class PulseClient:
         if not minted:
             raise PulseResponseError(
                 "Pulse token provider returned an empty token; cannot continue. "
-                "Refresh PULSE_AUTH_TOKEN in judge/.env by hand."
+                "Refresh PULSE_AUTH_TOKEN in .env by hand."
             )
         self._token = minted
         exp = token_expiry(minted)
@@ -553,7 +553,7 @@ class PulseClient:
                 if auth_retried or self._token_provider is None:
                     raise PulseResponseError(
                         f"{exc} — PULSE_AUTH_TOKEN is not valid for org "
-                        f"{self._settings.org_id}. Refresh it in judge/.env."
+                        f"{self._settings.org_id}. Refresh it in .env."
                     ) from exc
                 auth_retried = True
                 self._log.event("pulse.auth_retry", question_preview=question[:80])

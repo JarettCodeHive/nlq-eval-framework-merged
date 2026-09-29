@@ -189,6 +189,32 @@ def dataset_release_config(domain: str, *, repo_root: Path | None = None) -> dic
     return _load_json(_root(repo_root) / _GENERATION_CONFIG / domain / "release.json")
 
 
+def dataset_version(domain: str, *, repo_root: Path | None = None) -> str:
+    """The dataset version for this domain, resolved the way generation does.
+
+    `NLQ_DATASET_VERSION` → the domain's `release.json` → the shared default in
+    `config/generation/base.json`. The judge reads the same three sources in the
+    same order as `generators.core.base` and `qa_pairs.utils.dataset_source`, so
+    a version bump cannot leave the scorer pointed at a different build than the
+    one that was generated. Returns `""` for a judge-only domain with no
+    generation config at all.
+    """
+
+    override = (os.getenv("NLQ_DATASET_VERSION") or "").strip()
+    if override:
+        return override
+    release = dataset_release_config(domain, repo_root=repo_root)
+    if not release:
+        # Judge-only domain: there is no dataset here to have a version. The
+        # shared default would otherwise let a run label claim one.
+        return ""
+    declared = str(release.get("dataset_version") or "").strip()
+    if declared:
+        return declared
+    base = _load_json(_root(repo_root) / _GENERATION_CONFIG / "base.json")
+    return str(base.get("dataset_version") or "").strip()
+
+
 def dataset_csv_dir(
     domain: str, profile: str, *, repo_root: Path | None = None
 ) -> Path | None:
@@ -205,7 +231,7 @@ def dataset_csv_dir(
     if raw:
         base = root / str(raw).format(
             domain=domain,
-            dataset_version=config.get("dataset_version", ""),
+            dataset_version=dataset_version(domain, repo_root=repo_root),
             profile=profile,
         )
     else:
@@ -235,11 +261,9 @@ def dataset_version_label(
     """
 
     parts: list[str] = []
-    dataset_version = str(
-        dataset_release_config(domain, repo_root=repo_root).get("dataset_version", "")
-    ).strip()
-    if dataset_version:
-        parts.append(dataset_version)
+    version = dataset_version(domain, repo_root=repo_root)
+    if version:
+        parts.append(version)
     if profile == "full":
         qa_dir = qa_release_dir(domain, profile, repo_root=repo_root)
         parts.append(qa_dir.name)

@@ -22,7 +22,7 @@ SQL**, then scores that response two independent ways:
 | Scorer | Question it answers | Output |
 |---|---|---|
 | **exact-match** (`judge/exact_match.py`) | Are the numbers exactly right? (§HC-3, zero tolerance) | PASS / FAIL / NOT_APPLICABLE / ERROR |
-| **LLM-as-judge** (`judge/openai_judge.py`) | Is the answer complete, correctly formatted, coherent, and is the SQL plausible? (§10) | 4 integer scores 1–5 + a rationale each |
+| **LLM-as-judge** (`judge/floodgate_judge.py`) | Is the answer complete, correctly formatted, coherent, and is the SQL plausible? (§10) | 4 integer scores 1–5 + a rationale each |
 
 The two are always reported **side by side, never blended** (§11.3). Results
 aggregate into a **scorecard** (`scorecard/`): per domain × tier, compared to an

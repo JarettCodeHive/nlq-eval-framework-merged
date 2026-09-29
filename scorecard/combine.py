@@ -227,8 +227,9 @@ def release_blockers(inputs: list[RunInput]) -> list[str]:
         if run.judge_name != "llm":
             blockers.append(
                 f"{run.domain}/{run.run_id} was scored by --judge "
-                f"{run.judge_name!r}; the heuristic test double is never "
-                "release-eligible"
+                f"{run.judge_name!r}, which is not release-eligible. Runs "
+                "recorded before the test double was removed still carry it, so "
+                "this is checked against the artifact, not the current CLI."
             )
         if run.pulse_mode in _STANDIN_PULSE:
             blockers.append(

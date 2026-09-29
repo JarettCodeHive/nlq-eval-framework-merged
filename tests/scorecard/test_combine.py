@@ -253,7 +253,7 @@ def test_a_clean_set_has_no_blockers(runs) -> None:
     ("kwargs", "expected"),
     [
         ({"calibrated": False}, "uncalibrated"),
-        ({"judge": "heuristic"}, "heuristic test double"),
+        ({"judge": "heuristic"}, "not release-eligible"),
         ({"pulse_mode": "sql"}, "HC-4"),
         ({"platform_version": ""}, "no platform_version"),
         ({"dataset_version": ""}, "no dataset_version"),

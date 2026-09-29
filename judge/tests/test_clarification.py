@@ -20,7 +20,7 @@ from judge.contracts import (
     PulseResponse,
 )
 from judge.exact_match import ExactMatchOutcome, ExactMatchResult
-from judge.heuristic_judge import HeuristicJudge
+from judge.tests.stub_judge import StubJudge
 from judge.pulse_client import _extract_clarify
 from scorecard.summary import RunContext, aggregate, build_summary_rows
 
@@ -61,14 +61,8 @@ class _ClarifyingPulse:
         )
 
 
-class _CountingJudge(HeuristicJudge):
-    def __init__(self) -> None:
-        super().__init__()
-        self.calls = 0
-
-    async def judge(self, req):
-        self.calls += 1
-        return await super().judge(req)
+class _CountingJudge(StubJudge):
+    """StubJudge already records `calls`; named for what the tests assert on."""
 
 
 # --- detection ---------------------------------------------------------------

@@ -422,11 +422,11 @@ python main.py judge-build-input --domain crm --profile full
 ```
 
 An offline run, executing each pair's `reference_sql` in DuckDB instead of
-calling the platform. Use this for CI and for validating the pipeline:
+calling the platform. Use this for validating the pipeline and for §14.2 pair
+verification. Note it still spends judge quota — there is no offline judge.
 
 ```bash
 python main.py judge --domain crm --profile full \
-  --judge heuristic \
   --pulse sql \
   --limit 3 \
   --allow-uncalibrated
