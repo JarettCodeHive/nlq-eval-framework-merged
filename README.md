@@ -46,25 +46,6 @@ nlq-eval-framework/
   docs/          Data dictionaries, rubric, audit reports, and handover docs.
 ```
 
-### Generation Configuration
-
-`config/generation/base.json` contains shared deterministic defaults. CRM,
-Sales, Finance, Project Management and Logistics use `config/generation/<domain>.json` as stable entry-point
-descriptors.
-Each descriptor assembles four focused component files:
-
-- `<domain>/release.json`: dataset identity, fixed values, output paths, table
-  order, and release rules.
-- `<domain>/schema.json`: tables, fields, row targets, keys, and relationships.
-- `<domain>/generation.json`: domain values, generation rules, business
-  mappings, distributions, and imperfection targets.
-- `<domain>/validation.json`: join-path and consistency rules.
-
-Generator code reads each assembled configuration through its domain loader;
-component files are not consumed independently. Shared presets remain in
-`base.json`, while domain-specific selections and overrides remain in the
-domain's `generation.json`.
-
 ## Python Environment
 
 Use Python 3.11. Create the virtual environment from the repository root so the
@@ -102,396 +83,47 @@ generation domains.
 Pass `--domain` explicitly in repeatable workflows. Omitting it continues to
 select CRM for backward compatibility.
 
-### CRM Dataset Build
+### End-to-End Pipeline
 
-Use one command per profile. These workflows generate CSV files and run the
-required post-generation checks against the persisted final CSVs rather than
-requiring separate in-memory validation commands.
+Build the dataset and Q&A pairs, refresh the platform dataset, and run a
+three-question judge pass with one command:
 
-Development build:
+```bash
+python main.py run-pipeline --domain crm --profile dev
+```
+
+> **Warning:** `run-pipeline` confirms `dataset-delete` internally. It deletes
+> and re-uploads the selected domain/profile on the configured platform before
+> judging. Its judge stage uses `--allow-uncalibrated --limit 3`, so the result
+> is a preview and cannot certify a release.
+
+Before running it, configure `judge/.env` and verify both the judge-provider and
+Pulse credentials:
+
+```bash
+python main.py check-auth --domain crm
+```
+
+### Dataset Builds
+
+Use `build-dataset` for the complete generation and validation workflow:
 
 ```bash
 python main.py build-dataset --domain crm --profile dev
-```
-
-This writes `base/`, `distributed/`, and `imperfect/` under
-`tmp/generated/crm/dev/`, then validates row caps, DDL and foreign keys, join
-paths, and imperfection rates from `imperfect/*.csv`.
-
-Full release build:
-
-```bash
 python main.py build-dataset --domain crm --profile full
 ```
 
-This generates `release/crm/dataset-v1.0.0/`, validates the written CSVs,
-computes hashes, generates the data dictionary and schema SQL, performs a
-clean-room reproducibility check, and writes `manifest.json` last. The manifest
-seals the release; corrections require a new dataset version.
-
-Both commands print numbered pipeline progress plus table-level generation and
-CSV export progress.
-
-### Sales Dataset Build
-
-Use one command per profile. The Sales workflow applies the same persisted-data
-gates and release ordering as the CRM workflow.
-
-Development build:
-
-```bash
-python main.py build-dataset --domain sales --profile dev
-```
-
-This writes `base/`, `distributed/`, and `imperfect/` under
-`tmp/generated/sales/dev/`, then validates row caps, DDL and foreign keys, join
-paths, and imperfection rates from `imperfect/*.csv`.
-
-Full release build:
-
-```bash
-python main.py build-dataset --domain sales --profile full
-```
-
-This generates `release/sales/dataset-v1.0.0/`, validates the persisted CSVs,
-computes SHA-256 hashes, generates the data dictionary and schema SQL, performs
-a clean-room reproducibility check, and writes `manifest.json` last. An existing
-manifest prevents the release from being modified in place.
-
-Sales generation produces `leads`, `deals`, `products`, `quotations`, and
-`targets`. The `quotations` table is both the quote-line fact and the explicit
-Deal-to-Product bridge.
-
-Sales Q&A authoring is not implemented yet. The `qa-*` commands remain
-explicitly CRM-only.
-
-### Finance Dataset Build
-
-Finance generates `accounts`, `transactions`, `ledger_entries`, `budgets`, and
-`fx_rates`. Use one command per profile to run generation and persisted-data
-validation in the required order.
-
-Development build:
-
-```bash
-python main.py build-dataset --domain finance --profile dev
-```
-
-This writes `base/`, `distributed/`, and `imperfect/` under
-`tmp/generated/finance/dev/`, then validates row caps, DDL and foreign keys,
-accounting balance, join and FX paths, and imperfection rates from the persisted
-`imperfect/*.csv` files.
-
-Full release build:
-
-```bash
-python main.py build-dataset --domain finance --profile full
-```
-
-This generates `release/finance/dataset-v1.0.0/`, validates persisted CSVs and
-Finance-specific accounting/FX contracts, computes hashes, writes the data
-dictionary and schema SQL, performs clean-room reproducibility checks, and
-writes `manifest.json` last.
-
-Finance uses multiple source currencies and USD as its sole reporting currency.
-Its rates are deterministic synthetic test values generated locally. No live
-rate service or production financial data is read.
-
-### Project Management Dataset Build
-
-Project Management generates `projects`, `resources`, `tasks`,
-`task_resources`, `milestones`, and `time_entries`. The `task_resources` bridge
-models the Task-to-Resource many-to-many relationship, and every time entry
-must match a declared task/resource assignment.
-
-Development build:
-
-```bash
-python main.py build-dataset --domain project_management --profile dev
-```
-
-This writes `base/`, `distributed/`, and `imperfect/` under
-`tmp/generated/project_management/dev/`, then validates persisted row caps,
-DDL, foreign keys, assignment membership, join paths, date rules, and
-imperfection rates from `imperfect/*.csv`.
-
-Full release build:
-
-```bash
-python main.py build-dataset --domain project_management --profile full
-```
-
-This generates `release/project_management/dataset-v1.0.0/`, validates all
-persisted artifacts, computes SHA-256 hashes, writes the data dictionary and
-schema SQL, performs clean-room reproducibility, and writes `manifest.json`
-last. An existing manifest makes the release immutable.
-
-Both commands print numbered pipeline progress and table-level generation and
-export progress. Project Management is USD-only and has no FX conversion path.
-All relative date logic uses the fixed reference date `2026-08-01`: overdue
-means `due_date < reference_today AND completed_date IS NULL`; in progress
-means `status = 'InProgress'`; and this quarter uses an inclusive quarter start
-and exclusive next-quarter start.
-
-### Logistics Dataset Build
-
-Logistics generates `carriers`, `warehouses`, `orders`, `shipments`, and
-`inventory`. The `shipments` fact provides the Order-to-Carrier many-to-many
-path. `orders.warehouse_id` is an analytical LEFT JOIN key that deliberately
-allows both NULL assignments and declared orphan values, so it has no physical
-SQL foreign key.
-
-Development build:
-
-```bash
-python main.py build-dataset --domain logistics --profile dev
-```
-
-This writes `base/`, `distributed/`, and `imperfect/` under
-`tmp/generated/logistics/dev/`, then validates persisted row caps, DDL,
-physical foreign keys, the declared orphan exception, join paths, chronology,
-inventory grain, and imperfection rates from `imperfect/*.csv`.
-
-Full release build:
-
-```bash
-python main.py build-dataset --domain logistics --profile full
-```
-
-This generates `release/logistics/dataset-v1.0.0/`, validates all persisted
-artifacts, computes SHA-256 hashes, writes the data dictionary and schema SQL,
-performs two-build clean-room reproducibility, and writes `manifest.json` last.
-An existing manifest makes the release immutable.
-
-Both commands print numbered progress and table-level generation/export
-updates. Logistics is USD-only and has no FX conversion path. Near-duplicate
-shipment rows preserve their business identity, so queries must choose between
-physical rows with `COUNT(*)` and business shipments with
-`COUNT(DISTINCT tracking_number)`.
-
-### Advanced CRM Commands
-
-Use these commands when investigating a specific stage or validation gate.
-They are not required when `build-dataset` succeeds.
-
-Inspect resolved configuration or write one development stage:
-
-```bash
-python main.py validate-config --domain crm --profile dev
-python main.py show-config --domain crm --profile dev
-python main.py generate-base --domain crm --profile dev --write-preview
-python main.py apply-distributions --domain crm --profile dev --write-preview
-python main.py apply-imperfections --domain crm --profile dev --write-preview
-```
-
-Run one generated-data validation gate without relying on saved previews:
-
-```bash
-python main.py validate-relations --domain crm --profile dev
-python main.py validate-row-caps --domain crm --profile dev --generated
-python main.py validate-fk --domain crm --profile dev --generated
-python main.py validate-join-paths --domain crm --profile dev --generated
-python main.py validate-imperfection-rates --domain crm --profile dev --generated
-```
-
-Run or troubleshoot individual full-release stages before the manifest exists:
-
-```bash
-python main.py validate-config --domain crm --profile full
-python main.py show-config --domain crm --profile full
-python main.py validate-relations --domain crm --profile full
-python main.py validate-row-caps --domain crm --profile full
-python main.py validate-row-caps --domain crm --profile full --generated
-python main.py export-csvs --domain crm --profile full
-python main.py validate-row-caps --domain crm --profile full --exported
-python main.py validate-fk --domain crm --profile full
-python main.py validate-join-paths --domain crm --profile full
-python main.py validate-imperfection-rates --domain crm --profile full
-python main.py compute-sha256 --domain crm --profile full
-python main.py generate-data-dictionary --domain crm --profile full
-python main.py generate-schema-sql --domain crm --profile full
-python main.py validate-reproducibility --domain crm --profile full
-python main.py generate-manifest --domain crm --profile full
-```
-
-The final command above seals the release and must not be followed by another
-release-writing command.
-
-### Advanced Sales Commands
-
-Use these commands to investigate an individual Sales generation stage or
-validation gate. They are not required when `build-dataset` succeeds.
-
-Inspect configuration, write dev stages, or validate generated data:
-
-```bash
-python main.py validate-config --domain sales --profile dev
-python main.py show-config --domain sales --profile dev
-python main.py generate-base --domain sales --profile dev --write-preview
-python main.py apply-distributions --domain sales --profile dev --write-preview
-python main.py apply-imperfections --domain sales --profile dev --write-preview
-python main.py validate-relations --domain sales --profile dev
-python main.py validate-row-caps --domain sales --profile dev --generated
-python main.py validate-fk --domain sales --profile dev --generated
-python main.py validate-join-paths --domain sales --profile dev --generated
-python main.py validate-imperfection-rates --domain sales --profile dev --generated
-```
-
-Run or troubleshoot individual full-release stages before the manifest exists:
-
-```bash
-python main.py validate-config --domain sales --profile full
-python main.py show-config --domain sales --profile full
-python main.py validate-relations --domain sales --profile full
-python main.py validate-row-caps --domain sales --profile full
-python main.py validate-row-caps --domain sales --profile full --generated
-python main.py export-csvs --domain sales --profile full
-python main.py validate-row-caps --domain sales --profile full --exported
-python main.py validate-fk --domain sales --profile full
-python main.py validate-join-paths --domain sales --profile full
-python main.py validate-imperfection-rates --domain sales --profile full
-python main.py compute-sha256 --domain sales --profile full
-python main.py generate-data-dictionary --domain sales --profile full
-python main.py generate-schema-sql --domain sales --profile full
-python main.py validate-reproducibility --domain sales --profile full
-python main.py generate-manifest --domain sales --profile full
-```
-
-The final command seals the Sales release and must remain last.
-
-### Advanced Finance Commands
-
-Use these commands to investigate individual Finance stages or validation
-gates. They are not required when `build-dataset` succeeds.
-
-Inspect configuration, write dev stages, or validate generated data:
-
-```bash
-python main.py validate-config --domain finance --profile dev
-python main.py show-config --domain finance --profile dev
-python main.py generate-base --domain finance --profile dev --write-preview
-python main.py apply-distributions --domain finance --profile dev --write-preview
-python main.py apply-imperfections --domain finance --profile dev --write-preview
-python main.py validate-relations --domain finance --profile dev
-python main.py validate-row-caps --domain finance --profile dev --generated
-python main.py validate-fk --domain finance --profile dev --generated
-python main.py validate-join-paths --domain finance --profile dev --generated
-python main.py validate-imperfection-rates --domain finance --profile dev --generated
-```
-
-Run or troubleshoot individual full-release stages before the manifest exists:
-
-```bash
-python main.py validate-config --domain finance --profile full
-python main.py show-config --domain finance --profile full
-python main.py validate-relations --domain finance --profile full
-python main.py validate-row-caps --domain finance --profile full
-python main.py validate-row-caps --domain finance --profile full --generated
-python main.py export-csvs --domain finance --profile full
-python main.py validate-row-caps --domain finance --profile full --exported
-python main.py validate-fk --domain finance --profile full
-python main.py validate-join-paths --domain finance --profile full
-python main.py validate-imperfection-rates --domain finance --profile full
-python main.py compute-sha256 --domain finance --profile full
-python main.py generate-data-dictionary --domain finance --profile full
-python main.py generate-schema-sql --domain finance --profile full
-python main.py validate-reproducibility --domain finance --profile full
-python main.py generate-manifest --domain finance --profile full
-```
-
-The final command seals the Finance release and must remain last.
-
-### Advanced Project Management Commands
-
-Use these commands only to investigate an individual PM stage or validation
-gate. They are not required when `build-dataset` succeeds.
-
-Inspect configuration, write dev stages, or validate generated data:
-
-```bash
-python main.py validate-config --domain project_management --profile dev
-python main.py show-config --domain project_management --profile dev
-python main.py generate-base --domain project_management --profile dev --write-preview
-python main.py apply-distributions --domain project_management --profile dev --write-preview
-python main.py apply-imperfections --domain project_management --profile dev --write-preview
-python main.py validate-relations --domain project_management --profile dev
-python main.py validate-row-caps --domain project_management --profile dev --generated
-python main.py validate-fk --domain project_management --profile dev --generated
-python main.py validate-join-paths --domain project_management --profile dev --generated
-python main.py validate-imperfection-rates --domain project_management --profile dev --generated
-```
-
-Run or troubleshoot individual full-release stages before the manifest exists:
-
-```bash
-python main.py validate-config --domain project_management --profile full
-python main.py show-config --domain project_management --profile full
-python main.py validate-relations --domain project_management --profile full
-python main.py validate-row-caps --domain project_management --profile full
-python main.py validate-row-caps --domain project_management --profile full --generated
-python main.py export-csvs --domain project_management --profile full
-python main.py validate-row-caps --domain project_management --profile full --exported
-python main.py validate-fk --domain project_management --profile full
-python main.py validate-join-paths --domain project_management --profile full
-python main.py validate-imperfection-rates --domain project_management --profile full
-python main.py compute-sha256 --domain project_management --profile full
-python main.py generate-data-dictionary --domain project_management --profile full
-python main.py generate-schema-sql --domain project_management --profile full
-python main.py validate-reproducibility --domain project_management --profile full
-python main.py generate-manifest --domain project_management --profile full
-```
-
-The final command seals the Project Management release and must remain last.
-
-### Advanced Logistics Commands
-
-Use these commands only to investigate an individual Logistics stage or
-validation gate. They are not required when `build-dataset` succeeds.
-
-Inspect configuration, write dev stages, or validate generated data:
-
-```bash
-python main.py validate-config --domain logistics --profile dev
-python main.py show-config --domain logistics --profile dev
-python main.py generate-base --domain logistics --profile dev --write-preview
-python main.py apply-distributions --domain logistics --profile dev --write-preview
-python main.py apply-imperfections --domain logistics --profile dev --write-preview
-python main.py validate-relations --domain logistics --profile dev
-python main.py validate-row-caps --domain logistics --profile dev --generated
-python main.py validate-fk --domain logistics --profile dev --generated
-python main.py validate-join-paths --domain logistics --profile dev --generated
-python main.py validate-imperfection-rates --domain logistics --profile dev --generated
-```
-
-Run or troubleshoot individual full-release stages before the manifest exists:
-
-```bash
-python main.py validate-config --domain logistics --profile full
-python main.py show-config --domain logistics --profile full
-python main.py validate-relations --domain logistics --profile full
-python main.py validate-row-caps --domain logistics --profile full
-python main.py validate-row-caps --domain logistics --profile full --generated
-python main.py export-csvs --domain logistics --profile full
-python main.py validate-row-caps --domain logistics --profile full --exported
-python main.py validate-fk --domain logistics --profile full
-python main.py validate-join-paths --domain logistics --profile full
-python main.py validate-imperfection-rates --domain logistics --profile full
-python main.py compute-sha256 --domain logistics --profile full
-python main.py generate-data-dictionary --domain logistics --profile full
-python main.py generate-schema-sql --domain logistics --profile full
-python main.py validate-reproducibility --domain logistics --profile full
-python main.py generate-manifest --domain logistics --profile full
-```
-
-The final command seals the Logistics release and must remain last. The detailed
-column-level behavior is recorded in
-`Logistics_Distributions_and_Imperfections_Matrix.md`.
+Replace `crm` with `sales`, `finance`, `project_management`, or `logistics`.
+The `dev` profile writes staged output under `tmp/generated/<domain>/dev/`.
+The `full` profile writes a versioned release under `release/<domain>/`, runs
+the persisted-data and reproducibility checks, and writes `manifest.json`
+last to seal the release.
 
 ### Q&A Pair Workflow
 
-The root CLI also runs the CRM Q&A authoring pipeline. Each Q&A command consumes
-the selected profile's generated dataset; it does not regenerate the golden
-dataset itself.
+The root CLI runs the Q&A authoring pipeline for CRM and Sales. Each Q&A command
+consumes the selected profile's generated dataset; it does not regenerate the
+golden dataset itself.
 
 #### Development Q&A Profile
 
@@ -503,214 +135,98 @@ python main.py build-dataset --domain crm --profile dev
 python main.py qa-build --domain crm --profile dev
 ```
 
-The 160 final dev pairs, companion CSV, and verification logs are written
-under:
+Replace `crm` with `sales` to run the Sales Q&A workflow. The `dev` profile
+writes the final pairs, companion CSV, and verification logs under:
 
 ```text
-tmp/generated/crm/dev/qa_pairs/
+tmp/generated/<domain>/dev/qa_pairs/
 ```
 
 #### Full Q&A Profile
 
-The full Q&A pipeline reads the frozen CRM dataset from
-`release/crm/dataset-v1.0.0`. After the dataset release is available, run:
+The `full` profile reads the selected domain's frozen dataset release. After
+that release is available, run:
 
 ```bash
 python main.py qa-build --domain crm --profile full
 ```
 
-The final full pair package is written to the independently versioned Q&A
-release directory configured in `qa_pairs/generator/config.json`:
+Replace `crm` with `sales` for the Sales Q&A workflow. The final pair package is
+written to the independently versioned Q&A release directory configured in
+`qa_pairs/generator/<domain>/config.json`:
 
 ```text
-release/crm/qa-pairs-v1.0.0/
+release/<domain>/qa-pairs-v<qa_version>/
 ```
 
 `qa-build` stages the selected generated dataset, validates it, and generates
 the complete SQL-verified pair set. It does not create review fixtures or
 rephrase variants.
 
-#### Advanced Q&A Commands
-
-Use the individual commands only when troubleshooting a specific production
-stage:
-
-```bash
-python main.py qa-stage-dataset --domain crm --profile dev
-python main.py qa-validate-dataset --domain crm --profile dev
-python main.py qa-generate-pairs --domain crm --profile dev
-```
-
-The following optional commands produce testing/review artifacts and are not
-part of `qa-build`:
-
-```bash
-python main.py qa-author-fixtures --domain crm --profile dev
-python main.py qa-generate-rephrases --domain crm --profile dev
-```
-
-Replace `dev` with `full` when troubleshooting the full profile. The original
-scripts under `qa_pairs/generator/` remain available for backward compatibility,
-but `main.py` is the preferred project entry point.
-
 ### Judge and Scorecard Workflow
 
-Scoring runs through `main.py` as well. There is no separate scorecard command:
-a scoring run writes the scorecard artifacts itself, because §11.3 requires
-exact-match accuracy and judge scores to be reported side by side from the same
-run.
-
-To build the dataset, build its Q&A pairs, and run the judge sequentially with
-one command, pass only the shared domain and profile:
-
-```bash
-python main.py run-pipeline --domain crm --profile dev
-```
-
-This is equivalent to running `build-dataset`, `qa-build`, and `judge` in that
-order. The wrapper supplies `--allow-uncalibrated --limit 3` to `judge` only.
-The three individual commands and their existing options remain unchanged.
-
-`judge` takes the same two arguments as `build-dataset` and `qa-build` —
-`--domain` and `--profile`. Everything those two already determine is resolved
-from config rather than retyped as a path: which Q&A package holds the pairs,
-the `--dataset-version` tag for the scorecard, and the table directory for
-`--pulse sql`. Any of them can still be overridden with its own flag.
-
-```bash
-python main.py judge --domain crm --profile full
-python main.py judge --help          # the judge's full flag surface
-```
-
-The judge input CSV is joined on demand. The §9.3 contract file carries no
-identifiers and the companion carries no answers, so the judge needs them joined
-on `natural_language_question`; `judge` does that itself if the joined file is
-absent. Run it deliberately — to rebuild the file after the pairs change — with:
-
-```bash
-python main.py judge-build-input --domain crm --profile full
-```
-
-An offline run, executing each pair's `reference_sql` in DuckDB instead of
-calling the platform. Use this for CI and for validating the pipeline:
-
-```bash
-python main.py judge --domain crm --profile full \
-  --judge heuristic \
-  --pulse sql \
-  --limit 3 \
-  --allow-uncalibrated
-```
-
-A real run against the platform, scored by the LLM judge. Requires the
-`PULSE_*` and provider credentials in `judge/.env` — copy `judge/.env.example`
-and fill it in:
-
-```bash
-python main.py judge --domain crm --profile full \
-  --judge llm --pulse live \
-  --allow-uncalibrated
-```
-
-Each run writes two directories under `release/<domain>/`, sharing one
-`run_id` so a scorecard is always traceable to the evidence behind it:
-
-```text
-release/crm/
-├── dataset-v1.0.0/            sealed, one version
-├── qa-pairs-v0.3.0/           sealed, one version
-├── scorecards/<run_id>/       the §11 deliverables
-│   ├── scorecard.pdf          stakeholder summary (§11.3)
-│   ├── scorecard.md           GitHub-renderable summary
-│   ├── scorecard_summary.csv  §11.1 per domain + per tier
-│   └── question_results.csv   §11.2 one row per question
-└── eval-runs/<run_id>/        provenance for that scorecard
-    ├── results.json           question-level drill-down
-    ├── run_manifest.json      git commit, input hash, argv
-    ├── run_log.jsonl          timestamped event stream
-    ├── prompts_log.jsonl      full judge prompt/response log
-    └── pulse_raw/             untouched platform payloads (live runs)
-```
-
-The two roots are configured as `report_output_root` in `config/scorecard/` and
-`run_output_root` in `config/judge/`, so either can move without a code change.
-They are split because the scorecard is the deliverable §13.1 wants versioned in
-`release/`, while `pulse_raw/` is ~72KB per question of raw org data that should
-not be tracked.
-
-Unlike the dataset and Q&A packages, both are append-only rather than a sealed
-single version — each scoring pass adds a directory and never rewrites an
-earlier one.
-
-`--allow-uncalibrated` is required until calibration passes. Every run without
-it is refused, and an uncalibrated run is always labelled `PREVIEW`: it cannot
-establish a baseline or certify a release (§10.2, §11.3).
-
-Before a long run on a new machine, preflight both credentials — the judge
-provider and the platform — rather than discovering a missing one 18 minutes in:
+Before a live judge run, copy `judge/.env.example` to `judge/.env`, add the
+judge-provider and Pulse credentials, and verify both connections:
 
 ```bash
 python main.py check-auth --domain crm
 ```
 
-It mints a real judge token (an expired AppleConnect session looks identical to a
-working one until you ask it for one) and reports how much life the Pulse token
-has left against the estimated run length. Exit code 2 if either side is unusable.
+After `qa-build`, the judge input can be built explicitly. This step is useful
+for inspection but optional because `judge` builds the input on demand:
 
-On a corporate network this is also the fastest TLS/proxy check: both paths are
-exercised. If it fails with `CERTIFICATE_VERIFY_FAILED` or an instant `403`, see
-**§3a Corporate network: TLS and proxies** in `docs/judge_runbook.md` — TLS is
-configured with `PULSE_CA_BUNDLE` / `FLOODGATE_CA_BUNDLE`, while proxies are
-inherited from the standard environment variables and are deliberately not
-configured in this project.
+```bash
+python main.py judge-build-input --domain crm --profile dev
+```
 
-The Pulse token lasts one hour and has no refresh by default, so a run longer
-than its remaining life is refused up front. Setting `PULSE_REFRESH_*` in
-`judge/.env` lets the client re-mint its own token during a run and removes that
-ceiling — see `judge/.env.example`, and note the endpoint is not yet confirmed.
+Run an offline development check with the heuristic test double and local SQL,
+or run a three-question live LLM preview:
+
+```bash
+python main.py judge --domain crm --profile dev --judge heuristic --pulse sql
+python main.py judge --domain crm --profile dev --judge llm --pulse live \
+  --limit 3 --allow-uncalibrated
+```
+
+The heuristic judge is for development only. An uncalibrated LLM run is also a
+preview and must not be used for an official scorecard. Once independently
+reviewed anchors are available, calibrate the configured judge before a release
+run:
 
 ```bash
 python main.py calibrate --domain crm
-```
-
-Calibration scores the human-agreed anchors in `judge/anchors/<domain>.json`
-and writes the `judge/.calibration` marker when agreement passes. It currently
-fails by design — the CRM anchors are quarantined as `crm.provisional.json`
-pending the §10.2 Platform Owner session, so no run is release-eligible yet.
-
-```bash
 python main.py rubric
 ```
 
-Renders the §14.1 rubric PDF deliverable from the same Jinja templates the
-judge runs against, so the document cannot drift from the scored prompt.
+To combine completed per-domain judge runs into a preview scorecard, use:
 
-The judge model comes from `config/judge/<domain>.json`, which outranks
-`FLOODGATE_MODEL` / `OPENAI_MODEL` / `LLM_MODEL` in the environment, which in
-turn outranks `config/judge/default.json`. Pinning it per domain is what keeps a
-run's provenance reproducible from committed config rather than from whoever's
-machine it ran on. Only credentials belong in `judge/.env`.
+```bash
+python main.py score --domains crm
+```
+
+Use `python main.py judge --help` and `python main.py score --help` for the full
+flag surfaces. See the [Judge Runbook](docs/judge_runbook.md) for release
+requirements and provider setup.
+
+For authentication, calibration, offline judging, output artifacts, and
+scorecard operations, see the [Judge Runbook](docs/judge_runbook.md),
+[judge documentation](judge/README.md), and
+[scorecard documentation](scorecard/README.md).
+
+### Individual Stages and Troubleshooting
+
+For individual generation stages, validation gates, full-release
+troubleshooting, advanced Q&A commands, and detailed judge operations, see the
+[Development Guide](DEVELOPMENT.md).
 
 ## Tests
 
 ```bash
-python -m pytest                      # everything
-python -m pytest judge/tests tests/scorecard   # judge + scorecard only (199)
+python -m pytest
 ```
 
-Suites live next to what they cover: `judge/tests/` and `qa_pairs/tests/` inside
-their packages, generator and schema suites under `tests/`.
-
-Six failures are **pre-existing and unrelated to scoring**, so a clean checkout
-does not start green. Know them before assuming a change broke something:
-
-| Failing | Cause |
-|---|---|
-| `tests/generators/crm/test_config_compatibility_baseline.py` (5) | `CRM_Config_Simplification_Pre_Migration_Baseline.json` is not in the repo — the test reads it from the root and gets `FileNotFoundError` |
-| `qa_pairs/tests/test_sqlfluff.py::test_authoritative_ddl_is_sqlfluff_clean` | sqlfluff has no configured dialect; needs `--dialect` or a `.sqlfluff` config |
-
-Both belong to the generator and Q&A side. `judge/tests` and `tests/scorecard`
-are green.
+See [tests/README.md](tests/README.md) for the suite layout and focused test
+commands.
 
 ## First Build Track
 
