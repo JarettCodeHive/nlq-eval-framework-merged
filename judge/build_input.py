@@ -42,6 +42,7 @@ CONTRACT_FIELDS: tuple[str, ...] = (
 COMPANION_FIELDS: tuple[str, ...] = ("question_id", "tier", "family", "scoring_mode")
 
 JOIN_KEY = "natural_language_question"
+GROUP_KEY = "rephrase_group_id"
 
 
 def _read(path: Path) -> list[dict[str, str]]:
@@ -72,6 +73,7 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
     _require_unique(companion, companion_path)
 
     by_question = {row[JOIN_KEY]: row for row in contract}
+    comp_by_question = {row[JOIN_KEY]: row for row in companion}
     missing = [
         row["question_id"] for row in companion if row[JOIN_KEY] not in by_question
     ]
@@ -80,10 +82,50 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
             f"{len(missing)} companion row(s) have no contract match, "
             f"first: {missing[0]}"
         )
-    if len(contract) != len(companion):
-        raise SystemExit(
-            f"row count mismatch: {len(contract)} contract vs {len(companion)} companion"
-        )
+
+    # Two release shapes. The original contract carried the seven §9.3 fields
+    # and nothing else, so the companion was the only source of identifiers and
+    # the two files were 1:1. Since the §9.5 rephrase merge the contract also
+    # carries question_id/tier and holds the whole release — the 160 release
+    # pairs plus their rephrase variants — while the companion stays at the 160
+    # (asserted by qa_pairs' test_companion_aligns_with_contract). A variant is
+    # therefore contract-only, and inherits family and scoring_mode from its
+    # group's base: it asks the same underlying question against the same
+    # expected answer, so it must be scored the same way.
+    if "question_id" not in contract[0]:
+        if len(contract) != len(companion):
+            raise SystemExit(
+                f"row count mismatch: {len(contract)} contract vs "
+                f"{len(companion)} companion"
+            )
+        joined = [(comp, by_question[comp[JOIN_KEY]]) for comp in companion]
+    else:
+        base_by_group = {
+            row[GROUP_KEY]: comp_by_question[row[JOIN_KEY]]
+            for row in contract
+            if row.get(GROUP_KEY) and row[JOIN_KEY] in comp_by_question
+        }
+        joined = []
+        for pair in contract:
+            comp = comp_by_question.get(pair[JOIN_KEY])
+            if comp is None:
+                group = (pair.get(GROUP_KEY) or "").strip()
+                base = base_by_group.get(group)
+                if base is None:
+                    raise SystemExit(
+                        f"{pair.get('question_id') or pair[JOIN_KEY]!r} is not in "
+                        f"the companion and its rephrase group {group!r} has no "
+                        f"base there, so its scoring mode is unknown"
+                    )
+                comp = {
+                    **base,
+                    "question_id": pair["question_id"],
+                    "tier": pair.get("tier") or base["tier"],
+                }
+            joined.append((comp, pair))
+        # Same climb-the-tiers order as the companion-driven path, with each
+        # variant sorting next to the base it inherits from.
+        joined.sort(key=lambda item: (item[0]["tier"], item[0]["question_id"]))
 
     fieldnames = [
         "question_id",
@@ -91,13 +133,14 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
         "tier",
         "family",
         "scoring_mode",
+        GROUP_KEY,
         *CONTRACT_FIELDS,
     ]
     rows = []
-    for comp in companion:
-        pair = by_question[comp[JOIN_KEY]]
+    for comp, pair in joined:
         row = {field: comp[field] for field in COMPANION_FIELDS}
         row["domain"] = domain
+        row[GROUP_KEY] = (pair.get(GROUP_KEY) or comp.get(GROUP_KEY) or "").strip()
         row.update({field: pair[field] for field in CONTRACT_FIELDS})
         rows.append(row)
 

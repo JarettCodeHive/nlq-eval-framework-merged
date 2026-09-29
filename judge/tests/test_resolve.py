@@ -31,7 +31,7 @@ COMPANION_ROW = "CRM-T1-01-01,T1,count,exact,How many accounts?\n"
 def _repo(tmp_path: Path, *, qa_version: str = "0.3.0") -> Path:
     """A repo skeleton holding only the config the resolver reads."""
 
-    qa_config = tmp_path / "qa_pairs" / "generator"
+    qa_config = tmp_path / "qa_pairs" / "generator" / "crm"
     qa_config.mkdir(parents=True)
     (qa_config / "config.json").write_text(
         json.dumps(
