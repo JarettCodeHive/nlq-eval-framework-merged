@@ -161,8 +161,13 @@ Sales generation produces `leads`, `deals`, `products`, `quotations`, and
 `targets`. The `quotations` table is both the quote-line fact and the explicit
 Deal-to-Product bridge.
 
-Sales Q&A authoring is not implemented yet. The `qa-*` commands remain
-explicitly CRM-only.
+Sales Q&A authoring is implemented: `qa-build`, `qa-generate-pairs` and
+`qa-validate-dataset` all take `--domain sales` and produce 104 verified pairs
+under `release/sales/qa-pairs-v0.1.0/`. Three commands remain CRM-only, because
+their inputs only exist for CRM — `qa-author-fixtures`, `qa-generate-rephrases`
+(Sales has no rephrase plan yet) and `judge-build-input`. Sales is short of the
+§9.1 quota of 160 and has no taxonomy docs; see the domain's `config.json`
+`tier_quota`.
 
 ### Finance Dataset Build
 
@@ -504,19 +509,26 @@ short version is below.
 ### Getting the Pulse credentials
 
 There is no API-key page for this — every value is captured from a browser
-session against Claris Studio QA.
+session. Sign in to Claris Studio QA in Chrome, open a chat, open DevTools →
+Network. **Two requests carry everything.**
 
-1. Sign in to `https://studio-qa.platform.claris.com` in Chrome.
-2. Open DevTools → Network.
-3. **`PULSE_AUTH_TOKEN`** — from the `Authorization: Bearer …` header on any
-   request to `api-qa.platform.claris.com`. Strip `Bearer `, or leave it; the
-   client adds it if missing. This one expires in an hour.
-4. **`PULSE_ORG_ID`** — the integer in the request path,
-   `/api-proxy/org/<ORG_ID>/ai-svc/…` (QA is `4104`).
-5. **`PULSE_REFRESH_TOKEN`** — from the **request body** of Studio's
-   `POST /auth/token`. This is the credential worth having: it is long-lived, and
-   with it the client re-mints hour-long tokens by itself.
-6. Verify the chain before trusting it in a long run:
+**1. `GET https://api-qa.platform.claris.com/org/<ORG_ID>/chat?query=<base64>`**
+— the chat-history request the UI fires whenever a chat is open. (The `query`
+param is a base64 filter: `$limit` / `$skip` / `$filter` on `Meta.ChatID`.)
+
+- **`PULSE_AUTH_TOKEN`** — the `Authorization: Bearer …` request header. Strip
+  `Bearer `, or leave it; the client adds it if missing. Expires in ~1 hour.
+- **`PULSE_ORG_ID`** — the integer path segment, `/org/<ORG_ID>/chat` (QA: `4104`).
+
+**2. `POST https://api-qa.platform.claris.com/auth/token`** — read the **request
+body**, not a header, and not the response.
+
+- **`PULSE_REFRESH_TOKEN`** — the long-lived Cognito refresh token. This is the
+  credential worth having: with it the client re-mints hour-long tokens by itself,
+  which is what makes a 2-hour run possible.
+- **`PULSE_COGNITO_CLIENT_ID`** — the `clientID` field in the same body.
+
+Then verify the chain before trusting it in a long run:
 
 ```bash
 python judge/pulse_auth.py --probe
@@ -524,10 +536,10 @@ python judge/pulse_auth.py --probe
 
 The refresh is a two-step chain, because the token Pulse accepts is not the
 Cognito token: `Cognito REFRESH_TOKEN_AUTH` → `POST {PULSE_BASE_URL}/auth/token`
-→ the `claris.com` token that goes on the wire. `PULSE_COGNITO_CLIENT_ID` and
-`PULSE_COGNITO_REGION` are the other half of step one and are pre-filled in
-`.env.example`. If `--probe` reports no matching token, the platform token comes
-from a third endpoint — check the `mag.uri` cookie and repoint
+→ the `claris.com` token that goes on the wire. `PULSE_COGNITO_REGION`
+(`us-west-2`) and `PULSE_AUTH_EXCHANGE_PATH` (`/auth/token`) are defaults and
+rarely need changing. If `--probe` reports no matching token, the platform token
+comes from a third endpoint — check the `mag.uri` cookie and repoint
 `PULSE_AUTH_EXCHANGE_PATH`.
 
 > **Corporate network — three hosts must be reachable.** All three are separate
