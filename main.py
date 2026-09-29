@@ -672,6 +672,31 @@ def run_judge(args: argparse.Namespace) -> None:
         raise SystemExit(exit_code)
 
 
+def run_pipeline(args: argparse.Namespace) -> None:
+    """Build the dataset and Q&A pairs, then run a small judge pass.
+
+    This is the convenient end-to-end entry point.  The individual commands
+    remain available with their existing behavior; only this wrapper supplies
+    the judge-specific smoke-test flags.
+    """
+
+    pipeline_args = argparse.Namespace(domain=args.domain, profile=args.profile)
+
+    print("Pipeline step 1/3: build dataset")
+    run_build_dataset(pipeline_args)
+
+    print("Pipeline step 2/3: build Q&A pairs")
+    run_qa_build(pipeline_args)
+
+    print("Pipeline step 3/3: judge")
+    judge_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        command_argv=["--allow-uncalibrated", "--limit", "3"],
+    )
+    run_judge(judge_args)
+
+
 def run_score(args: argparse.Namespace) -> None:
     """Combine per-domain `judge` runs into one regression scorecard (§14.1).
 
@@ -751,6 +776,7 @@ COMMANDS: dict[str, CommandHandler] = {
     "dataset-delete": run_dataset_delete,
     "judge-build-input": run_judge_build_input,
     "judge": run_judge,
+    "run-pipeline": run_pipeline,
     "score": run_score,
     "calibrate": run_calibrate,
     "rubric": run_rubric,
