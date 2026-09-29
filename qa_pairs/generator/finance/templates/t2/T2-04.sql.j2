@@ -1,0 +1,4 @@
+SELECT ROUND(SUM(b.budget_amount), 2) AS total_budget_amount
+FROM budgets b
+INNER JOIN accounts a ON b.account_id = a.account_id
+WHERE a.account_type = {{ account_type | sqlstr }};

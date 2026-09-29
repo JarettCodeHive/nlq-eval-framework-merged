@@ -1,0 +1,3 @@
+SELECT ROUND(SUM(budget_amount), 2) AS total_budget_amount
+FROM budgets
+WHERE scenario = {{ scenario | sqlstr }};

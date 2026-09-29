@@ -1,0 +1,18 @@
+WITH activity AS (
+    SELECT le.account_id, t.transaction_date
+    FROM ledger_entries le
+    INNER JOIN transactions t ON le.transaction_id = t.transaction_id
+)
+SELECT
+    CASE WHEN EXISTS (
+        SELECT 1 FROM activity ac
+        WHERE ac.account_id = b.account_id
+          AND ac.transaction_date >= b.period_start
+          AND ac.transaction_date < b.period_end
+    ) THEN 'has_actuals' ELSE 'no_actuals' END AS entity,
+    COUNT(*) AS metric
+FROM budgets b
+INNER JOIN accounts a ON b.account_id = a.account_id
+WHERE a.account_type = {{ account_type | sqlstr }}
+GROUP BY entity
+ORDER BY entity;

@@ -1,0 +1,8 @@
+SELECT ROUND(SUM(ROUND(t.total_amount * f.rate, 4)), 2) AS total_usd_amount
+FROM transactions t
+INNER JOIN fx_rates f
+    ON t.source_currency = f.from_currency
+    AND t.target_currency = f.to_currency
+    AND t.transaction_date = f.rate_date
+    AND f.rate IS NOT NULL
+WHERE t.source_currency = {{ source_currency | sqlstr }};
