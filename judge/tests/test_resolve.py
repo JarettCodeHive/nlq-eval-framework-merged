@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from judge.cli import build_argparser
+from judge.config import load_judge_config as _load_judge_config
 from judge.resolve import (
     ResolutionError,
     apply_resolved_defaults,
@@ -98,7 +99,12 @@ def test_a_newer_package_than_the_config_knows_about_still_resolves(
 
 
 def test_an_undeclared_domain_falls_back_to_the_release_layout(tmp_path: Path) -> None:
-    """The Q&A config declares ONE domain's version; the rest share its layout."""
+    """A domain with no Q&A config of its own still resolves off the filesystem.
+
+    It used to resolve through CRM's config — the path was hardcoded — so Sales
+    inherited CRM's declared version and only landed correctly because the glob
+    below happened to override it.
+    """
 
     repo = _repo(tmp_path, qa_version="0.3.0")
     sales = repo / "release" / "sales" / "qa-pairs-v1.2.0"
@@ -242,3 +248,59 @@ def test_sql_pulse_refuses_to_guess_when_the_dataset_is_absent(tmp_path: Path) -
         apply_resolved_defaults(args, repo_root=repo)
 
     assert "build-dataset --domain crm --profile full" in str(excinfo.value)
+
+
+# --- release block: version pinning (config/judge/<domain>.json) -------------
+
+
+def _judge_config(tmp_path: Path, domain: str, release: dict) -> Path:
+    """A judge config dir holding default.json plus one domain override."""
+
+    d = tmp_path / "judge_cfg"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "default.json").write_text(
+        json.dumps({"model": "m", "release": release}), encoding="utf-8"
+    )
+    (d / f"{domain}.json").write_text("{}", encoding="utf-8")
+    return d
+
+
+def test_an_unpinned_version_follows_what_the_domain_declares(tmp_path, monkeypatch):
+    """Null means "newest / whatever the domain is on" — today's behaviour."""
+
+    repo = _repo(tmp_path, qa_version="0.7.0")
+    _qa_package(repo, "0.7.0")
+    assert qa_release_dir("crm", "full", repo_root=repo).name == "qa-pairs-v0.7.0"
+
+
+def test_a_pinned_qa_version_selects_that_build(tmp_path, monkeypatch):
+    """The point of the block: score an older package without touching qa_pairs."""
+
+    repo = _repo(tmp_path, qa_version="0.7.0")
+    _qa_package(repo, "0.7.0")
+    _qa_package(repo, "0.3.0")
+
+    cfg = _judge_config(tmp_path, "crm", {"qa_version": "0.3.0"})
+    monkeypatch.setattr(
+        "judge.resolve.load_judge_config",
+        lambda domain, config_dir=None: _load_judge_config(domain, cfg),
+    )
+    assert qa_release_dir("crm", "full", repo_root=repo).name == "qa-pairs-v0.3.0"
+
+
+def test_a_pin_at_a_missing_build_refuses_rather_than_falling_back(
+    tmp_path, monkeypatch
+):
+    """Scoring a different build than the one asked for is the failure this
+    whole block exists to prevent, so it must not degrade into the glob."""
+
+    repo = _repo(tmp_path, qa_version="0.7.0")
+    _qa_package(repo, "0.7.0")
+
+    cfg = _judge_config(tmp_path, "crm", {"qa_version": "9.9.9"})
+    monkeypatch.setattr(
+        "judge.resolve.load_judge_config",
+        lambda domain, config_dir=None: _load_judge_config(domain, cfg),
+    )
+    with pytest.raises(ResolutionError, match="9.9.9"):
+        qa_release_dir("crm", "full", repo_root=repo)

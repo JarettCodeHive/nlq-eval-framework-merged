@@ -32,7 +32,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from judge.calibration import JudgeFingerprint, check_calibrated
+from judge.calibration import JudgeFingerprint, check_calibrated, thresholds_for
 from judge.checks import CheckStatus, check_null_handling, check_rephrase_groups
 from judge.client import JudgeClient
 from judge.config import (
@@ -720,7 +720,18 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
     calibration = check_calibrated(args.domain, fingerprint)
     calibrated = calibration.calibrated
-    if args.judge == "llm" and not calibrated and not args.allow_uncalibrated:
+    # Whether the gate is enforced is a per-domain config decision
+    # (`calibration.require_calibration`), defaulting to true because §10.2 is
+    # explicit. `--allow-uncalibrated` remains the per-run smoke-test escape and
+    # still labels the run calibrated=false either way, so turning the gate off in
+    # config cannot quietly promote an uncalibrated run to a release.
+    gate_enforced = thresholds_for(args.domain).require_calibration
+    if (
+        args.judge == "llm"
+        and gate_enforced
+        and not calibrated
+        and not args.allow_uncalibrated
+    ):
         if calibration.stale:
             remedy = (
                 "Re-run calibration for this configuration: the marker cannot "

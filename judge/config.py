@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Literal, Union
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 MODULE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = MODULE_ROOT.parent
@@ -166,8 +166,73 @@ FloodgateSettings = Union[FloodgateOIDCSettings, FloodgateNarrativeSettings]
 LLMSettings = FloodgateSettings
 
 
+class ReleaseConfig(BaseModel):
+    """Which dataset and Q&A build a run of this domain scores.
+
+    Shaped like the generation and Q&A configs it sits beside: profile-keyed path
+    maps, `{domain}` / `{dataset_version}` / `{qa_version}` interpolation, and
+    pointer strings to the sibling configs rather than restated paths. Those two
+    pointers are READ-ONLY — the judge resolves versions out of them and never
+    writes to `config/generation/` or `qa_pairs/`.
+
+    `dataset_version` / `qa_version` are the point of the block. Left null they
+    resolve to the newest build on disk, which is what the judge always did
+    implicitly. Pinned to a string they select one build, so a domain carrying
+    several dataset versions can be re-scored against an older one — a regression
+    comparison — without regenerating anything or editing another module's config.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version: str | None = None
+    qa_version: str | None = None
+    qa_config_path: str = "qa_pairs/generator/{domain}/config.json"
+    dataset_release_config_path: str = "config/generation/{domain}/release.json"
+    qa_sources: dict[str, str] = Field(
+        default_factory=lambda: {
+            "dev": "tmp/generated/{domain}/dev/qa_pairs",
+            "full": "release/{domain}/qa-pairs-v{qa_version}",
+        }
+    )
+    dataset_sources: dict[str, str] = Field(
+        default_factory=lambda: {
+            "dev": "tmp/generated/{domain}/dev/imperfect",
+            "full": "release/{domain}/{dataset_version}",
+        }
+    )
+    input_csv_name: str = "{domain}_judge_input.csv"
+    pairs_csv_name: str = "{domain}_qa_pairs.csv"
+    companion_csv_name: str = "{domain}_qa_pairs_companion.csv"
+
+
+class CalibrationConfig(BaseModel):
+    """§10.2 acceptance thresholds and where the anchors and marker live.
+
+    These were module constants, which made the protocol unreviewable without
+    reading Python: the numbers the spec fixes (≥10 anchors, ±1 on ≥90%) were
+    indistinguishable from numbers someone happened to choose.
+
+    `require_calibration` defaults to true because §10.2 is explicit that
+    uncalibrated scores must not enter a scorecard. Turning it off is therefore a
+    deliberate, recorded config change per domain rather than a flag someone
+    remembers to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    anchors_path: str = "judge/anchors/{domain}.json"
+    marker_path: str = "judge/.calibration/{domain}.passed.json"
+    min_anchors: int = Field(default=10, ge=1)
+    agreement_pct: float = Field(default=90.0, gt=0, le=100)
+    # §10.2: "never disagrees on direction ... on any anchor". Separate from the
+    # ±1 threshold because it is a hard zero, not a percentage.
+    allow_directional_flips: bool = False
+    require_calibration: bool = True
+
+
 class JudgeConfig(BaseModel):
     model: str
+    domain: str = ""
     temperature: float = 0.0
     seed: int | None = 42
     max_tokens: int = 1024
@@ -180,6 +245,8 @@ class JudgeConfig(BaseModel):
     mode: str = "combined"  # combined | per_dimension
     json_mode: bool = True
     cache_enabled: bool = True
+    release: ReleaseConfig = Field(default_factory=ReleaseConfig)
+    calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
     # Where a scoring run writes its artifacts, mirroring how the dataset and
     # Q&A stages resolve their own release paths from config. `{domain}` is
     # interpolated; the path is relative to the repository root. Run outputs are
@@ -206,6 +273,19 @@ def _load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _without_notes(config: dict) -> dict:
+    """Drop `_`-prefixed documentation keys, at the top level and one nesting in."""
+
+    cleaned = {}
+    for key, value in config.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, dict):
+            value = {k: v for k, v in value.items() if not k.startswith("_")}
+        cleaned[key] = value
+    return cleaned
+
+
 def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfig:
     """Merge `default.json` with the `<domain>.json` override.
 
@@ -214,13 +294,8 @@ def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfi
     gateway/deployment):
 
       1. `model` set in `<domain>.json`  — an explicit per-domain choice wins
-      2. FLOODGATE_MODEL / OPENAI_MODEL / LLM_MODEL — the environment's model
+      2. FLOODGATE_MODEL / LLM_MODEL — the environment's model
       3. `model` in `default.json`       — the project-wide default
-
-    On Azure this value is display-only: the SDK routes on the DEPLOYMENT name
-    from `AZURE_OPENAI_DEPLOYMENT`, which is per-engineer and must never come
-    from shared JSON, or everyone with a differently-named deployment gets a
-    404 DeploymentNotFound.
 
     On Floodgate the model is an Anthropic id with no provider prefix, e.g.
     `anthropic.claude-sonnet-5`. `FloodgateJudge` rejects anything that isn't,
@@ -230,7 +305,22 @@ def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfi
     root = config_dir or CONFIGS_DIR
     base = _load_json(root / f"{DEFAULT_DOMAIN_CONFIG}.json")
     override = _load_json(root / f"{domain}.json")
+    # Shallow-merging would make a domain that overrides one calibration field
+    # silently lose the rest of the block, which is the sort of thing that only
+    # surfaces as a weird threshold months later. Nested sections merge per key.
     merged = {**base, **override}
+    for section in ("release", "calibration"):
+        base_section = base.get(section)
+        override_section = override.get(section)
+        if isinstance(base_section, dict) and isinstance(override_section, dict):
+            merged[section] = {**base_section, **override_section}
+    merged.setdefault("domain", domain)
+    # `_note` keys document these files, exactly as they do in
+    # config/generation/ and qa_pairs/generator/. They are stripped rather than
+    # allowed through, so the models can keep extra="forbid" and still catch a
+    # real typo — `min_anchor` instead of `min_anchors` must fail loudly, not be
+    # silently ignored as if it were a comment.
+    merged = _without_notes(merged)
 
     env_model = (
         os.getenv("FLOODGATE_MODEL")

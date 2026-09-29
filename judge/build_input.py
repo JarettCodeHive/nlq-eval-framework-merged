@@ -13,7 +13,7 @@ silently mis-tier it in the scorecard.
 Deterministic: same release in, byte-identical CSV out. Rows are emitted in
 companion order (sorted by question_id), so a run log climbs tiers in order.
 
-    python judge/build_input.py --qa-release release/crm/qa-pairs-v0.3.0
+    python judge/build_input.py --qa-release release/crm/qa-pairs-v<version>
 
 Supersedes the per-tier concatenation used before the Q&A pipeline emitted a
 single package.
@@ -162,8 +162,9 @@ def main() -> None:
     parser.add_argument(
         "--qa-release",
         type=Path,
-        default=Path("release/crm/qa-pairs-v0.3.0"),
-        help="Q&A release package directory",
+        default=None,
+        help="Q&A release package directory. Omit it and the package is resolved "
+        "from --domain via config/judge/<domain>.json, the same way a run does.",
     )
     parser.add_argument("--domain", default="crm")
     parser.add_argument(
@@ -173,8 +174,13 @@ def main() -> None:
         help="defaults to <qa-release>/<domain>_judge_input.csv",
     )
     args = parser.parse_args()
-    output = args.output or args.qa_release / f"{args.domain}_judge_input.csv"
-    build(args.qa_release, args.domain, output)
+    qa_release = args.qa_release
+    if qa_release is None:
+        from judge.resolve import qa_release_dir
+
+        qa_release = qa_release_dir(args.domain, "full")
+    output = args.output or qa_release / f"{args.domain}_judge_input.csv"
+    build(qa_release, args.domain, output)
 
 
 if __name__ == "__main__":

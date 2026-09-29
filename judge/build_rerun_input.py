@@ -137,7 +137,9 @@ def main() -> None:
     if not (run_dir / "results.json").is_file():
         raise SystemExit(f"no results.json under {run_dir}")
 
-    qa_dir = REPO_ROOT / "release" / args.domain / "qa-pairs-v0.3.0"
+    from judge.resolve import qa_release_dir
+
+    qa_dir = qa_release_dir(args.domain, "full")
     input_csv = args.input_csv or qa_dir / f"{args.domain}_judge_input.csv"
     output = args.output or qa_dir / f"{args.domain}_rerun_{args.run}.csv"
     build(run_dir, input_csv, output, include_ambiguous=args.include_ambiguous)

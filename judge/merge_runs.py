@@ -120,9 +120,14 @@ def merge(domain: str, base_id: str, new_id: str) -> Path:
     base_rows = {r["question_id"]: r for r in base["rows"]}
     new_rows = {r["question_id"]: r for r in new["rows"]}
 
-    qa = (
-        REPO_ROOT / "release" / domain / "qa-pairs-v0.3.0" / f"{domain}_judge_input.csv"
-    )
+    # Resolved, not hardcoded: this used to name qa-pairs-v0.3.0 literally, so a
+    # merge silently found no judge_reference the moment the domain moved on.
+    from judge.resolve import judge_input_csv
+
+    try:
+        qa = judge_input_csv(domain, "full", build_if_missing=False)
+    except Exception:
+        qa = REPO_ROOT / "release" / domain / "__missing__"
     refs: dict[str, str] = {}
     if qa.is_file():
         with qa.open(newline="", encoding="utf-8") as fh:
