@@ -1,0 +1,6 @@
+SELECT o.status AS entity, COUNT(*) AS metric
+FROM orders o
+INNER JOIN warehouses w ON o.warehouse_id = w.warehouse_id
+WHERE w.region = {{ region | sqlstr }}
+GROUP BY o.status
+ORDER BY metric DESC, entity ASC;

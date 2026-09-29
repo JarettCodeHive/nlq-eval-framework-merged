@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS shipment_count
+FROM shipments s
+INNER JOIN orders o ON s.order_id = o.order_id
+WHERE o.status = {{ order_status | sqlstr }};

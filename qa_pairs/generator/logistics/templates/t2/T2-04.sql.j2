@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS inventory_count
+FROM inventory i
+INNER JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+WHERE w.region = {{ region | sqlstr }};

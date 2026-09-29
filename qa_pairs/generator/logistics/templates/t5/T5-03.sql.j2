@@ -1,0 +1,16 @@
+WITH by_region AS (
+    SELECT w.region AS entity, ROUND(SUM(o.total_amount), 2) AS total_value
+    FROM orders o
+    INNER JOIN warehouses w ON o.warehouse_id = w.warehouse_id
+    GROUP BY w.region
+),
+tot AS (
+    SELECT SUM(total_value) AS grand_total FROM by_region
+)
+SELECT
+    by_region.entity AS entity,
+    by_region.total_value AS total_value,
+    ROUND(100.0 * by_region.total_value / tot.grand_total, 2) AS pct_share
+FROM by_region, tot
+ORDER BY total_value DESC, entity ASC
+LIMIT 1;
