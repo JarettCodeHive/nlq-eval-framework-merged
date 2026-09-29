@@ -1,16 +1,29 @@
--- Project Management DDL - Draft v0.1
+-- Project Management DDL - Contract v1.0
 --
 -- Conformance: ANSI SQL, intended to lint clean under
 -- `sqlfluff lint --dialect ansi`.
 -- Runs unmodified in DuckDB 0.10+.
 --
 -- Source ERD: schemas/project_management/project_management_er.dbml
+-- Semantic contract:
+-- schemas/project_management/project_management_semantics.md
 --
 -- Ambiguity definitions for Q&A authoring:
 -- overdue = tasks.due_date < fixed TODAY AND tasks.completed_date IS NULL.
 -- in_progress = tasks.status = 'InProgress'.
 -- this_quarter = time_entries.entry_date in the current calendar quarter of
 -- the fixed reference date.
+-- active_assignment = assigned_at <= fixed TODAY AND
+-- (released_at IS NULL OR released_at >= fixed TODAY).
+-- Milestone completion uses actual_date IS NOT NULL, rounds once to two
+-- decimal places with ROUND_HALF_UP, and defensively uses a NULL denominator
+-- when a project has no milestones. Generation must give every project at
+-- least one milestone.
+--
+-- Decimal semantics: use exact fixed-point values and ROUND_HALF_UP. Never
+-- convert through binary float. Calculated outputs multiply/divide first and
+-- round once at their contracted final scale.
+-- Currency policy: Project Management Contract v1.0 is USD-only.
 --
 -- NOT-NULL rules: never nullify a PK or INNER-JOIN FK.
 -- INNER-JOIN FKs: tasks.project_id, task_resources.task_id,
@@ -33,7 +46,8 @@ CREATE TABLE projects (
     start_date DATE NOT NULL,
     end_date DATE,
     budget_amount DECIMAL(15, 2),
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD'
+    CHECK (currency_code = 'USD'),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_projects PRIMARY KEY (project_id)
 );
@@ -45,7 +59,8 @@ CREATE TABLE resources (
     department VARCHAR(64),
     location VARCHAR(128), -- noqa: RF04
     hourly_rate DECIMAL(10, 2),
-    currency_code CHAR(3) NOT NULL DEFAULT 'USD',
+    currency_code CHAR(3) NOT NULL DEFAULT 'USD'
+    CHECK (currency_code = 'USD'),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_resources PRIMARY KEY (resource_id)

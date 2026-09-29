@@ -12,6 +12,8 @@ from typing import Any
 
 from generators.core.base import DeterministicGenerator
 from generators.core.progress import ProgressReporter
+from generators.core.temporal import random_date_inclusive
+from generators.core.temporal import random_datetime_inclusive
 from generators.crm.config import load_crm_config
 from generators.crm.config import settings_for_profile
 from generators.crm.validators.config import validate_crm_config
@@ -1004,17 +1006,11 @@ def _ensure_required_coverage(values: list[Any], required_values: list[Any]) -> 
 
 
 def _random_date(rng: Any, start: date, end: date) -> date:
-    if end < start:
-        raise ValueError("Random date range end cannot precede start")
-    day_count = (end - start).days
-    return start + timedelta(days=int(rng.integers(0, day_count + 1)))
+    return random_date_inclusive(rng, start, end)
 
 
 def _random_datetime(rng: Any, start: datetime, end: datetime) -> datetime:
-    if end < start:
-        raise ValueError("Random timestamp range end cannot precede start")
-    second_count = int((end - start).total_seconds())
-    return start + timedelta(seconds=int(rng.integers(0, second_count + 1)))
+    return random_datetime_inclusive(rng, start, end)
 
 
 def _datetime_from_fraction(

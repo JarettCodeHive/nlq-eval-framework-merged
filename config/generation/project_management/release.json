@@ -1,0 +1,51 @@
+{
+  "domain": "project_management",
+  "dataset_version": "dataset-v1.0.0",
+  "schema_source": "schemas/project_management/project_management_ddl.sql",
+  "semantic_contract": "schemas/project_management/project_management_semantics.md",
+  "fixed_values": {
+    "seed_source": "config/generation/base.json:seed",
+    "reference_today_source": "config/generation/base.json:reference_today",
+    "manifest_generated_at": "2026-09-24T00:00:00"
+  },
+  "output_paths": {
+    "dev": "tmp/generated/project_management/dev",
+    "full": "release/project_management/dataset-v1.0.0"
+  },
+  "release_rules": {
+    "release_profile": "full",
+    "refuse_release_export_for_profiles": [
+      "dev"
+    ],
+    "immutable_after_manifest": true,
+    "correction_policy": "Create a new dataset version rather than editing an immutable release."
+  },
+  "table_order": [
+    "projects",
+    "resources",
+    "tasks",
+    "task_resources",
+    "milestones",
+    "time_entries"
+  ],
+  "precision_metadata": {
+    "budget_precision": 15,
+    "resource_rate_precision": 10,
+    "task_estimate_precision": 8,
+    "allocation_precision": 5,
+    "logged_hours_precision": 6,
+    "metric_precision": 5,
+    "scale": 2,
+    "rounding_mode": "ROUND_HALF_UP",
+    "calculation_order": "calculate_first_round_once"
+  },
+  "generation_notes": {
+    "row_target_policy": "Explicit per-table targets are base counts before imperfection injection.",
+    "release_profile": "full",
+    "release_directory": "release/project_management/dataset-v1.0.0",
+    "row_cap_source": "config/generation/base.json:max_rows_per_table",
+    "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version for reproducible manifests.",
+    "domain_boundary": "Project Management covers projects, staffing, tasks, milestones, and time-entry execution.",
+    "currency_policy": "Project Management Contract v1.0 is USD-only; FX evaluation belongs to Finance."
+  }
+}

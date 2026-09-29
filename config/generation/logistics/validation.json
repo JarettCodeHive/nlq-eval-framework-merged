@@ -1,0 +1,207 @@
+{
+  "physical_relationships": [
+    {
+      "child_table": "shipments",
+      "child_field": "order_id",
+      "parent_table": "orders",
+      "parent_field": "order_id",
+      "nullable": false
+    },
+    {
+      "child_table": "shipments",
+      "child_field": "carrier_id",
+      "parent_table": "carriers",
+      "parent_field": "carrier_id",
+      "nullable": false
+    },
+    {
+      "child_table": "inventory",
+      "child_field": "warehouse_id",
+      "parent_table": "warehouses",
+      "parent_field": "warehouse_id",
+      "nullable": false
+    }
+  ],
+  "analytical_relationships": [
+    {
+      "child_table": "orders",
+      "child_field": "warehouse_id",
+      "parent_table": "warehouses",
+      "parent_field": "warehouse_id",
+      "join_type": "left",
+      "physical_foreign_key": false,
+      "allows_null": true,
+      "allows_declared_orphan": true
+    }
+  ],
+  "orphan_exclusions": [
+    {
+      "table": "orders",
+      "field": "warehouse_id",
+      "reason": "Declared Logistics orphaned-orders imperfection.",
+      "namespace_base": 900000000,
+      "id_formula": "namespace_base + order_id",
+      "rate_pct": 1.0,
+      "validate_exact_count": true,
+      "unexpected_orphans_allowed": false
+    }
+  ],
+  "join_path_requirements": [
+    {
+      "id": "logistics_jp_001",
+      "name": "shipments_to_orders",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "shipments",
+        "orders"
+      ],
+      "join_condition": "shipments.order_id = orders.order_id",
+      "required_result": "non_empty",
+      "purpose": "Supports shipment analysis using order attributes."
+    },
+    {
+      "id": "logistics_jp_002",
+      "name": "shipments_to_carriers",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "shipments",
+        "carriers"
+      ],
+      "join_condition": "shipments.carrier_id = carriers.carrier_id",
+      "required_result": "non_empty",
+      "purpose": "Supports the required Shipment-to-Carrier path."
+    },
+    {
+      "id": "logistics_jp_003",
+      "name": "inventory_to_warehouses",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "inventory",
+        "warehouses"
+      ],
+      "join_condition": "inventory.warehouse_id = warehouses.warehouse_id",
+      "required_result": "non_empty",
+      "purpose": "Supports warehouse inventory and replenishment analysis."
+    },
+    {
+      "id": "logistics_jp_004",
+      "name": "orders_to_warehouses_left",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left_analytical",
+      "tables": [
+        "orders",
+        "warehouses"
+      ],
+      "join_condition": "orders.warehouse_id = warehouses.warehouse_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "warehouses.warehouse_id IS NULL",
+      "purpose": "Supports orders with NULL or declared-orphan warehouse assignments."
+    },
+    {
+      "id": "logistics_jp_005",
+      "name": "orders_to_warehouses_inner_subset",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner_analytical",
+      "tables": [
+        "orders",
+        "warehouses"
+      ],
+      "join_condition": "orders.warehouse_id = warehouses.warehouse_id",
+      "required_result": "non_empty",
+      "purpose": "Confirms valid warehouse assignments remain available."
+    },
+    {
+      "id": "logistics_jp_006",
+      "name": "orders_to_shipments_to_carriers",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "orders",
+        "shipments",
+        "carriers"
+      ],
+      "join_condition": "orders.order_id = shipments.order_id AND shipments.carrier_id = carriers.carrier_id",
+      "required_result": "non_empty",
+      "purpose": "Supports the required three-table Order-to-Shipment-to-Carrier path."
+    }
+  ],
+  "date_rules": [
+    "All normal relative dates use config/generation/base.json:reference_today and never the wall clock.",
+    "A shipment ship_date cannot precede its order_date.",
+    "A delivery_date requires ship_date and cannot precede it.",
+    "Shipment status determines whether ship_date and delivery_date are required or null.",
+    "Orders and shipments must preserve created_at chronology.",
+    "Boundary-date scenarios update dependent order and shipment dates together."
+  ],
+  "decimal_rules": [
+    "Stored decimal values use their configured precision and exactly two fractional digits.",
+    "All rounding uses ROUND_HALF_UP and calculations round once at the final output scale.",
+    "Order totals are positive and populated carrier rates and shipment costs are non-negative.",
+    "Warehouse utilization is between 0.00 and 100.00.",
+    "Binary floating-point arithmetic is prohibited for contract values."
+  ],
+  "currency_rules": [
+    "carriers.currency_code, orders.currency_code, and shipments.currency_code must equal USD.",
+    "Logistics has no FX conversion path."
+  ],
+  "imperfection_rules": [
+    "Warehouse NULL and declared-orphan positions are deterministic and disjoint.",
+    "Warehouse NULLs equal the shared null percentage of base orders.",
+    "Declared warehouse orphans equal 1.0 percent of base orders and use the configured namespace formula.",
+    "Near-duplicate shipments preserve business keys, receive new primary keys, and vary an approved field.",
+    "Near-duplicate counts use the base shipment count, not the final row count.",
+    "Order amount outliers remain positive fixed-scale USD values.",
+    "Boundary shipment sources are protected from duplicate selection."
+  ],
+  "consistency_rules": [
+    "Every physical foreign key must reference an existing parent row.",
+    "Only orders.warehouse_id may contain declared orphan values.",
+    "Unexpected orphan values are prohibited.",
+    "The clean stage contains only valid populated warehouse assignments.",
+    "At least one order remains without shipments.",
+    "Shipped and Delivered orders have shipment evidence; Returned orders retain shipment history.",
+    "At least one order uses multiple carriers and at least one carrier serves multiple orders.",
+    "Clean shipment business keys are unique before duplicate injection.",
+    "Inventory warehouse and SKU pairs are logically unique.",
+    "Inventory quantities and populated reorder points are non-negative.",
+    "Inventory created_at is not after last_updated_at.",
+    "All Logistics currency values are USD.",
+    "Only shipments may gain rows during imperfection injection."
+  ],
+  "release_validation_rules": [
+    "No final table may exceed config/generation/base.json:max_rows_per_table.",
+    "Full release output is immutable after manifest creation.",
+    "Every release CSV header must match schemas/logistics/logistics_csv_header_spec.md.",
+    "Reproducibility requires byte-identical CSV hashes from a clean regeneration."
+  ]
+}

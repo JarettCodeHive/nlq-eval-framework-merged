@@ -1,0 +1,215 @@
+{
+  "join_path_requirements": [
+    {
+      "id": "pm_jp_001",
+      "name": "tasks_to_projects",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "tasks",
+        "projects"
+      ],
+      "join_condition": "tasks.project_id = projects.project_id",
+      "required_result": "non_empty",
+      "purpose": "Supports task analysis by project attributes."
+    },
+    {
+      "id": "pm_jp_002",
+      "name": "projects_to_tasks",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "left",
+      "tables": [
+        "projects",
+        "tasks"
+      ],
+      "join_condition": "projects.project_id = tasks.project_id",
+      "required_result": "non_empty_with_unmatched_parent_rows",
+      "unmatched_condition": "tasks.task_id IS NULL",
+      "purpose": "Supports projects that do not yet have tasks."
+    },
+    {
+      "id": "pm_jp_003",
+      "name": "task_resources_to_tasks",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "task_resources",
+        "tasks"
+      ],
+      "join_condition": "task_resources.task_id = tasks.task_id",
+      "required_result": "non_empty",
+      "purpose": "Supports task staffing analysis."
+    },
+    {
+      "id": "pm_jp_004",
+      "name": "task_resources_to_resources",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "task_resources",
+        "resources"
+      ],
+      "join_condition": "task_resources.resource_id = resources.resource_id",
+      "required_result": "non_empty",
+      "purpose": "Supports resource assignment and allocation analysis."
+    },
+    {
+      "id": "pm_jp_005",
+      "name": "tasks_to_task_resources_to_resources",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "tasks",
+        "task_resources",
+        "resources"
+      ],
+      "join_condition": "tasks.task_id = task_resources.task_id AND task_resources.resource_id = resources.resource_id",
+      "required_result": "non_empty",
+      "purpose": "Supports the required Task-to-Resource path through the explicit bridge."
+    },
+    {
+      "id": "pm_jp_006",
+      "name": "milestones_to_projects",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "milestones",
+        "projects"
+      ],
+      "join_condition": "milestones.project_id = projects.project_id",
+      "required_result": "non_empty",
+      "purpose": "Supports project-level milestone completion percentage."
+    },
+    {
+      "id": "pm_jp_007",
+      "name": "time_entries_to_tasks",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "time_entries",
+        "tasks"
+      ],
+      "join_condition": "time_entries.task_id = tasks.task_id",
+      "required_result": "non_empty",
+      "purpose": "Supports logged-hours aggregation by task."
+    },
+    {
+      "id": "pm_jp_008",
+      "name": "time_entries_to_resources",
+      "tier_support": [
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "time_entries",
+        "resources"
+      ],
+      "join_condition": "time_entries.resource_id = resources.resource_id",
+      "required_result": "non_empty",
+      "purpose": "Supports resource utilization and billable-hours analysis."
+    },
+    {
+      "id": "pm_jp_009",
+      "name": "projects_to_tasks_to_time_entries",
+      "tier_support": [
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner",
+      "tables": [
+        "projects",
+        "tasks",
+        "time_entries"
+      ],
+      "join_condition": "projects.project_id = tasks.project_id AND tasks.task_id = time_entries.task_id",
+      "required_result": "non_empty",
+      "purpose": "Supports the required Project-to-Task-to-Time Entry aggregation path."
+    },
+    {
+      "id": "pm_jp_010",
+      "name": "time_entries_to_task_resources",
+      "tier_support": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "join_type": "inner_semantic_composite",
+      "tables": [
+        "time_entries",
+        "task_resources"
+      ],
+      "join_condition": "time_entries.task_id = task_resources.task_id AND time_entries.resource_id = task_resources.resource_id",
+      "required_result": "complete_membership",
+      "purpose": "Ensures logged work uses a declared task/resource assignment."
+    }
+  ],
+  "date_rules": [
+    "All relative dates use config/generation/base.json:reference_today and never the wall clock.",
+    "Overdue means due_date < reference_today AND completed_date IS NULL.",
+    "In progress means status = 'InProgress'.",
+    "This quarter uses an inclusive quarter start and exclusive next-quarter start.",
+    "Completed tasks require completed_date and non-completed tasks require it to be null.",
+    "Completed milestones require actual_date and incomplete milestones require it to be null.",
+    "Assignment release dates are inclusive and cannot precede assignment dates.",
+    "Time entries must fall within their valid assignment windows unless a coordinated boundary scenario adjusts the complete path."
+  ],
+  "decimal_rules": [
+    "Stored decimal values use their configured precision and exactly two fractional digits.",
+    "All rounding uses ROUND_HALF_UP and calculations round once at the final output scale.",
+    "Allocation percentages must be positive and sum exactly to 100.00 per task.",
+    "Milestone completion percentage is DECIMAL(5,2) and uses NULLIF for a defensive zero denominator.",
+    "Binary floating-point arithmetic is prohibited for contract values."
+  ],
+  "currency_rules": [
+    "projects.currency_code and resources.currency_code must equal USD.",
+    "Project Management has no FX conversion path."
+  ],
+  "consistency_rules": [
+    "Every physical foreign key must reference an existing parent row.",
+    "Every time-entry task/resource pair must exist in task_resources.",
+    "Every project must have at least one milestone.",
+    "Selected projects must remain taskless for the declared LEFT JOIN path.",
+    "Every task must have at least one resource assignment.",
+    "At least one task must have multiple resources and at least one resource must have multiple tasks.",
+    "Task/resource assignment pairs must be unique.",
+    "Project, task, assignment, milestone, and time-entry dates must preserve chronology.",
+    "Project and task windows must include deliberately overlapping ranges.",
+    "Only time_entries may gain rows during imperfection injection.",
+    "Controlled NULL and outlier targets must modify only approved eligible rows."
+  ]
+}

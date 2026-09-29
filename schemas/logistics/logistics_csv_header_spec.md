@@ -6,6 +6,7 @@ Source of truth:
 
 - ERD: `schemas/logistics/logistics_er.dbml`
 - DDL: `schemas/logistics/logistics_ddl.sql`
+- Semantic contract: `schemas/logistics/logistics_semantics.md`
 
 Purpose:
 
@@ -27,6 +28,14 @@ schema review before data generation or Q&A authoring proceeds.
 - Rate precision: `DECIMAL(10, 2)` for carrier base rates.
 - Percentage precision: `DECIMAL(5, 2)` for warehouse utilization.
 - Maximum rows per table: `250000`.
+- Fixed reference date: `2026-08-01`, sourced from the shared base config.
+- Currency: USD-only; Logistics has no FX conversion path.
+- Decimal rounding: exact fixed-point `ROUND_HALF_UP`, rounding once at the
+  final scale.
+- Controlled order warehouse NULLs and orphans are separate, deterministic,
+  disjoint sets at `2.5%` and `1.0%` of base orders, respectively.
+- Near-duplicate shipments are added at `1.0%` of base shipments and retain
+  their order, carrier, and tracking-number business key.
 
 ## Tables
 

@@ -16,6 +16,58 @@ def count_from_pct(total: int, pct: float, minimum: int = 1) -> int:
     return max(minimum, math.ceil(total * pct / 100))
 
 
+def select_disjoint_positions(
+    rng: Any,
+    total: int,
+    percentages: dict[str, float],
+    *,
+    eligible_positions: list[int] | tuple[int, ...] | None = None,
+    protected_positions: set[int] | None = None,
+) -> dict[str, tuple[int, ...]]:
+    """Select deterministic, non-overlapping position groups by percentage.
+
+    Percentages are evaluated against ``total`` using ``count_from_pct`` and
+    allocated in mapping insertion order. Eligible positions are normalized to
+    sorted unique integers before sampling, and protected positions are never
+    selected. The function raises when the requested groups exceed available
+    capacity instead of silently reducing a contract rate.
+    """
+
+    if total < 0:
+        raise ValueError("total cannot be negative")
+    protected = protected_positions or set()
+    candidates = (
+        list(range(total))
+        if eligible_positions is None
+        else sorted(set(int(position) for position in eligible_positions))
+    )
+    if any(position < 0 or position >= total for position in candidates):
+        raise ValueError("eligible position is outside the table range")
+    available = [position for position in candidates if position not in protected]
+    selected: dict[str, tuple[int, ...]] = {}
+
+    for label, pct in percentages.items():
+        if pct < 0:
+            raise ValueError(f"percentage for {label} cannot be negative")
+        count = count_from_pct(total, pct)
+        if count > len(available):
+            raise ValueError(
+                f"insufficient eligible positions for {label}: "
+                f"required={count}, available={len(available)}"
+            )
+        if count == 0:
+            selected[label] = ()
+            continue
+        positions = tuple(
+            sorted(int(value) for value in rng.choice(available, count, replace=False))
+        )
+        selected[label] = positions
+        chosen = set(positions)
+        available = [position for position in available if position not in chosen]
+
+    return selected
+
+
 def inject_nulls(
     table: Any,
     column_name: str,
