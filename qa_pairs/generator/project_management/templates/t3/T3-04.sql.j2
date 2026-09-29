@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS incomplete_milestone_count
+FROM milestones m
+INNER JOIN projects p ON m.project_id = p.project_id
+WHERE p.status = {{ project_status | sqlstr }} AND m.actual_date IS NULL;

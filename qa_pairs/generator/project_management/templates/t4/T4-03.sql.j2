@@ -1,0 +1,7 @@
+SELECT t.status AS entity, COUNT(*) AS metric
+FROM tasks t
+INNER JOIN task_resources tr ON t.task_id = tr.task_id
+INNER JOIN resources r ON tr.resource_id = r.resource_id
+WHERE r.role = {{ resource_role | sqlstr }}
+GROUP BY t.status
+ORDER BY metric DESC, entity ASC;

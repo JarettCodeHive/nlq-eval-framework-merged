@@ -1,0 +1,34 @@
+{
+  "domain": "project_management",
+  "id_prefix": "PM",
+  "reference_today": "2026-08-01",
+  "dataset": {
+    "profile_sources": {
+      "dev": "tmp/generated/project_management/dev/imperfect",
+      "full": "release/project_management/{dataset_version}"
+    },
+    "base_config_path": "config/generation/base.json",
+    "release_config_path": "config/generation/project_management/release.json",
+    "schema_ddl_path": "schemas/project_management/project_management_ddl.sql",
+    "schema_dbml_path": "schemas/project_management/project_management_er.dbml"
+  },
+  "qa_release": {
+    "version": "0.1.0",
+    "profile_outputs": {
+      "dev": "tmp/generated/{domain}/dev/qa_pairs",
+      "full": "release/{domain}/qa-pairs-v{qa_version}"
+    }
+  },
+  "tier_quota": {"T1": 18, "T2": 30, "T3": 18, "T4": 18, "T5": 10},
+  "tables": ["projects", "resources", "tasks", "task_resources", "milestones", "time_entries"],
+  "scoring": {
+    "numeric_tolerance": "0",
+    "judge_rubric_version": "project-management-judge-rubric-v0-draft",
+    "judge_prompt_version": "project-management-judge-prompt-v0-draft",
+    "scorer_status": "draft",
+    "_note": "scorer_status stays 'draft' until the Platform Owner confirms the judge input format and tolerance=0, mirroring the CRM/Sales/Finance open items; then it moves to 'approved', and to 'calibrated' after a judge calibration run."
+  },
+  "resolved_open_items": {
+    "_note": "Project Management reuses the CRM-established rulings (OI-1..OI-4) rather than re-litigating them: T1 stays a single-table tier, golden numeric answers are plain numbers with no currency symbol or thousands separator, date answers are exact match with no tolerance, and an empty CSV field ingests as SQL NULL."
+  }
+}

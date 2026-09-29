@@ -21,6 +21,15 @@ from qa_pairs.generator.crm.generate_crm import build as stage_crm_qa_dataset
 from qa_pairs.generator.crm.rephrase import generate_rephrases
 from qa_pairs.generator.crm.scale_pairs import generate_pairs as generate_crm_pairs
 from qa_pairs.generator.crm.validate_crm import validate as validate_crm_qa_dataset
+from qa_pairs.generator.project_management.generate_project_management import (
+    build as stage_project_management_qa_dataset,
+)
+from qa_pairs.generator.project_management.scale_pairs_project_management import (
+    generate_pairs as generate_project_management_pairs,
+)
+from qa_pairs.generator.project_management.validate_project_management import (
+    validate as validate_project_management_qa_dataset,
+)
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
 from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
 from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
@@ -428,14 +437,17 @@ def run_validate_reproducibility(args: argparse.Namespace) -> None:
 QA_STAGE: dict[str, CommandHandler] = {
     "crm": stage_crm_qa_dataset,
     "sales": stage_sales_qa_dataset,
+    "project_management": stage_project_management_qa_dataset,
 }
 QA_VALIDATE: dict[str, CommandHandler] = {
     "crm": validate_crm_qa_dataset,
     "sales": validate_sales_qa_dataset,
+    "project_management": validate_project_management_qa_dataset,
 }
 QA_GENERATE: dict[str, CommandHandler] = {
     "crm": generate_crm_pairs,
     "sales": generate_sales_pairs,
+    "project_management": generate_project_management_pairs,
 }
 
 
