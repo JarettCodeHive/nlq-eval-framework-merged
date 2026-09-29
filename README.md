@@ -560,16 +560,18 @@ a scoring run writes the scorecard artifacts itself, because §11.3 requires
 exact-match accuracy and judge scores to be reported side by side from the same
 run.
 
-To build the dataset, build its Q&A pairs, and run the judge sequentially with
-one command, pass only the shared domain and profile:
+To build the dataset and its Q&A pairs, refresh the platform dataset, and run
+the judge sequentially with one command, pass only the shared domain and
+profile:
 
 ```bash
 python main.py run-pipeline --domain crm --profile dev
 ```
 
-This is equivalent to running `build-dataset`, `qa-build`, and `judge` in that
-order. The wrapper supplies `--allow-uncalibrated --limit 3` to `judge` only.
-The three individual commands and their existing options remain unchanged.
+This runs `build-dataset`, `qa-build`, `dataset-delete`, `dataset-upload`, and
+`judge` in that order. The wrapper confirms `dataset-delete` as if `--yes` were
+passed, then supplies `--allow-uncalibrated --limit 3` to `judge` only. The
+individual commands and their existing options remain unchanged.
 
 `judge` takes the same two arguments as `build-dataset` and `qa-build` —
 `--domain` and `--profile`. Everything those two already determine is resolved

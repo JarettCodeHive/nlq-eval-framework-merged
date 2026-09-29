@@ -673,22 +673,40 @@ def run_judge(args: argparse.Namespace) -> None:
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
-    """Build the dataset and Q&A pairs, then run a small judge pass.
+    """Build locally, refresh the platform dataset, then run a small judge pass.
 
     This is the convenient end-to-end entry point.  The individual commands
-    remain available with their existing behavior; only this wrapper supplies
-    the judge-specific smoke-test flags.
+    remain available with their existing behavior; only this wrapper confirms
+    the delete and supplies the judge-specific smoke-test flags.
     """
 
     pipeline_args = argparse.Namespace(domain=args.domain, profile=args.profile)
 
-    print("Pipeline step 1/3: build dataset")
+    print("Pipeline step 1/5: build dataset")
     run_build_dataset(pipeline_args)
 
-    print("Pipeline step 2/3: build Q&A pairs")
+    print("Pipeline step 2/5: build Q&A pairs")
     run_qa_build(pipeline_args)
 
-    print("Pipeline step 3/3: judge")
+    print("Pipeline step 3/5: delete platform dataset")
+    delete_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        yes=True,
+        dry_run=False,
+    )
+    run_dataset_delete(delete_args)
+
+    print("Pipeline step 4/5: upload platform dataset")
+    upload_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        replace=False,
+        dry_run=False,
+    )
+    run_dataset_upload(upload_args)
+
+    print("Pipeline step 5/5: judge")
     judge_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
