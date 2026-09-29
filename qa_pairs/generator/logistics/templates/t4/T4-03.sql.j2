@@ -1,0 +1,6 @@
+SELECT i.product_category AS entity, SUM(i.quantity_on_hand) AS metric
+FROM inventory i
+INNER JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+WHERE w.region = {{ region | sqlstr }} AND i.product_category IS NOT NULL
+GROUP BY i.product_category
+ORDER BY metric DESC, entity ASC;

@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS warehouse_count
+FROM warehouses
+WHERE region = {{ region | sqlstr }};

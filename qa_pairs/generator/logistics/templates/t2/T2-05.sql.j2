@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS order_count
+FROM orders o
+INNER JOIN warehouses w ON o.warehouse_id = w.warehouse_id
+WHERE w.region = {{ region | sqlstr }};

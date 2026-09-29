@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS carrier_count
+FROM carriers
+WHERE carrier_type = {{ carrier_type | sqlstr }};

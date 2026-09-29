@@ -26,6 +26,11 @@ from qa_pairs.generator.finance.scale_pairs_finance import (
     generate_pairs as generate_finance_pairs,
 )
 from qa_pairs.generator.finance.validate_finance import validate as validate_finance_qa_dataset
+from qa_pairs.generator.logistics.generate_logistics import build as stage_logistics_qa_dataset
+from qa_pairs.generator.logistics.scale_pairs_logistics import (
+    generate_pairs as generate_logistics_pairs,
+)
+from qa_pairs.generator.logistics.validate_logistics import validate as validate_logistics_qa_dataset
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
 from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
 from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
@@ -434,16 +439,19 @@ QA_STAGE: dict[str, CommandHandler] = {
     "crm": stage_crm_qa_dataset,
     "sales": stage_sales_qa_dataset,
     "finance": stage_finance_qa_dataset,
+    "logistics": stage_logistics_qa_dataset,
 }
 QA_VALIDATE: dict[str, CommandHandler] = {
     "crm": validate_crm_qa_dataset,
     "sales": validate_sales_qa_dataset,
     "finance": validate_finance_qa_dataset,
+    "logistics": validate_logistics_qa_dataset,
 }
 QA_GENERATE: dict[str, CommandHandler] = {
     "crm": generate_crm_pairs,
     "sales": generate_sales_pairs,
     "finance": generate_finance_pairs,
+    "logistics": generate_logistics_pairs,
 }
 
 
