@@ -252,7 +252,6 @@ def test_a_clean_set_has_no_blockers(runs) -> None:
 @pytest.mark.parametrize(
     ("kwargs", "expected"),
     [
-        ({"calibrated": False}, "uncalibrated"),
         ({"judge": "heuristic"}, "not release-eligible"),
         ({"pulse_mode": "sql"}, "HC-4"),
         ({"platform_version": ""}, "no platform_version"),
@@ -266,6 +265,41 @@ def test_each_release_condition_blocks_with_a_reason(runs, kwargs, expected) -> 
     blockers = release_blockers(inputs)
 
     assert any(expected in b for b in blockers), blockers
+
+
+def test_calibration_blocks_a_release_only_when_config_asks_it_to(
+    runs, monkeypatch
+) -> None:
+    """Project decision: a release scorecard does NOT require a calibration
+    marker by default, so a baseline can be established before the §10.2 session
+    is scheduled. It is a config knob rather than a removed check, and the run
+    stays labelled `calibrated: false` either way — see the note on
+    CalibrationConfig.require_calibration_for_release.
+    """
+
+    inputs = [load_run("crm", runs("crm", "r1", calibrated=False).name)]
+
+    assert not any("uncalibrated" in b for b in release_blockers(inputs))
+
+    monkeypatch.setattr(
+        "scorecard.combine._requires_calibration_for_release", lambda domain: True
+    )
+    assert any("uncalibrated" in b for b in release_blockers(inputs))
+
+
+def test_an_uncalibrated_release_is_still_labelled_uncalibrated(
+    runs, tmp_path: Path
+) -> None:
+    """The gate is configurable; the LABEL is not. A card established without
+    calibration must never be mistakable for a calibrated one after the fact.
+    """
+
+    inputs = [load_run("crm", runs("crm", "r1", calibrated=False).name)]
+
+    outcome = mod.combine(inputs, release=True, out_dir=tmp_path / "out")
+
+    assert outcome.mode == "RELEASE"
+    assert "calibrated: **False**" in (outcome.out_dir / "scorecard.md").read_text()
 
 
 def test_mixed_platform_versions_block(runs) -> None:
@@ -299,7 +333,7 @@ def test_rows_belonging_to_another_domain_block(runs) -> None:
 def test_a_blocked_release_downgrades_to_preview_and_writes_nothing_immutable(
     runs, tmp_path: Path
 ) -> None:
-    inputs = [load_run("crm", runs("crm", "r1", calibrated=False).name)]
+    inputs = [load_run("crm", runs("crm", "r1", pulse_mode="sql").name)]
 
     outcome = mod.combine(inputs, release=True, out_dir=tmp_path / "out")
 
@@ -392,7 +426,7 @@ def test_exit_codes(runs, tmp_path: Path, monkeypatch) -> None:
 def test_a_blocked_release_exits_3(runs, tmp_path: Path) -> None:
     from scorecard.combine import build_argparser, run_from_args
 
-    runs("crm", "r1", calibrated=False)
+    runs("crm", "r1", pulse_mode="sql")
     args = build_argparser().parse_args(
         ["--domains", "crm", "--release", "--out", str(tmp_path / "out")]
     )

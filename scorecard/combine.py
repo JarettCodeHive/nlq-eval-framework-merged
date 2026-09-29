@@ -205,6 +205,23 @@ def domains_with_runs() -> list[str]:
     return sorted(d for d in candidates if discover_run_ids(d))
 
 
+def _requires_calibration_for_release(domain: str) -> bool:
+    """Whether a RELEASE card for this domain needs a calibration marker.
+
+    Config decides (`calibration.require_calibration_for_release`), defaulting to
+    false by project decision. The run is still labelled `calibrated: false`
+    either way — the label is what keeps an uncalibrated baseline honest, and it
+    is not configurable.
+    """
+
+    try:
+        from judge.config import load_judge_config
+
+        return load_judge_config(domain).calibration.require_calibration_for_release
+    except Exception:
+        return False
+
+
 def release_blockers(inputs: list[RunInput]) -> list[str]:
     """Why these runs may not establish or be compared to a baseline.
 
@@ -236,7 +253,7 @@ def release_blockers(inputs: list[RunInput]) -> list[str]:
                 f"{run.domain}/{run.run_id} used --pulse {run.pulse_mode!r}, which "
                 "does not reach the platform (HC-4)"
             )
-        if not run.calibrated:
+        if not run.calibrated and _requires_calibration_for_release(run.domain):
             blockers.append(
                 f"{run.domain}/{run.run_id} was scored by an uncalibrated judge "
                 "(§10.2)"

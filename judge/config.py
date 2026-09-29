@@ -227,7 +227,17 @@ class CalibrationConfig(BaseModel):
     # §10.2: "never disagrees on direction ... on any anchor". Separate from the
     # ±1 threshold because it is a hard zero, not a percentage.
     allow_directional_flips: bool = False
+    # Gate on SCORING: refuse to run an LLM judge against a domain with no
+    # passing marker. §10.2's reading, and the default.
     require_calibration: bool = True
+    # Gate on RELEASE: whether a --release scorecard additionally requires that
+    # marker. Defaults FALSE by project decision — §10.2's last line says
+    # uncalibrated scores must not enter a scorecard, so this is a deliberate
+    # departure, taken because a baseline is needed before the calibration
+    # session can be scheduled. What is NOT negotiable is the labelling: every
+    # artifact still records `calibrated: false`, so a card produced this way
+    # cannot be mistaken for a calibrated one after the fact.
+    require_calibration_for_release: bool = False
 
 
 class JudgeConfig(BaseModel):

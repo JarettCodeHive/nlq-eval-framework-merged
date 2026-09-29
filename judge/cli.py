@@ -644,7 +644,7 @@ def _resolve_scorecard_mode(
             f"a release run requires --pulse live; {args.pulse!r} does not reach "
             "the platform (HC-4)"
         )
-    if not calibrated:
+    if not calibrated and thresholds_for(args.domain).require_calibration_for_release:
         blockers.append(
             f"domain {args.domain!r} is not calibrated for this judge (§10.2)"
             + (f": {calibration_reason}" if calibration_reason else "")

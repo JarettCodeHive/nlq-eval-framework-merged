@@ -122,17 +122,20 @@ def test_absent_versions_say_so_rather_than_printing_a_dash() -> None:
 
 
 def test_a_failing_run_says_below_gate_on_its_face(tmp_path: Path) -> None:
+    """The headline is a stat tile, not a table row — assert the verdict and the
+    denominator reach the first screen, not the shape they arrive in."""
+
     text = _text(tmp_path, _results(passes=88, fails=72), _ctx())
 
     assert "BELOW GATE" in text
-    assert f"vs {ACCURACY_GATE_PCT:.0f}% gate" in text
     assert "88 of 160" in text
+    assert f"{ACCURACY_GATE_PCT:.0f}%" in text  # the gate is stated, not implied
 
 
-def test_a_passing_run_says_pass(tmp_path: Path) -> None:
+def test_a_passing_run_says_it_meets_the_gate(tmp_path: Path) -> None:
     text = _text(tmp_path, _results(passes=96, fails=4), _ctx())
 
-    assert "PASS" in text
+    assert "MEETS GATE" in text
     assert "BELOW GATE" not in text
 
 
