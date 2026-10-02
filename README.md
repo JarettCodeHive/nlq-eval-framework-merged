@@ -90,12 +90,30 @@ three-question judge pass with one command:
 
 ```bash
 python main.py run-pipeline --domain crm --profile dev
+python main.py run-pipeline --domain crm --profile full
 ```
+
+The end-to-end command uses one console format across dataset generation, Q&A,
+platform refresh, upload verification, and judging:
+
+```text
+00:00:00.000 | INFO  | pipeline        | [1/5] START  Build and validate dataset
+00:00:00.142 | INFO  | dataset         | Step 1/6: Validate CRM configuration and expected row caps
+00:00:02.918 | INFO  | pipeline        | [1/5] DONE   Build and validate dataset (00:00:02.918)
+...
+00:00:41.204 | INFO  | pipeline        | SUCCESS domain=crm profile=dev elapsed=00:00:41.204
+```
+
+Every non-empty line carries elapsed time, severity, and component. The five
+top-level stages emit `START`, `DONE`, or `FAILED`, while detailed output from
+older subcommands is normalized under the active component. The format is plain
+text by design, so it remains readable in terminals, CI systems, redirected log
+files, and demo recordings. A failure names the stage and elapsed time before
+the command exits non-zero.
 
 > **Warning:** `run-pipeline` confirms `dataset-delete` internally. It deletes
 > and re-uploads the selected domain/profile on the configured platform before
-> judging. Its judge stage uses `--allow-uncalibrated --limit 3`, so the result
-> is a preview and cannot certify a release.
+> judging.
 
 Before running it, configure `judge/.env` and verify both the judge-provider and
 Pulse credentials:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 
+import pytest
+
 import main as main_module
 from main import COMMANDS, build_parser, run_pipeline
 
@@ -66,10 +68,49 @@ def test_run_pipeline_runs_each_command_in_order_with_judge_defaults(
             },
         ),
     ]
-    assert capsys.readouterr().out.splitlines() == [
-        "Pipeline step 1/5: build dataset",
-        "Pipeline step 2/5: build Q&A pairs",
-        "Pipeline step 3/5: delete platform dataset",
-        "Pipeline step 4/5: upload platform dataset",
-        "Pipeline step 5/5: judge",
+    output = capsys.readouterr().out
+    expected = [
+        "[1/5] START  Build and validate dataset",
+        "[1/5] DONE   Build and validate dataset",
+        "[2/5] START  Build and verify Q&A pairs",
+        "[2/5] DONE   Build and verify Q&A pairs",
+        "[3/5] START  Delete existing platform dataset",
+        "[3/5] DONE   Delete existing platform dataset",
+        "[4/5] START  Upload and verify platform dataset",
+        "[4/5] DONE   Upload and verify platform dataset",
+        "[5/5] START  Run three-question judge preview",
+        "[5/5] DONE   Run three-question judge preview",
+        "SUCCESS domain=crm profile=dev",
     ]
+    positions = [output.index(message) for message in expected]
+    assert positions == sorted(positions)
+
+
+def test_run_pipeline_reports_the_failed_stage_and_stops(
+    monkeypatch,
+    capsys,
+) -> None:
+    calls: list[str] = []
+
+    def fail(_args: argparse.Namespace) -> None:
+        calls.append("build-dataset")
+        raise RuntimeError("generation failed")
+
+    monkeypatch.setattr(main_module, "run_build_dataset", fail)
+    monkeypatch.setattr(
+        main_module,
+        "run_qa_build",
+        lambda _args: calls.append("qa-build"),
+    )
+
+    args = build_parser().parse_args(
+        ["run-pipeline", "--domain", "crm", "--profile", "dev"]
+    )
+    with pytest.raises(RuntimeError, match="generation failed"):
+        run_pipeline(args)
+
+    captured = capsys.readouterr()
+    assert calls == ["build-dataset"]
+    assert "[1/5] FAILED Build and validate dataset" in captured.err
+    assert "FAILED domain=crm profile=dev" in captured.err
+    assert "[2/5] START" not in captured.out

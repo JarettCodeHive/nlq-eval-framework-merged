@@ -8,6 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from generators.core.progress import PipelineReporter
+from generators.core.progress import PipelineStage
 from generators.core.progress import ProgressReporter
 from generators.crm.pipeline import CRMDatasetPipeline
 from generators.domain_registry import DATASET_DOMAINS
@@ -708,39 +710,68 @@ def run_pipeline(args: argparse.Namespace) -> None:
     the delete and supplies the judge-specific smoke-test flags.
     """
 
+    total = 5
+    reporter = PipelineReporter()
+    reporter.start(domain=args.domain, profile=args.profile, total_stages=total)
     pipeline_args = argparse.Namespace(domain=args.domain, profile=args.profile)
-
-    print("Pipeline step 1/5: build dataset")
-    run_build_dataset(pipeline_args)
-
-    print("Pipeline step 2/5: build Q&A pairs")
-    run_qa_build(pipeline_args)
-
-    print("Pipeline step 3/5: delete platform dataset")
     delete_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         yes=True,
         dry_run=False,
     )
-    run_dataset_delete(delete_args)
-
-    print("Pipeline step 4/5: upload platform dataset")
     upload_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         replace=False,
         dry_run=False,
     )
-    run_dataset_upload(upload_args)
-
-    print("Pipeline step 5/5: judge")
     judge_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         command_argv=["--allow-uncalibrated", "--limit", "3"],
     )
-    run_judge(judge_args)
+    stages = (
+        (
+            PipelineStage(1, total, "dataset", "Build and validate dataset"),
+            run_build_dataset,
+            pipeline_args,
+        ),
+        (
+            PipelineStage(2, total, "qa", "Build and verify Q&A pairs"),
+            run_qa_build,
+            pipeline_args,
+        ),
+        (
+            PipelineStage(
+                3, total, "platform.delete", "Delete existing platform dataset"
+            ),
+            run_dataset_delete,
+            delete_args,
+        ),
+        (
+            PipelineStage(
+                4, total, "platform.upload", "Upload and verify platform dataset"
+            ),
+            run_dataset_upload,
+            upload_args,
+        ),
+        (
+            PipelineStage(5, total, "judge", "Run three-question judge preview"),
+            run_judge,
+            judge_args,
+        ),
+    )
+
+    try:
+        for stage, handler, stage_args in stages:
+            with reporter.stage(stage):
+                handler(stage_args)
+    except BaseException:
+        reporter.finish(domain=args.domain, profile=args.profile, succeeded=False)
+        raise
+
+    reporter.finish(domain=args.domain, profile=args.profile, succeeded=True)
 
 
 def run_score(args: argparse.Namespace) -> None:
