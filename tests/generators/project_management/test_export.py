@@ -33,7 +33,7 @@ def test_exporter_uses_versioned_full_output() -> None:
     exporter = ProjectManagementCSVExporter.for_profile("full")
 
     assert exporter.settings.is_release_profile
-    assert exporter.output_dir.name == "dataset-v1.0.0"
+    assert exporter.output_dir == Path("release/project_management/v1.0.0/dataset").resolve()
 
 
 def test_profile_specific_export_methods_reject_wrong_profile() -> None:

@@ -32,7 +32,7 @@ def test_sales_manifest_generator_loads_full_profile_settings() -> None:
 
     assert generator.settings.domain == "sales"
     assert generator.settings.profile == "full"
-    assert generator.settings.dataset_version == "dataset-v1.0.0"
+    assert generator.settings.release_version == "v1.0.0"
     assert generator.settings.manifest_generated_at == "2026-09-16T00:00:00"
 
 

@@ -14,7 +14,7 @@ def test_logistics_component_descriptor_assembles_expected_sections() -> None:
 
     assert list(config) == [
         "domain",
-        "dataset_version",
+        "release_version",
         "schema_source",
         "semantic_contract",
         "fixed_values",

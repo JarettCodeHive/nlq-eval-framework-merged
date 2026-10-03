@@ -117,7 +117,7 @@ class LogisticsDataDictionaryGenerator:
         lines = [
             "# Logistics Data Dictionary",
             "",
-            f"Dataset version: `{self.settings.dataset_version}`",
+            f"Release version: `{self.settings.release_version}`",
             "",
             f"Schema source: `{self.logistics_config['schema_source']}`",
             "",

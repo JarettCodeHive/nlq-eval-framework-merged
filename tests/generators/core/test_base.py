@@ -19,7 +19,7 @@ def test_settings_load_dev_profile_from_config() -> None:
     settings = GenerationSettings.from_config_files("crm", "dev")
 
     assert settings.domain == "crm"
-    assert settings.dataset_version == "dataset-v1.0.0"
+    assert settings.release_version == "v1.0.0"
     assert settings.profile == "dev"
     assert settings.seed == 42
     assert settings.reference_today.isoformat() == "2026-08-01"
@@ -46,7 +46,13 @@ def test_versioned_release_detection_uses_configured_domain() -> None:
     finance = replace(
         sales,
         domain="finance",
-        output_path=PROJECT_ROOT / "release" / "finance" / sales.dataset_version,
+        output_path=(
+            PROJECT_ROOT
+            / "release"
+            / "finance"
+            / sales.release_version
+            / "dataset"
+        ),
     )
 
     assert finance.targets_versioned_release
@@ -62,7 +68,7 @@ def test_sales_settings_load_from_component_config(tmp_path: Path) -> None:
     )
 
     assert settings.domain == "sales"
-    assert settings.dataset_version == "dataset-v1.0.0"
+    assert settings.release_version == "v1.0.0"
     assert settings.table_order == (
         "leads",
         "deals",
@@ -106,7 +112,7 @@ def test_component_config_produces_same_settings_as_monolithic_config(
             key: crm_config[key]
             for key in (
                 "domain",
-                "dataset_version",
+                    "release_version",
                 "schema_source",
                 "fixed_values",
                 "output_paths",

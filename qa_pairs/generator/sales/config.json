@@ -5,7 +5,7 @@
   "dataset": {
     "profile_sources": {
       "dev": "tmp/generated/sales/dev/imperfect",
-      "full": "release/sales/{dataset_version}"
+      "full": "release/sales/{release_version}/dataset"
     },
     "base_config_path": "config/generation/base.json",
     "release_config_path": "config/generation/sales/release.json",
@@ -13,10 +13,9 @@
     "schema_dbml_path": "schemas/sales/sales_er.dbml"
   },
   "qa_release": {
-    "version": "0.1.0",
     "profile_outputs": {
       "dev": "tmp/generated/{domain}/dev/qa_pairs",
-      "full": "release/{domain}/qa-pairs-v{qa_version}"
+      "full": "release/{domain}/{release_version}/qa_pairs"
     }
   },
   "tier_quota": {"T1": 21, "T2": 36, "T3": 15, "T4": 18, "T5": 14},

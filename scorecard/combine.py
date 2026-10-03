@@ -44,6 +44,8 @@ from scorecard.summary import (
     write_question_results_csv,
     write_scorecard_summary_csv,
 )
+from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import selected_release_version
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -134,10 +136,18 @@ class CombineOutcome:
 def eval_runs_root(domain: str) -> Path:
     """Where `judge` writes its runs for one domain."""
 
-    from judge.config import load_judge_config
-
-    root = load_judge_config(domain).run_output_root.format(domain=domain)
-    return REPO_ROOT / root
+    version = selected_release_version()
+    if not version:
+        config_path = REPO_ROOT / "config" / "generation" / domain / "release.json"
+        if config_path.is_file():
+            version = active_release_version(
+                json.loads(config_path.read_text(encoding="utf-8"))
+            )
+        else:
+            # Isolated tests and imported historical run stores may not carry
+            # generation config. The repository default remains deterministic.
+            version = "v1.0.0"
+    return REPO_ROOT / "release" / domain / version / "judge"
 
 
 def discover_run_ids(domain: str) -> list[str]:

@@ -8,6 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from generators.core.progress import PipelineReporter
+from generators.core.progress import PipelineStage
 from generators.core.progress import ProgressReporter
 from generators.crm.pipeline import CRMDatasetPipeline
 from generators.domain_registry import DATASET_DOMAINS
@@ -43,6 +45,8 @@ from qa_pairs.generator.project_management.validate_project_management import (
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
 from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
 from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
+from qa_pairs.utils.release_bundle import default_release_version
+from qa_pairs.utils.release_bundle import use_release_version
 
 from judge.build_input import build as build_judge_input
 from judge.cli import build_argparser as build_judge_argparser
@@ -106,14 +110,18 @@ def run_build_dataset(args: argparse.Namespace) -> None:
         ) from exc
 
     progress = ProgressReporter()
-    output_path = pipeline.for_profile(
-        args.profile,
-        progress=progress,
-    ).run()
+    with use_release_version(getattr(args, "release_version", None)):
+        configured_pipeline = pipeline.for_profile(
+            args.profile,
+            progress=progress,
+        )
+        output_path = configured_pipeline.run()
+        release_version = configured_pipeline.settings.release_version
 
     print(f"{runtime.display_name} dataset build passed")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
+    print(f"release_version: {release_version}")
     print(f"output: {output_path}")
 
 
@@ -130,6 +138,11 @@ def run_generate_base(args: argparse.Namespace) -> None:
     print(f"Generated clean {runtime.display_name} base entities")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
+    if args.profile == "full":
+        print(
+            "release_version: "
+            f"{getattr(args, 'release_version', None) or default_release_version(args.domain)}"
+        )
     print("tables:")
     for table_name in generator.settings.table_order:
         table = tables[table_name]
@@ -483,23 +496,32 @@ def run_qa_stage_dataset(args: argparse.Namespace) -> None:
 
 
 def run_qa_build(args: argparse.Namespace) -> None:
-    """Stage, validate, and generate the production Q&A pair set."""
+    """Stage, validate, and generate the complete production Q&A package."""
 
     stage = _qa_domain_fn(QA_STAGE, args.domain)
     validate = _qa_domain_fn(QA_VALIDATE, args.domain)
     generate = _qa_domain_fn(QA_GENERATE, args.domain)
     progress = ProgressReporter()
+    total = 4 if args.domain == "crm" else 3
 
-    progress.report(
-        f"Step 1/3: Stage the generated {args.domain} dataset for Q&A authoring"
-    )
-    stage(args.profile)
+    with use_release_version(getattr(args, "release_version", None)):
+        progress.report(
+            f"Step 1/{total}: Stage the generated {args.domain} dataset for Q&A authoring"
+        )
+        stage(args.profile)
 
-    progress.report(f"Step 2/3: Validate the staged {args.domain} dataset")
-    validate(args.profile)
+        progress.report(f"Step 2/{total}: Validate the staged {args.domain} dataset")
+        validate(args.profile)
 
-    progress.report(f"Step 3/3: Generate and verify the {args.domain} Q&A pair set")
-    generate(args.profile)
+        progress.report(
+            f"Step 3/{total}: Generate and verify the {args.domain} Q&A pair set"
+        )
+        generate(args.profile)
+        if args.domain == "crm":
+            progress.report(
+                "Step 4/4: Generate and verify CRM rephrase-group variants"
+            )
+            generate_rephrases(args.profile)
 
     print(f"{args.domain} Q&A pair build passed")
     print(f"domain: {args.domain}")
@@ -695,7 +717,8 @@ def run_judge(args: argparse.Namespace) -> None:
     # pipeline was invoked with.
     judge_args.domain = args.domain
     judge_args.profile = args.profile
-    exit_code = run_judge_from_args(judge_args)
+    with use_release_version(getattr(args, "release_version", None)):
+        exit_code = run_judge_from_args(judge_args)
     if exit_code != 0:
         raise SystemExit(exit_code)
 
@@ -708,39 +731,77 @@ def run_pipeline(args: argparse.Namespace) -> None:
     the delete and supplies the judge-specific smoke-test flags.
     """
 
-    pipeline_args = argparse.Namespace(domain=args.domain, profile=args.profile)
-
-    print("Pipeline step 1/5: build dataset")
-    run_build_dataset(pipeline_args)
-
-    print("Pipeline step 2/5: build Q&A pairs")
-    run_qa_build(pipeline_args)
-
-    print("Pipeline step 3/5: delete platform dataset")
+    total = 5
+    reporter = PipelineReporter()
+    reporter.start(domain=args.domain, profile=args.profile, total_stages=total)
+    release_version = getattr(args, "release_version", None)
+    pipeline_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        release_version=release_version,
+    )
     delete_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         yes=True,
         dry_run=False,
+        release_version=release_version,
     )
-    run_dataset_delete(delete_args)
-
-    print("Pipeline step 4/5: upload platform dataset")
     upload_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         replace=False,
         dry_run=False,
+        release_version=release_version,
     )
-    run_dataset_upload(upload_args)
-
-    print("Pipeline step 5/5: judge")
     judge_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         command_argv=["--allow-uncalibrated", "--limit", "3"],
+        release_version=release_version,
     )
-    run_judge(judge_args)
+    stages = (
+        (
+            PipelineStage(1, total, "dataset", "Build and validate dataset"),
+            run_build_dataset,
+            pipeline_args,
+        ),
+        (
+            PipelineStage(2, total, "qa", "Build and verify Q&A pairs"),
+            run_qa_build,
+            pipeline_args,
+        ),
+        (
+            PipelineStage(
+                3, total, "platform.delete", "Delete existing platform dataset"
+            ),
+            run_dataset_delete,
+            delete_args,
+        ),
+        (
+            PipelineStage(
+                4, total, "platform.upload", "Upload and verify platform dataset"
+            ),
+            run_dataset_upload,
+            upload_args,
+        ),
+        (
+            PipelineStage(5, total, "judge", "Run three-question judge preview"),
+            run_judge,
+            judge_args,
+        ),
+    )
+
+    try:
+        with use_release_version(release_version):
+            for stage, handler, stage_args in stages:
+                with reporter.stage(stage):
+                    handler(stage_args)
+    except BaseException:
+        reporter.finish(domain=args.domain, profile=args.profile, succeeded=False)
+        raise
+
+    reporter.finish(domain=args.domain, profile=args.profile, succeeded=True)
 
 
 def run_score(args: argparse.Namespace) -> None:
@@ -856,6 +917,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generation profile to use. Defaults to dev.",
     )
     parser.add_argument(
+        "--version",
+        dest="release_version",
+        default=None,
+        help=(
+            "Unified release-bundle directory name. Full outputs are written "
+            "under release/<domain>/<version>/. Defaults to the domain config."
+        ),
+    )
+    parser.add_argument(
         "--write-preview",
         action="store_true",
         help="Write generated stage CSV previews for non-release profiles.",
@@ -930,7 +1000,8 @@ def main() -> None:
         command_argv.append("--help")
     args.command_argv = command_argv
     try:
-        COMMANDS[args.command](args)
+        with use_release_version(args.release_version):
+            COMMANDS[args.command](args)
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

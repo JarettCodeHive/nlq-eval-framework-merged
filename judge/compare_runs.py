@@ -23,11 +23,13 @@ import argparse
 import json
 from pathlib import Path
 
+from qa_pairs.utils.release_bundle import component_dir
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load(domain: str, run_id: str) -> dict[str, dict]:
-    path = REPO_ROOT / "release" / domain / "eval-runs" / run_id / "results.json"
+    path = component_dir(domain, "judge") / run_id / "results.json"
     if not path.is_file():
         raise SystemExit(f"no results.json for run {run_id} ({path})")
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -102,10 +104,7 @@ def compare(domain: str, base_id: str, new_id: str) -> int:
         clarifications on a run that had eleven. Parse, then look.
         """
         raw = (
-            REPO_ROOT
-            / "release"
-            / domain
-            / "eval-runs"
+            component_dir(domain, "judge")
             / run_id
             / "pulse_raw"
             / f"{qid}.json"

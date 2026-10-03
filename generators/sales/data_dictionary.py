@@ -120,7 +120,7 @@ class SalesDataDictionaryGenerator:
         lines = [
             "# Sales Data Dictionary",
             "",
-            f"Dataset version: `{self.settings.dataset_version}`",
+            f"Release version: `{self.settings.release_version}`",
             "",
             f"Schema source: `{self.sales_config['schema_source']}`",
             "",

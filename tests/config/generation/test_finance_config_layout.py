@@ -29,7 +29,7 @@ TABLE_ORDER = [
 EXPECTED_COMPONENT_SECTIONS = {
     "release": (
         "domain",
-        "dataset_version",
+        "release_version",
         "schema_source",
         "fixed_values",
         "output_paths",
@@ -96,7 +96,7 @@ def test_assembled_finance_config_has_frozen_table_and_row_targets() -> None:
     config = _finance_config()
 
     assert config["domain"] == "finance"
-    assert config["dataset_version"] == "dataset-v1.0.0"
+    assert config["release_version"] == "v1.0.0"
     assert config["table_order"] == TABLE_ORDER
     assert {
         table_name: config["tables"][table_name]["row_targets"]
@@ -117,7 +117,7 @@ def test_finance_settings_load_for_dev_and_full_profiles() -> None:
     assert dev.output_path == Path("tmp/generated/finance/dev").resolve()
     assert not dev.is_release_profile
     assert not dev.targets_versioned_release
-    assert full.output_path == Path("release/finance/dataset-v1.0.0").resolve()
+    assert full.output_path == Path("release/finance/v1.0.0/dataset").resolve()
     assert full.is_release_profile
     assert full.targets_versioned_release
     assert dev.table_order == tuple(TABLE_ORDER)
