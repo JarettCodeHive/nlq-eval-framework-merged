@@ -25,7 +25,7 @@ def test_finance_hash_computer_loads_full_profile_settings() -> None:
 
     assert computer.settings.domain == "finance"
     assert computer.settings.profile == "full"
-    assert computer.settings.output_path.name == "dataset-v1.0.0"
+    assert computer.settings.output_path == Path("release/finance/v1.0.0/dataset").resolve()
 
 
 def test_finance_hash_computer_refuses_non_release_profile() -> None:

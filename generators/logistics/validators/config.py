@@ -25,7 +25,7 @@ from generators.logistics import config as logistics_config_module
 
 REQUIRED_SECTIONS = {
     "domain",
-    "dataset_version",
+    "release_version",
     "schema_source",
     "semantic_contract",
     "fixed_values",

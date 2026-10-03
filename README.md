@@ -90,8 +90,27 @@ three-question judge pass with one command:
 
 ```bash
 python main.py run-pipeline --domain crm --profile dev
-python main.py run-pipeline --domain crm --profile full
+python main.py run-pipeline --domain crm --profile full --version v1.0.0
 ```
+
+`--version` is the single evaluation-release version shared by the dataset,
+Q&A pairs, judge evidence, and scorecard. A full run writes all artifacts under
+one bundle root:
+
+```text
+release/crm/v1.0.0/
+  dataset/
+  qa_pairs/
+  judge/<run_id>/
+  scorecard/<run_id>/
+```
+
+If `--version` is omitted, the domain's `release_version` in
+`config/generation/<domain>/release.json` is used. Existing bundle versions are
+immutable: changing either the dataset or the Q&A pairs requires a new release
+version. The Claris/Pulse platform version remains separate and is recorded in
+the judge and scorecard metadata so the same evaluation release can measure
+multiple application versions.
 
 The end-to-end command uses one console format across dataset generation, Q&A,
 platform refresh, upload verification, and judging:
@@ -128,12 +147,13 @@ Use `build-dataset` for the complete generation and validation workflow:
 
 ```bash
 python main.py build-dataset --domain crm --profile dev
-python main.py build-dataset --domain crm --profile full
+python main.py build-dataset --domain crm --profile full --version v1.0.0
 ```
 
 Replace `crm` with `sales`, `finance`, `project_management`, or `logistics`.
 The `dev` profile writes staged output under `tmp/generated/<domain>/dev/`.
-The `full` profile writes a versioned release under `release/<domain>/`, runs
+The `full` profile writes the dataset under
+`release/<domain>/<version>/dataset/`, runs
 the persisted-data and reproducibility checks, and writes `manifest.json`
 last to seal the release.
 
@@ -166,16 +186,19 @@ The `full` profile reads the selected domain's frozen dataset release. After
 that release is available, run:
 
 ```bash
-python main.py qa-build --domain crm --profile full
+python main.py qa-build --domain crm --profile full --version v1.0.0
 ```
 
 Replace `crm` with `sales` for the Sales Q&A workflow. The final pair package is
-written to the independently versioned Q&A release directory configured in
-`qa_pairs/generator/<domain>/config.json`:
+written under the same evaluation-release version as its dataset:
 
 ```text
-release/<domain>/qa-pairs-v<qa_version>/
+release/<domain>/<version>/qa_pairs/
 ```
+
+The Q&A build refuses to select a different or "latest" dataset release. The
+single CLI/config release version resolves both components, preventing a pair
+set from being verified against the wrong dataset.
 
 `qa-build` stages the selected generated dataset, validates it, and generates
 the complete SQL-verified pair set. It does not create review fixtures or

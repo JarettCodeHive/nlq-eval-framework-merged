@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 
 from pydantic import BaseModel
+from release_bundle import component_dir
 
 MODULE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = MODULE_ROOT.parent
@@ -63,8 +64,7 @@ def report_output_dir(
     a scorecard can always be traced back to the evidence that produced it.
     """
 
-    settings = cfg or load_scorecard_config(domain)
-    return REPO_ROOT / settings.report_output_root.format(domain=domain) / run_id
+    return component_dir(domain, "scorecard") / run_id
 
 
 def combined_report_dir(run_id: str, cfg: ScorecardConfig | None = None) -> Path:

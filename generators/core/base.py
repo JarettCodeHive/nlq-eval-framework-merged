@@ -22,6 +22,9 @@ from numbers import Real
 from pathlib import Path
 from typing import Any
 
+from release_bundle import active_release_version
+from release_bundle import validate_release_version
+
 from generators.core.config import load_domain_config
 
 
@@ -314,7 +317,6 @@ class GenerationSettings:
         }
         required_domain = {
             "domain",
-            "dataset_version",
             "schema_source",
             "fixed_values",
             "output_paths",
@@ -325,6 +327,8 @@ class GenerationSettings:
         }
         _assert_required_keys(base_config, required_base, "base config")
         _assert_required_keys(domain_config, required_domain, "domain config")
+        if not (domain_config.get("release_version") or domain_config.get("dataset_version")):
+            raise ValueError("domain config is missing release_version")
 
         if profile not in base_config["profiles"]:
             raise ValueError(f"Unknown generation profile: {profile}")
@@ -334,9 +338,24 @@ class GenerationSettings:
         table_order = tuple(str(table) for table in domain_config["table_order"])
         row_counts = _row_counts_for_profile(domain_config, table_order, profile)
 
+        release_version = active_release_version(domain_config)
+        configured_output = str(domain_config["output_paths"][profile]).format(
+            domain=domain_config["domain"],
+            release_version=release_version,
+            dataset_version=release_version,
+            profile=profile,
+        )
+        if str(profile) == str(base_config["release_profile"]):
+            configured_output = (
+                f"release/{domain_config['domain']}/{release_version}/dataset"
+            )
+
         settings = cls(
             domain=str(domain_config["domain"]),
-            dataset_version=str(domain_config["dataset_version"]),
+            # Kept as an internal/backward-compatible name because the scorecard
+            # contract still calls this field dataset_version.  It now always
+            # carries the one release-bundle version.
+            dataset_version=release_version,
             profile=str(profile),
             seed=int(base_config["seed"]),
             reference_today=date.fromisoformat(str(base_config["reference_today"])),
@@ -344,7 +363,7 @@ class GenerationSettings:
                 domain_config["fixed_values"]["manifest_generated_at"]
             ),
             schema_source=PROJECT_ROOT / str(domain_config["schema_source"]),
-            output_path=PROJECT_ROOT / str(domain_config["output_paths"][profile]),
+            output_path=PROJECT_ROOT / configured_output,
             table_order=table_order,
             row_counts=row_counts,
             max_rows_per_table=int(base_config["max_rows_per_table"]),
@@ -372,8 +391,7 @@ class GenerationSettings:
 
         if not self.domain:
             raise ValueError("domain is required")
-        if not self.dataset_version.startswith("dataset-v"):
-            raise ValueError("dataset_version must start with 'dataset-v'")
+        validate_release_version(self.dataset_version)
         if not self.table_order:
             raise ValueError("table_order cannot be empty")
         if set(self.row_counts) != set(self.table_order):
@@ -395,7 +413,9 @@ class GenerationSettings:
                     f"max is {self.max_rows_per_table}"
                 )
         if self.profile in self.release_disallowed_profiles:
-            if self.targets_versioned_release:
+            if self.output_path.resolve().is_relative_to(
+                (PROJECT_ROOT / "release").resolve()
+            ):
                 raise ValueError(f"{self.profile} cannot target a release directory")
 
     @property
@@ -409,14 +429,25 @@ class GenerationSettings:
         """Return whether output uses this domain's versioned release path."""
 
         return self.output_path == (
-            PROJECT_ROOT / "release" / self.domain / self.dataset_version
+            PROJECT_ROOT
+            / "release"
+            / self.domain
+            / self.dataset_version
+            / "dataset"
         )
+
+    @property
+    def release_version(self) -> str:
+        """Canonical bundle version (legacy ``dataset_version`` is an alias)."""
+
+        return self.dataset_version
 
     def metadata(self) -> dict[str, Any]:
         """Return deterministic run metadata suitable for manifest input."""
 
         return {
             "domain": self.domain,
+            "release_version": self.release_version,
             "dataset_version": self.dataset_version,
             "profile": self.profile,
             "seed": self.seed,

@@ -13,7 +13,7 @@ silently mis-tier it in the scorecard.
 Deterministic: same release in, byte-identical CSV out. Rows are emitted in
 companion order (sorted by question_id), so a run log climbs tiers in order.
 
-    python judge/build_input.py --qa-release release/crm/qa-pairs-v0.3.0
+    python judge/build_input.py --qa-release release/crm/v1.0.0/qa_pairs
 
 Supersedes the per-tier concatenation used before the Q&A pipeline emitted a
 single package.
@@ -119,7 +119,7 @@ def main() -> None:
     parser.add_argument(
         "--qa-release",
         type=Path,
-        default=Path("release/crm/qa-pairs-v0.3.0"),
+        default=Path("release/crm/v1.0.0/qa_pairs"),
         help="Q&A release package directory",
     )
     parser.add_argument("--domain", default="crm")

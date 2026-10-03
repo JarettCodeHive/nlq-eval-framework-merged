@@ -30,7 +30,7 @@ def test_pm_manifest_generator_loads_full_profile_settings() -> None:
 
     assert generator.settings.domain == "project_management"
     assert generator.settings.profile == "full"
-    assert generator.settings.dataset_version == "dataset-v1.0.0"
+    assert generator.settings.release_version == "v1.0.0"
     assert generator.settings.manifest_generated_at == "2026-09-24T00:00:00"
 
 
@@ -97,7 +97,7 @@ def test_pm_manifest_includes_complete_contract(
     assert manifest["manifest_schema_version"] == "1.0"
     assert manifest["domain"] == "project_management"
     assert manifest["output_path"] == (
-        "release/project_management/dataset-v1.0.0"
+        "release/project_management/v1.0.0/dataset"
     )
     assert manifest["table_order"] == [
         "projects",
@@ -121,7 +121,7 @@ def test_pm_manifest_includes_complete_contract(
         "csv_header_spec",
     }
     assert manifest["release_artifacts"]["schema_sql"]["path"] == (
-        "release/project_management/dataset-v1.0.0/schema.sql"
+        "release/project_management/v1.0.0/dataset/schema.sql"
     )
     assert len(manifest["release_artifacts"]["erd_dbml"]["sha256"]) == 64
     assert manifest["decimal_policy"] == config["decimal_policy"]

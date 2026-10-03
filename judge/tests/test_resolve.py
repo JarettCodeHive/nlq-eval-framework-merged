@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from release_bundle import use_release_version
 
 from judge.cli import build_argparser
 from judge.resolve import (
@@ -28,20 +29,22 @@ COMPANION_HEADER = (
 COMPANION_ROW = "CRM-T1-01-01,T1,count,exact,How many accounts?\n"
 
 
-def _repo(tmp_path: Path, *, qa_version: str = "0.3.0") -> Path:
+def _repo(tmp_path: Path, *, release_version: str = "v1.0.0") -> Path:
     """A repo skeleton holding only the config the resolver reads."""
 
-    qa_config = tmp_path / "qa_pairs" / "generator"
+    qa_config = tmp_path / "qa_pairs" / "generator" / "crm"
     qa_config.mkdir(parents=True)
     (qa_config / "config.json").write_text(
         json.dumps(
             {
                 "domain": "crm",
+                "dataset": {
+                    "release_config_path": "config/generation/crm/release.json"
+                },
                 "qa_release": {
-                    "version": qa_version,
                     "profile_outputs": {
                         "dev": "tmp/generated/{domain}/dev/qa_pairs",
-                        "full": "release/{domain}/qa-pairs-v{qa_version}",
+                        "full": "release/{domain}/{release_version}/qa_pairs",
                     },
                 },
             }
@@ -53,10 +56,11 @@ def _repo(tmp_path: Path, *, qa_version: str = "0.3.0") -> Path:
     (release_config / "release.json").write_text(
         json.dumps(
             {
-                "dataset_version": "dataset-v1.0.0",
+                "release_version": release_version,
+                "dataset_version": release_version,
                 "output_paths": {
                     "dev": "tmp/generated/crm/dev",
-                    "full": "release/crm/dataset-v1.0.0",
+                    "full": "release/crm/{release_version}/dataset",
                 },
             }
         ),
@@ -66,7 +70,7 @@ def _repo(tmp_path: Path, *, qa_version: str = "0.3.0") -> Path:
 
 
 def _qa_package(repo: Path, version: str, *, joined: bool = False) -> Path:
-    directory = repo / "release" / "crm" / f"qa-pairs-v{version}"
+    directory = repo / "release" / "crm" / version / "qa_pairs"
     directory.mkdir(parents=True)
     (directory / "crm_qa_pairs.csv").write_text(
         CONTRACT_HEADER + CONTRACT_ROW, encoding="utf-8"
@@ -81,41 +85,29 @@ def _qa_package(repo: Path, version: str, *, joined: bool = False) -> Path:
 
 def test_full_profile_resolves_the_configured_qa_release(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    expected = _qa_package(repo, "0.3.0")
+    expected = _qa_package(repo, "v1.0.0")
 
     assert qa_release_dir("crm", "full", repo_root=repo) == expected
 
 
-def test_a_newer_package_than_the_config_knows_about_still_resolves(
+def test_a_cli_selected_release_version_overrides_the_configured_default(
     tmp_path: Path,
 ) -> None:
-    repo = _repo(tmp_path, qa_version="0.3.0")
-    _qa_package(repo, "0.9.0")
-    newest = _qa_package(repo, "0.10.0")
-    # The config's own version has no package, so the filesystem decides — and
-    # picks 0.10.0, not the 0.9.0 a string sort would call newest.
-    assert qa_release_dir("crm", "full", repo_root=repo) == newest
+    repo = _repo(tmp_path)
+    selected = _qa_package(repo, "client-2.4")
+    with use_release_version("client-2.4"):
+        assert qa_release_dir("crm", "full", repo_root=repo) == selected
 
 
-def test_an_undeclared_domain_falls_back_to_the_release_layout(tmp_path: Path) -> None:
-    """The Q&A config declares ONE domain's version; the rest share its layout."""
-
-    repo = _repo(tmp_path, qa_version="0.3.0")
-    sales = repo / "release" / "sales" / "qa-pairs-v1.2.0"
-    sales.mkdir(parents=True)
-    (sales / "sales_qa_pairs.csv").write_text(
-        CONTRACT_HEADER + CONTRACT_ROW, encoding="utf-8"
-    )
-
-    assert qa_release_dir("sales", "full", repo_root=repo) == sales
-
-
-def test_a_half_created_package_does_not_mask_a_complete_one(tmp_path: Path) -> None:
-    repo = _repo(tmp_path, qa_version="0.9.9")  # config points somewhere empty
-    complete = _qa_package(repo, "0.3.0")
-    (repo / "release" / "crm" / "qa-pairs-v0.4.0").mkdir(parents=True)
-
-    assert qa_release_dir("crm", "full", repo_root=repo) == complete
+def test_an_empty_selected_bundle_does_not_fall_back_to_another_version(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path)
+    _qa_package(repo, "v1.0.0")
+    with use_release_version("v2.0.0"):
+        assert qa_release_dir("crm", "full", repo_root=repo) == (
+            repo / "release" / "crm" / "v2.0.0" / "qa_pairs"
+        )
 
 
 def test_dev_profile_resolves_the_disposable_package(tmp_path: Path) -> None:
@@ -128,7 +120,7 @@ def test_dev_profile_resolves_the_disposable_package(tmp_path: Path) -> None:
 
 def test_the_judge_input_is_joined_on_demand_when_absent(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    package = _qa_package(repo, "0.3.0")
+    package = _qa_package(repo, "v1.0.0")
 
     resolved = judge_input_csv("crm", "full", repo_root=repo)
 
@@ -138,7 +130,7 @@ def test_the_judge_input_is_joined_on_demand_when_absent(tmp_path: Path) -> None
 
 def test_an_existing_judge_input_is_never_rebuilt(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    package = _qa_package(repo, "0.3.0", joined=True)
+    package = _qa_package(repo, "v1.0.0", joined=True)
 
     resolved = judge_input_csv("crm", "full", repo_root=repo)
 
@@ -155,17 +147,16 @@ def test_a_missing_package_names_the_command_that_creates_it(tmp_path: Path) -> 
     assert "qa-build --domain crm --profile full" in str(excinfo.value)
 
 
-def test_dataset_version_label_carries_both_versions(tmp_path: Path) -> None:
-    """Q&A templates and the dataset version move independently (§11.1)."""
+def test_dataset_version_label_is_the_unified_release_version(tmp_path: Path) -> None:
 
     repo = _repo(tmp_path)
-    _qa_package(repo, "0.3.0")
+    _qa_package(repo, "v1.0.0")
 
     assert (
         dataset_version_label("crm", "full", repo_root=repo)
-        == "dataset-v1.0.0+qa-pairs-v0.3.0"
+        == "v1.0.0"
     )
-    assert dataset_version_label("crm", "dev", repo_root=repo) == "dataset-v1.0.0+dev"
+    assert dataset_version_label("crm", "dev", repo_root=repo) == "v1.0.0+dev"
 
 
 def test_dev_pulse_data_points_at_the_imperfect_stage(tmp_path: Path) -> None:
@@ -178,14 +169,14 @@ def test_dev_pulse_data_points_at_the_imperfect_stage(tmp_path: Path) -> None:
         repo / "tmp" / "generated" / "crm" / "dev" / "imperfect"
     )
     assert dataset_csv_dir("crm", "full", repo_root=repo) == (
-        repo / "release" / "crm" / "dataset-v1.0.0"
+        repo / "release" / "crm" / "v1.0.0" / "dataset"
     )
 
 
 def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
     repo = _repo(tmp_path)
-    package = _qa_package(repo, "0.3.0", joined=True)
-    (repo / "release" / "crm" / "dataset-v1.0.0").mkdir(parents=True)
+    package = _qa_package(repo, "v1.0.0", joined=True)
+    (repo / "release" / "crm" / "v1.0.0" / "dataset").mkdir(parents=True)
     monkeypatch.setenv("PLATFORM_VERSION", "pulse-2026.09")
 
     args = build_argparser().parse_args(
@@ -194,8 +185,8 @@ def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
     resolved = apply_resolved_defaults(args, repo_root=repo)
 
     assert args.input_csv == str(package / "crm_judge_input.csv")
-    assert args.pulse_data == str(repo / "release" / "crm" / "dataset-v1.0.0")
-    assert args.dataset_version == "dataset-v1.0.0+qa-pairs-v0.3.0"
+    assert args.pulse_data == str(repo / "release" / "crm" / "v1.0.0" / "dataset")
+    assert args.dataset_version == "v1.0.0"
     assert args.platform_version == "pulse-2026.09"
     assert set(resolved.derived) == {
         "--input-csv",
@@ -207,7 +198,7 @@ def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
 
 def test_explicit_flags_are_never_overridden(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    _qa_package(repo, "0.3.0", joined=True)
+    _qa_package(repo, "v1.0.0", joined=True)
 
     args = build_argparser().parse_args(
         [
@@ -233,7 +224,7 @@ def test_explicit_flags_are_never_overridden(tmp_path: Path) -> None:
 
 def test_sql_pulse_refuses_to_guess_when_the_dataset_is_absent(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    _qa_package(repo, "0.3.0", joined=True)
+    _qa_package(repo, "v1.0.0", joined=True)
 
     args = build_argparser().parse_args(
         ["--domain", "crm", "--profile", "full", "--pulse", "sql"]

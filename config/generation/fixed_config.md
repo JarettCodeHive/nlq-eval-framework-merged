@@ -35,13 +35,13 @@ Source: `config/generation/crm/release.json`, assembled through
 | Setting | Value |
 |---|---|
 | `domain` | `crm` |
-| `dataset_version` | `dataset-v1.0.0` |
+| `release_version` | `v1.0.0` |
 | `schema_source` | `schemas/crm/crm_ddl.sql` |
 | `manifest_generated_at` | `2026-09-04T00:00:00` |
 | `dev` output path | `tmp/generated/crm/dev` |
-| `full` output path | `release/crm/dataset-v1.0.0` |
+| `full` output path | `release/crm/v1.0.0/dataset` |
 
-`manifest_generated_at` is intentionally fixed per dataset version. A
+`manifest_generated_at` is intentionally fixed per release version. A
 wall-clock manifest timestamp would make clean-room regeneration fail the
 byte-identical manifest contract.
 
@@ -64,7 +64,7 @@ The CSV format contract is also fixed in `base.json`:
 
 Step 9 is complete when:
 
-- The CRM dataset version is fixed.
+- The CRM evaluation-release version is fixed and shared by dataset and Q&A.
 - The root seed and `reference_today` are fixed.
 - `dev` and `full` profiles are declared.
 - Output paths are declared for both profiles.

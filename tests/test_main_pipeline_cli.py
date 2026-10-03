@@ -12,12 +12,21 @@ from main import COMMANDS, build_parser, run_pipeline
 
 def test_run_pipeline_is_registered_and_accepts_only_shared_inputs() -> None:
     args = build_parser().parse_args(
-        ["run-pipeline", "--domain", "sales", "--profile", "full"]
+        [
+            "run-pipeline",
+            "--domain",
+            "sales",
+            "--profile",
+            "full",
+            "--version",
+            "client-2.4.0",
+        ]
     )
 
     assert COMMANDS["run-pipeline"] is run_pipeline
     assert args.domain == "sales"
     assert args.profile == "full"
+    assert args.release_version == "client-2.4.0"
 
 
 def test_run_pipeline_runs_each_command_in_order_with_judge_defaults(
@@ -44,11 +53,20 @@ def test_run_pipeline_runs_each_command_in_order_with_judge_defaults(
     run_pipeline(args)
 
     assert calls == [
-        ("build-dataset", {"domain": "crm", "profile": "dev"}),
-        ("qa-build", {"domain": "crm", "profile": "dev"}),
+        (
+            "build-dataset",
+            {"domain": "crm", "profile": "dev", "release_version": None},
+        ),
+        ("qa-build", {"domain": "crm", "profile": "dev", "release_version": None}),
         (
             "dataset-delete",
-            {"domain": "crm", "profile": "dev", "yes": True, "dry_run": False},
+            {
+                "domain": "crm",
+                "profile": "dev",
+                "yes": True,
+                "dry_run": False,
+                "release_version": None,
+            },
         ),
         (
             "dataset-upload",
@@ -57,6 +75,7 @@ def test_run_pipeline_runs_each_command_in_order_with_judge_defaults(
                 "profile": "dev",
                 "replace": False,
                 "dry_run": False,
+                "release_version": None,
             },
         ),
         (
@@ -65,6 +84,7 @@ def test_run_pipeline_runs_each_command_in_order_with_judge_defaults(
                 "domain": "crm",
                 "profile": "dev",
                 "command_argv": ["--allow-uncalibrated", "--limit", "3"],
+                "release_version": None,
             },
         ),
     ]

@@ -75,6 +75,7 @@ from scorecard.summary import (
     write_question_results_csv,
     write_scorecard_summary_csv,
 )
+from release_bundle import component_dir
 
 # Non-live Pulse sources (fixtures / offline stand-ins). A --release run against
 # one of these still produces artifacts, but its baseline is marked provisional
@@ -94,8 +95,7 @@ def run_output_dir(domain: str, run_id: str, cfg: JudgeConfig) -> Path:
     launched from a subdirectory still lands in the same place.
     """
 
-    root = cfg.run_output_root.format(domain=domain)
-    return REPO_ROOT / root / run_id
+    return component_dir(domain, "judge") / run_id
 
 
 # Measured against org 4104 on the crm_dataset_v2 full profile.
