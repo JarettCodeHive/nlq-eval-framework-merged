@@ -20,6 +20,7 @@ from pathlib import Path
 from .output_paths import qa_version
 from .serialization import SerializationError, serialize
 
+
 @dataclass
 class Result:
     status: str  # "ok" | "blocked" | "error"

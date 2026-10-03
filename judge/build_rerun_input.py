@@ -37,7 +37,7 @@ import json
 import re
 from pathlib import Path
 
-from release_bundle import component_dir
+from qa_pairs.utils.release_bundle import component_dir
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 

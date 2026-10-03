@@ -24,7 +24,7 @@ from pathlib import Path
 
 from judge.build_input import build as build_judge_input
 from judge.config import REPO_ROOT, load_env, load_judge_config
-from release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import active_release_version
 
 PROFILES: tuple[str, ...] = ("dev", "full")
 
@@ -191,14 +191,7 @@ def dataset_csv_dir(
             profile=profile,
         )
     else:
-        versions = sorted(
-            (root / "release" / domain).glob("*/dataset"),
-            key=_version_key,
-            reverse=True,
-        )
-        if not versions:
-            return None
-        base = versions[0]
+        return None
     # A dev build keeps one directory per pipeline stage. The pairs were authored
     # against the imperfect stage, so that is the only stage worth replaying.
     imperfect = base / "imperfect"

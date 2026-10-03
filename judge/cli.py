@@ -42,7 +42,6 @@ from judge.config import (
     FloodgateOIDCSettings,
     JudgeConfig,
     MissingCredentials,
-    REPO_ROOT,
     load_judge_config,
     load_llm_settings,
     trust_os_ca_store,
@@ -75,7 +74,7 @@ from scorecard.summary import (
     write_question_results_csv,
     write_scorecard_summary_csv,
 )
-from release_bundle import component_dir
+from qa_pairs.utils.release_bundle import component_dir
 
 # Non-live Pulse sources (fixtures / offline stand-ins). A --release run against
 # one of these still produces artifacts, but its baseline is marked provisional

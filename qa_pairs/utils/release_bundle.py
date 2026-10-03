@@ -1,21 +1,15 @@
-"""Shared release-bundle identity and path resolution.
-
-A release version identifies the complete evaluation asset set for one domain:
-dataset, Q&A pairs, judge evidence, and scorecards.  The root CLI selects the
-version once and every component resolves its paths through this module.
-"""
+"""Shared release-bundle identity and path resolution."""
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from contextvars import ContextVar
 import json
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Iterator
 
-
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _VERSION = ContextVar[str | None]("nlq_release_version", default=None)
 _VALID_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -56,7 +50,6 @@ def configured_release_version(config: dict) -> str:
     if not configured:
         raise ValueError("release configuration is missing release_version")
     value = str(configured)
-    # Old configuration used dataset-vX.Y.Z.  New bundles use vX.Y.Z.
     if "release_version" not in config and value.startswith("dataset-"):
         value = value.removeprefix("dataset-")
     return validate_release_version(value)
@@ -68,13 +61,6 @@ def active_release_version(config: dict) -> str:
     return selected_release_version() or configured_release_version(config)
 
 
-def bundle_root(domain: str, version: str | None = None) -> Path:
-    """Return ``release/<domain>/<version>`` for the active release."""
-
-    selected = version or selected_release_version() or default_release_version(domain)
-    return REPO_ROOT / "release" / domain / validate_release_version(selected)
-
-
 def default_release_version(domain: str) -> str:
     """Read a domain's checked-in default release version."""
 
@@ -83,6 +69,13 @@ def default_release_version(domain: str) -> str:
         raise ValueError(f"no release configuration exists for domain {domain!r}")
     config = json.loads(path.read_text(encoding="utf-8"))
     return configured_release_version(config)
+
+
+def bundle_root(domain: str, version: str | None = None) -> Path:
+    """Return ``release/<domain>/<version>`` for the active release."""
+
+    selected = version or selected_release_version() or default_release_version(domain)
+    return REPO_ROOT / "release" / domain / validate_release_version(selected)
 
 
 def component_dir(domain: str, component: str, version: str | None = None) -> Path:

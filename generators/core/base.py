@@ -22,8 +22,8 @@ from numbers import Real
 from pathlib import Path
 from typing import Any
 
-from release_bundle import active_release_version
-from release_bundle import validate_release_version
+from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import validate_release_version
 
 from generators.core.config import load_domain_config
 

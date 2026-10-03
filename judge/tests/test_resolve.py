@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from release_bundle import use_release_version
+from qa_pairs.utils.release_bundle import use_release_version
 
 from judge.cli import build_argparser
 from judge.resolve import (

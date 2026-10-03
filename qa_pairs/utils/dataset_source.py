@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from release_bundle import active_release_version
+from .release_bundle import active_release_version
 
 
 @dataclass(frozen=True)

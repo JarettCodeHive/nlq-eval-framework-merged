@@ -45,8 +45,8 @@ from qa_pairs.generator.project_management.validate_project_management import (
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
 from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
 from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
-from release_bundle import default_release_version
-from release_bundle import use_release_version
+from qa_pairs.utils.release_bundle import default_release_version
+from qa_pairs.utils.release_bundle import use_release_version
 
 from judge.build_input import build as build_judge_input
 from judge.cli import build_argparser as build_judge_argparser
@@ -496,26 +496,32 @@ def run_qa_stage_dataset(args: argparse.Namespace) -> None:
 
 
 def run_qa_build(args: argparse.Namespace) -> None:
-    """Stage, validate, and generate the production Q&A pair set."""
+    """Stage, validate, and generate the complete production Q&A package."""
 
     stage = _qa_domain_fn(QA_STAGE, args.domain)
     validate = _qa_domain_fn(QA_VALIDATE, args.domain)
     generate = _qa_domain_fn(QA_GENERATE, args.domain)
     progress = ProgressReporter()
+    total = 4 if args.domain == "crm" else 3
 
     with use_release_version(getattr(args, "release_version", None)):
         progress.report(
-            f"Step 1/3: Stage the generated {args.domain} dataset for Q&A authoring"
+            f"Step 1/{total}: Stage the generated {args.domain} dataset for Q&A authoring"
         )
         stage(args.profile)
 
-        progress.report(f"Step 2/3: Validate the staged {args.domain} dataset")
+        progress.report(f"Step 2/{total}: Validate the staged {args.domain} dataset")
         validate(args.profile)
 
         progress.report(
-            f"Step 3/3: Generate and verify the {args.domain} Q&A pair set"
+            f"Step 3/{total}: Generate and verify the {args.domain} Q&A pair set"
         )
         generate(args.profile)
+        if args.domain == "crm":
+            progress.report(
+                "Step 4/4: Generate and verify CRM rephrase-group variants"
+            )
+            generate_rephrases(args.profile)
 
     print(f"{args.domain} Q&A pair build passed")
     print(f"domain: {args.domain}")

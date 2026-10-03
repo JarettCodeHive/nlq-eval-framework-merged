@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 
 from pydantic import BaseModel
-from release_bundle import component_dir
+from qa_pairs.utils.release_bundle import component_dir
 
 MODULE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = MODULE_ROOT.parent

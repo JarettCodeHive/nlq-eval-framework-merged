@@ -1,7 +1,5 @@
 """Unified evaluation-release path contract."""
 
-from pathlib import Path
-
 import pytest
 
 from generators.core.base import GenerationSettings
@@ -9,7 +7,11 @@ from judge.cli import run_output_dir
 from judge.config import load_judge_config
 from qa_pairs.utils.dataset_source import resolve_dataset_source
 from qa_pairs.utils.output_paths import resolve_qa_output_dir
-from release_bundle import REPO_ROOT, use_release_version, validate_release_version
+from qa_pairs.utils.release_bundle import (
+    REPO_ROOT,
+    use_release_version,
+    validate_release_version,
+)
 from scorecard.config import report_output_dir
 
 
@@ -40,4 +42,3 @@ def test_one_cli_version_resolves_every_full_release_component() -> None:
 def test_release_version_must_be_one_safe_directory_name(version: str) -> None:
     with pytest.raises(ValueError, match="release version"):
         validate_release_version(version)
-

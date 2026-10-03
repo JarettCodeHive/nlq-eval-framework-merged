@@ -44,8 +44,8 @@ from scorecard.summary import (
     write_question_results_csv,
     write_scorecard_summary_csv,
 )
-from release_bundle import active_release_version
-from release_bundle import selected_release_version
+from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import selected_release_version
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 

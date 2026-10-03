@@ -201,8 +201,8 @@ single CLI/config release version resolves both components, preventing a pair
 set from being verified against the wrong dataset.
 
 `qa-build` stages the selected generated dataset, validates it, and generates
-the complete SQL-verified pair set. It does not create review fixtures or
-rephrase variants.
+the complete SQL-verified pair set. For CRM it also generates the required
+rephrase-group variants; review-only seed fixtures remain a separate command.
 
 ### Judge and Scorecard Workflow
 

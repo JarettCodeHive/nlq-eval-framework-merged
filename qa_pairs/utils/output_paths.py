@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from release_bundle import active_release_version
+from .release_bundle import active_release_version
 
 
 def load_qa_config(qa_root: Path, generator_dir: str) -> dict:
@@ -25,9 +25,7 @@ def qa_version(qa_root: Path, generator_dir: str) -> str:
 
     config = load_qa_config(qa_root, generator_dir)
     release_config = json.loads(
-        (qa_root.parent / config["dataset"]["release_config_path"]).read_text(
-            encoding="utf-8"
-        )
+        (qa_root.parent / config["dataset"]["release_config_path"]).read_text(encoding="utf-8")
     )
     return active_release_version(release_config)
 
