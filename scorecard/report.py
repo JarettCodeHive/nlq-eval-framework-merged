@@ -21,18 +21,11 @@ from scorecard.summary import (
 # against it so a reader sees pass/fail rather than a number needing context.
 ACCURACY_GATE_PCT: float = 95.0
 
-# §9.1's per-domain tier quota — the CONTRACT figure, 160 pairs per domain.
-# Used as the fallback when a domain declares no quota of its own, and as the
-# yardstick for whether a domain's own declared quota meets the contract.
-SPEC_TIER_QUOTA: dict[str, int] = {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24}
-# Kept as the historical name; several call sites and readers know it.
-TIER_QUOTA = SPEC_TIER_QUOTA
-
 # Status palette, taken as given from a validated reference instance rather than
 # chosen by eye. Light-surface contrast is 3.27 / 1.79 / 2.57 / 4.68 — warning
 # and serious are sub-3:1 BY DESIGN, and the stated mitigation is that a status
-# colour never carries meaning alone. Every use below is paired with the number
-# and a verdict word, so hue is redundant.
+# colour never carries meaning alone. Every use below is paired with a number and
+# a verdict word, so hue is redundant. For TEXT, see `_pct_ink_hex`.
 _STATUS_GOOD = "#0ca30c"
 _STATUS_WARNING = "#fab219"
 _STATUS_SERIOUS = "#ec835a"
@@ -55,6 +48,7 @@ def _status_fill(pct: object) -> str:
     if pct >= 50:
         return _STATUS_SERIOUS
     return _STATUS_CRITICAL
+
 
 def _pct_ink_hex(pct: object) -> str:
     """A TEXT-safe ink for a status verdict, banded like `_status_fill`.
@@ -476,6 +470,198 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
     return table
 
 
+def _outcome_chart(rows: list[dict], *, width: float, height: float):
+    """How the platform RESPONDED, as one stacked bar per domain.
+
+    FORM. Part-to-whole across five mutually exclusive outcomes, so a stacked bar
+    — and only five segments, inside the <=6 a stack can carry. The accuracy
+    percentage answers "how often was it right"; this answers "what did it do",
+    which is a different question and the one that explains the percentage. A
+    domain whose misses are mostly declined questions needs a different
+    conversation from one whose misses are wrong numbers.
+
+    COLOUR. Status, not identity: each segment is a state (right, wrong, declined,
+    errored, nothing deterministic to compare), so it comes from the reserved
+    status palette. Two of those steps are sub-3:1 here by design, so every
+    segment is also named in the legend with its count — hue is never the only
+    carrier.
+    """
+
+    from reportlab.graphics.shapes import Drawing, Line, Rect, String
+    from reportlab.lib import colors
+
+    domains = [r for r in rows if r["tier"] == "ALL"]
+    if not domains:
+        return None
+
+    # (key, label, status step). Ordered good -> bad -> not-applicable so the
+    # stack reads left to right as "how well did this go".
+    segments = (
+        ("_pass", "answered correctly", _STATUS_GOOD),
+        ("_fail", "answered incorrectly", _STATUS_CRITICAL),
+        ("exact_match_clarification", "declined, asked to clarify", _STATUS_WARNING),
+        ("platform_errors", "no answer returned", _STATUS_SERIOUS),
+        ("exact_match_not_applicable", "no deterministic core", _INK_MUTED),
+    )
+
+    left, right, top, bottom = 58, 8, 16, 30
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    bar_h = min(14.0, plot_h / max(1, len(domains)) - 10)
+    gap = (plot_h - bar_h * len(domains)) / max(1, len(domains))
+
+    drawing = Drawing(width, height)
+    for index, row in enumerate(reversed(domains)):
+        total = int(row.get("questions_total") or 0)
+        if not total:
+            continue
+        passed = int(row.get("exact_match_pass") or 0)
+        clarified = int(row.get("exact_match_clarification") or 0)
+        errored = int(row.get("platform_errors") or 0)
+        not_applicable = int(row.get("exact_match_not_applicable") or 0)
+        counts = {
+            "_pass": passed,
+            "_fail": max(0, total - passed - clarified - errored - not_applicable),
+            "exact_match_clarification": clarified,
+            "platform_errors": errored,
+            "exact_match_not_applicable": not_applicable,
+        }
+
+        y = bottom + index * (bar_h + gap) + gap / 2
+        drawing.add(
+            String(left - 8, y + bar_h / 2 - 3, _domain_label(row["domain"]),
+                   fontName="Helvetica-Bold", fontSize=8,
+                   fillColor=colors.HexColor(_INK), textAnchor="end")
+        )
+        x = left
+        for key, _label, fill in segments:
+            count = counts.get(key, 0)
+            if not count:
+                continue
+            seg_w = plot_w * count / total
+            drawing.add(
+                Rect(x, y, max(0.0, seg_w - 2), bar_h, rx=0, ry=0,
+                     fillColor=colors.HexColor(fill),
+                     strokeColor=colors.HexColor(_SURFACE), strokeWidth=0)
+            )
+            # Count inside the segment only when it fits; never clipped.
+            if seg_w > 24:
+                drawing.add(
+                    String(x + (seg_w - 2) / 2, y + bar_h / 2 - 3, str(count),
+                           fontName="Helvetica-Bold", fontSize=7,
+                           fillColor=colors.white, textAnchor="middle")
+                )
+            # 2px surface gap between fills, per the mark spec — a gap, not a border.
+            x += seg_w
+        drawing.add(
+            String(left + plot_w + 4, y + bar_h / 2 - 3, f"n={total}",
+                   fontName="Helvetica", fontSize=7,
+                   fillColor=colors.HexColor(_INK_MUTED))
+        )
+
+    # Legend: always present for >=2 series, so identity is never colour-alone —
+    # but only for outcomes that actually occurred. A swatch for "no answer
+    # returned" on a run where nothing failed reads as though something did.
+    present = set()
+    for row in domains:
+        total = int(row.get("questions_total") or 0)
+        if not total:
+            continue
+        passed = int(row.get("exact_match_pass") or 0)
+        clarified = int(row.get("exact_match_clarification") or 0)
+        errored = int(row.get("platform_errors") or 0)
+        not_applicable = int(row.get("exact_match_not_applicable") or 0)
+        if passed:
+            present.add("_pass")
+        if total - passed - clarified - errored - not_applicable > 0:
+            present.add("_fail")
+        if clarified:
+            present.add("exact_match_clarification")
+        if errored:
+            present.add("platform_errors")
+        if not_applicable:
+            present.add("exact_match_not_applicable")
+
+    lx = left
+    ly = 10
+    for _key, label, fill in [s for s in segments if s[0] in present]:
+        drawing.add(Rect(lx, ly, 7, 7, fillColor=colors.HexColor(fill),
+                         strokeColor=colors.HexColor(fill), strokeWidth=0))
+        drawing.add(String(lx + 11, ly + 1, label, fontName="Helvetica", fontSize=6.5,
+                           fillColor=colors.HexColor(_INK_MUTED)))
+        lx += 11 + len(label) * 3.3 + 14
+    drawing.add(Line(left, bottom - 6, left + plot_w, bottom - 6,
+                     strokeColor=colors.HexColor("#e6e7e4"), strokeWidth=0.5))
+    return drawing
+
+
+def _dimension_chart(rows: list[dict], domain: str, *, width: float, height: float):
+    """The judge's four dimensions for one domain, on the 1-5 rubric scale.
+
+    This is the chart that was missing. The dimensions sat in a table column, so
+    the most actionable thing in the run was invisible: on CRM the platform scores
+    ~4.1 for SQL plausibility and ~3.2 for factual correctness, which says it
+    writes credible SQL and still returns the wrong number. That distinction
+    decides whether the conversation is about query generation or about data
+    interpretation, and a reader should not have to diff two columns to find it.
+
+    FORM. Four ordered-by-nothing categories against a common 1-5 scale, so bars
+    on one axis. One series, so one colour — a per-bar value ramp would encode
+    length twice and burn the only free channel.
+    """
+
+    from reportlab.graphics.shapes import Drawing, Line, Rect, String
+    from reportlab.lib import colors
+
+    row = next((r for r in rows if r["domain"] == domain and r["tier"] == "ALL"), None)
+    if row is None:
+        return None
+    dims = (
+        ("judge_factual", "factual correctness"),
+        ("judge_completeness", "completeness"),
+        ("judge_format", "format adherence"),
+        ("judge_sql", "SQL plausibility"),
+    )
+    values = [(label, row.get(key)) for key, label in dims]
+    if not any(isinstance(v, (int, float)) for _l, v in values):
+        return None
+
+    left, right, top, bottom = 108, 54, 12, 22
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    bar_h = min(9.0, plot_h / len(values) - 5)
+    gap = (plot_h - bar_h * len(values)) / len(values)
+
+    drawing = Drawing(width, height)
+    # Recessive grid at each rubric anchor. 1, 3 and 5 are the scored anchors in
+    # §10; 2 and 4 are interpolated, so they are ticked but not labelled.
+    for score in (1, 2, 3, 4, 5):
+        x = left + plot_w * (score - 1) / 4
+        drawing.add(Line(x, bottom, x, bottom + plot_h,
+                         strokeColor=colors.HexColor("#e6e7e4"), strokeWidth=0.5))
+        drawing.add(String(x, bottom - 10, str(score) if score in (1, 3, 5) else "",
+                           fontName="Helvetica", fontSize=6.5,
+                           fillColor=colors.HexColor(_INK_MUTED), textAnchor="middle"))
+
+    for index, (label, value) in enumerate(reversed(values)):
+        y = bottom + index * (bar_h + gap) + gap / 2
+        drawing.add(String(left - 6, y + bar_h / 2 - 2.5, label,
+                           fontName="Helvetica", fontSize=7.5,
+                           fillColor=colors.HexColor(_INK), textAnchor="end"))
+        if not isinstance(value, (int, float)):
+            continue
+        # 1 is the floor of the scale, not zero, so the bar starts at 1.
+        bar_w = plot_w * (max(1.0, min(5.0, value)) - 1) / 4
+        if bar_w >= 1.0:
+            fill = colors.HexColor(_status_fill(((value - 1) / 4) * 100))
+            drawing.add(Rect(left, y, bar_w, bar_h, rx=3, ry=3, fillColor=fill,
+                             strokeColor=fill.clone(), strokeWidth=0.5))
+        drawing.add(String(left + plot_w + 6, y + bar_h / 2 - 2.5, f"{value:.2f}",
+                           fontName="Helvetica-Bold", fontSize=7.5,
+                           fillColor=colors.HexColor(_INK)))
+    return drawing
+
+
 def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
     """Per-tier accuracy as horizontal bars against the §14.2 gate.
 
@@ -573,136 +759,101 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
     return drawing
 
 
-def gate_checklist(
+def platform_findings(
     ctx: RunContext, rows: list[dict], comparisons: dict
 ) -> list[tuple[str, str, str]]:
-    """The §14.2 nine conditions as (condition, verdict, note).
+    """What this run observed about the PLATFORM, as (finding, verdict, basis).
 
-    §14.2 is a ship / do-not-ship instrument, so the scorecard states where the
-    run sits against it. Conditions this artefact cannot observe — an
-    independent reviewer re-executing every reference_sql, for instance — are
-    marked MANUAL rather than quietly omitted or assumed passed.
+    This replaced a table of §14.2's nine ship conditions. Seven of those nine
+    describe our own deliverables — an independent reviewer re-executing the
+    reference SQL, cross-domain question uniqueness, a clean-room byte-identical
+    regeneration, whether a failing pair was reworked rather than removed. None of
+    them say anything about how Pulse answered, and printing them on a card the
+    Platform Owner reads as a verdict on their platform confuses the evaluation
+    framework with the thing being evaluated. They belong in the §14.1 QA audit
+    report, which is a separate deliverable.
+
+    What is left here is only what the run can assert about the system under
+    evaluation. Three of these were already computed and buried in table columns.
     """
 
     domain_rows = [r for r in rows if r["tier"] == "ALL"]
+    out: list[tuple[str, str, str]] = []
+
     below = [
         r["domain"]
         for r in domain_rows
         if isinstance(r.get("exact_match_pct"), (int, float))
         and r["exact_match_pct"] < ACCURACY_GATE_PCT
     ]
-    excluded = sum(int(r.get("exact_match_clarification") or 0) for r in domain_rows)
-    excluded += sum(int(r.get("exact_match_not_applicable") or 0) for r in domain_rows)
-
-    checks: list[tuple[str, str, str]] = [
+    out.append(
         (
-            f"1. >={ACCURACY_GATE_PCT:.0f}% exact-match, every domain",
-            "FAIL" if below else "PASS",
-            f"below the gate: {', '.join(below)}" if below else "all domains at or above",
-        ),
+            f"Deterministic accuracy vs the {ACCURACY_GATE_PCT:.0f}% gate",
+            "BELOW GATE" if below else "MEETS GATE",
+            ", ".join(
+                f"{_domain_label(r['domain'])} {r['exact_match_pct']:.2f}%"
+                for r in domain_rows
+                if isinstance(r.get("exact_match_pct"), (int, float))
+            )
+            or "no eligible questions",
+        )
+    )
+
+    regressed = sorted(d for d, c in comparisons.items() if c.regression_flag)
+    if any(c.has_baseline for c in comparisons.values()):
+        out.append(
+            (
+                "Change against the established baseline",
+                "REGRESSION" if regressed else "NO REGRESSION",
+                f"{', '.join(_domain_label(d) for d in regressed)} dropped ≥5 pp"
+                if regressed
+                else "no domain dropped 5 pp or more",
+            )
+        )
+
+    errors = sum(int(r.get("platform_errors") or 0) for r in domain_rows)
+    out.append(
         (
-            "2. Numeric values identical on repeat runs",
-            "PASS" if ctx.judge_seed_enforced and ctx.judge_temperature_enforced else "AT RISK",
-            "exact-match is deterministic; the judge's own determinism is "
-            + ("enforced" if ctx.judge_seed_enforced and ctx.judge_temperature_enforced
-               else "NOT fully enforced this run"),
-        ),
-        ("3. Independent reviewer re-executes every reference_sql", "MANUAL",
-         "§15 protocol — not observable from a run"),
+            "Platform answered every question",
+            "YES" if not errors else "NO",
+            "no request failed"
+            if not errors
+            else f"{errors} question(s) the platform could not answer at all",
+        )
+    )
+
+    clarified = sum(int(r.get("exact_match_clarification") or 0) for r in domain_rows)
+    if clarified:
+        out.append(
+            (
+                "Questions the platform declined to answer (§2e)",
+                f"{clarified}",
+                "answered with a clarifying question instead; scored at a fixed "
+                f"{CLARIFICATION_SCORE} and held outside the percentage",
+            )
+        )
+
+    nulls = sum(int(r.get("null_handling_fail") or 0) for r in domain_rows)
+    out.append(
         (
-            "4. Failing pairs reworked, never removed",
-            "REVIEW" if excluded else "PASS",
-            f"{excluded} question(s) sit outside the percentage this run — confirm "
-            "each is a genuine exclusion" if excluded
-            else "no questions excluded from the denominator",
-        ),
-        ("5. Generated SQL logged for every failure", "PASS",
-         "platform_generated_sql is written for every question in question_results.csv"),
-        ("6. Cross-domain question uniqueness", "MANUAL",
-         "§15 normalise-and-hash across the corpus"),
-        (
-            "7. Baseline run completed across all domains",
-            "PASS" if ctx.scorecard_mode == "RELEASE" else "NOT YET",
-            f"this is a {ctx.scorecard_mode} scorecard"
-            + ("" if ctx.scorecard_mode == "RELEASE" else "; only a RELEASE run establishes a baseline"),
-        ),
-        ("8. Clean-room re-run reproduces byte-identical CSVs", "MANUAL",
-         "asserted by the dataset pipeline, not by this run"),
-        (
-            "9. CRM certified before final delivery",
-            "PASS" if "crm" not in below and any(r["domain"] == "crm" for r in domain_rows)
-            else ("FAIL" if "crm" in below else "NOT COVERED"),
-            "crm is above the gate" if "crm" not in below and any(
-                r["domain"] == "crm" for r in domain_rows)
-            else ("crm is below the gate" if "crm" in below else "no crm rows in this scorecard"),
-        ),
-    ]
-    return checks
+            "NULL / outer-join handling (§9.2, T3)",
+            "PASS" if not nulls else "FAIL",
+            "outer-join questions preserved the rows an outer join preserves"
+            if not nulls
+            else f"{nulls} question(s) answered an outer-join question with an "
+            "inner join, silently dropping unmatched rows",
+        )
+    )
 
+    if ctx.rephrase_findings:
+        out.append(
+            (
+                "Rephrase-group agreement (§9.5)",
+                "DISAGREEMENT",
+                "; ".join(str(f) for f in ctx.rephrase_findings)[:160],
+            )
+        )
 
-def domain_tier_quota(domain: str) -> dict[str, int]:
-    """The tier quota this domain actually declares, else the §9.1 contract.
-
-    Read from the domain's own Q&A config through the judge's read-only pointer,
-    because the quota is the Q&A side's declaration and differs per domain: CRM
-    declares 32/40/32/32/24 (160) and Sales declares 21/36/15/18/14 (104). A
-    single hardcoded table reported all five Sales tiers as SHORT, which is not
-    what §14.2 condition 4 means — nothing left the Sales set, it was authored
-    smaller. That is a separate finding, surfaced by `quota_shortfall`.
-    """
-
-    try:
-        from judge.config import REPO_ROOT, load_judge_config
-
-        release = load_judge_config(domain).release
-        pointer = REPO_ROOT / release.qa_config_path.format(domain=domain)
-        if pointer.is_file():
-            import json
-
-            declared = json.loads(pointer.read_text(encoding="utf-8")).get("tier_quota")
-            if isinstance(declared, dict) and declared:
-                return {str(k): int(v) for k, v in declared.items()}
-    except Exception:
-        pass
-    return dict(SPEC_TIER_QUOTA)
-
-
-def quota_shortfall(domain: str) -> tuple[int, int]:
-    """`(declared total, §9.1 contract total)` for this domain.
-
-    Distinct from a tier losing a pair: a domain whose authored set is smaller
-    than the contract is a scope gap, not a §14.2 condition-4 breach.
-    """
-
-    return (sum(domain_tier_quota(domain).values()), sum(SPEC_TIER_QUOTA.values()))
-
-
-def tier_quota_rows(rows: list[dict]) -> list[tuple[str, str, int, int, str]]:
-    """Actual questions per tier against the quota that domain declares.
-
-    §14.2's closing line asserts these counts in CI because a tier quietly losing
-    a pair raises the percentage without improving anything. Showing the
-    comparison here makes that visible to a reader, not just to CI.
-
-    Withheld for a PARTIAL run — see the caller, which passes `RunContext.partial_run`.
-    A 10-question smoke reported all ten tiers SHORT with "a pair left the set",
-    having lost nothing at all. Note this cannot be inferred from the counts: a run
-    one pair short of quota IS the condition-4 breach, so a size heuristic would
-    hide exactly what the section exists to show. The judge records whether it
-    scored a subset; that flag decides.
-    """
-
-    out: list[tuple[str, str, int, int, str]] = []
-    for row in rows:
-        domain = str(row["domain"])
-        tier = str(row["tier"])
-        quota_by_tier = domain_tier_quota(domain)
-        if tier == "ALL" or tier not in quota_by_tier:
-            continue
-        actual = int(row.get("questions_total") or 0)
-        quota = quota_by_tier[tier]
-        verdict = "ok" if actual == quota else ("SHORT" if actual < quota else "over")
-        out.append((domain, tier, actual, quota, verdict))
     return out
 
 
@@ -1035,7 +1186,7 @@ def write_scorecard_pdf(
     story.append(prov)
 
     # --- ship / do-not-ship, against §14.2 --------------------------------
-    checks = gate_checklist(ctx, rows, comparisons)
+    checks = platform_findings(ctx, rows, comparisons)
     verdict_ink = {
         "PASS": colors.HexColor("#1b7f3b"),
         "FAIL": colors.HexColor("#b42318"),
@@ -1046,7 +1197,7 @@ def write_scorecard_pdf(
         "NOT COVERED": colors.HexColor(_INK_MUTED),
     }
     gate_table = Table(
-        [["§14.2 condition", "status", "basis"]]
+        [["what this run observed about the platform", "verdict", "basis"]]
         + [[c, v, note] for c, v, note in checks],
         colWidths=[3.3 * inch, 0.95 * inch, 5.85 * inch],
         hAlign="LEFT",
@@ -1073,13 +1224,62 @@ def write_scorecard_pdf(
         KeepTogether(
             [
                 Paragraph(
-                    "Accuracy gate (§14.2) — all nine before the package ships",
+                    "Platform findings — what this run observed about Pulse",
                     section,
                 ),
                 gate_table,
             ]
         )
     )
+
+    # --- what the platform DID, before how often it was right -------------
+    outcome = _outcome_chart(rows, width=7.0 * inch, height=1.5 * inch)
+    if outcome is not None:
+        story.append(
+            KeepTogether(
+                [
+                    Paragraph("Answer outcomes", section),
+                    outcome,
+                    Paragraph(
+                        "<i>The accuracy percentage counts only questions with a "
+                        "deterministic core that the platform actually answered. "
+                        "Declined questions and errors sit outside it, so this is "
+                        "where they are visible (§14.2 condition 4).</i>",
+                        body,
+                    ),
+                ]
+            )
+        )
+        story.append(Spacer(1, 0.10 * inch))
+
+    # --- where answer QUALITY drops, per dimension ------------------------
+    for domain in sorted({r["domain"] for r in rows}):
+        chart = _dimension_chart(rows, domain, width=6.6 * inch, height=1.15 * inch)
+        if chart is None:
+            continue
+        story.append(
+            KeepTogether(
+                [
+                    Paragraph(
+                        f"Judge dimensions — {_domain_label(domain)}", section
+                    ),
+                    chart,
+                ]
+            )
+        )
+    if any(r["tier"] == "ALL" for r in rows):
+        story.append(
+            Paragraph(
+                "<i>The §10 rubric, 1–5, averaged over the domain. The gap between "
+                "SQL plausibility and factual correctness is the useful read: a high "
+                "SQL score beside a low factual score means the platform is writing "
+                "credible queries and still returning the wrong number, which is a "
+                "different problem from writing a query that cannot answer the "
+                "question. Never blended with exact-match (§11.3).</i>",
+                body,
+            )
+        )
+        story.append(Spacer(1, 0.10 * inch))
 
     # --- per-tier shape, as a picture -------------------------------------
     for domain in sorted({r["domain"] for r in rows}):
@@ -1093,59 +1293,6 @@ def write_scorecard_pdf(
                         f"Exact-match by tier — {_domain_label(domain)}", section
                     ),
                     chart,
-                ]
-            )
-        )
-
-    # --- §9.1 quota, because condition 4 is about counts ------------------
-    quota = [] if ctx.partial_run else tier_quota_rows(rows)
-    if quota:
-        short = [q for q in quota if q[4] == "SHORT"]
-        quota_table = Table(
-            [["domain", "tier", "questions", "§9.1 quota", ""]]
-            + [
-                [_domain_label(d), t, str(a), str(q), v]
-                for d, t, a, q, v in quota
-            ],
-            hAlign="LEFT",
-            repeatRows=1,
-        )
-        qstyle = [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#22304a")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("ALIGN", (2, 1), (3, -1), "RIGHT"),
-            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#c9ced6")),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ]
-        for index, entry in enumerate(quota, start=1):
-            if entry[4] == "SHORT":
-                qstyle.append(
-                    ("TEXTCOLOR", (0, index), (-1, index), colors.HexColor("#b42318"))
-                )
-                qstyle.append(
-                    ("FONTNAME", (4, index), (4, index), "Helvetica-Bold")
-                )
-        quota_table.setStyle(TableStyle(qstyle))
-        # Heading, table and footnote travel together. The table split across a
-        # page break before, leaving a headerless continuation whose rows read as
-        # belonging to whatever preceded them.
-        story.append(
-            KeepTogether(
-                [
-                    Paragraph("Pair counts against the §9.1 quota", section),
-                    quota_table,
-                    Paragraph(
-                        "<i>A tier short of quota means a pair left the set. §14.2 "
-                        "condition 4: failing pairs are reworked, never removed — "
-                        "removing one raises the percentage without improving "
-                        "anything."
-                        + ("" if not short else " <b>Short tiers above.</b>")
-                        + "</i>",
-                        body,
-                    ),
                 ]
             )
         )

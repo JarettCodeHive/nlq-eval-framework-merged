@@ -781,7 +781,7 @@ def run_anchors_export(args: argparse.Namespace) -> None:
 
     export_candidates(
         args.domain,
-        run_id=args.run or None,
+        run_id=args.from_run or None,
         profile=args.profile,
         count=args.count or None,
         output=Path(args.sheet) if args.sheet else None,
@@ -802,7 +802,7 @@ def run_anchors_import(args: argparse.Namespace) -> None:
     import_grades(
         args.domain,
         Path(args.sheet),
-        output=Path(args.out) if args.out else None,
+        output=Path(args.anchors_out) if args.anchors_out else None,
         force=args.force,
     )
 
@@ -878,8 +878,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("dev", "full"),
         help="Generation profile to use. Defaults to dev.",
     )
+    # NOT --run: `score --run DOMAIN=RUN_ID` is a passthrough flag, and a
+    # top-level flag of the same name is consumed by this parser first, which
+    # silently dropped the pin and combined the most recent runs instead.
     parser.add_argument(
-        "--run",
+        "--from-run",
         default="",
         help="anchors-export: run id to propose anchors from. Defaults to the "
         "most recent scored run for the domain.",
@@ -897,8 +900,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="anchors-export: how many candidates to propose. Defaults to two "
         "above the domain's min_anchors, so a rejected anchor leaves headroom.",
     )
+    # NOT --out, for the same reason: `score --out DIR` is a passthrough flag.
     parser.add_argument(
-        "--out",
+        "--anchors-out",
         default="",
         help="anchors-import: write the anchor set here instead of the "
         "calibration.anchors_path configured for the domain.",
