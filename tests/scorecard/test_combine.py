@@ -462,3 +462,38 @@ def test_shared_version_is_absent_when_no_run_recorded_one() -> None:
     """
 
     assert mod._shared_version(set()) == ""
+
+
+def test_platform_version_can_be_supplied_at_combine_time(runs, tmp_path: Path) -> None:
+    """A run scored before --platform-version was passed to `judge` records none,
+    and the baseline is keyed on it — so without this the run is unusable as a
+    baseline forever, which is a poor reason to re-spend hours of platform time.
+    """
+
+    inputs = [load_run("crm", runs("crm", "r1", platform_version="").name)]
+
+    assert any("no platform_version" in b for b in release_blockers(inputs))
+    assert not release_blockers(inputs, "pulse-2026.09")
+
+
+def test_a_supplied_version_cannot_contradict_a_recorded_one(runs) -> None:
+    """The run is the evidence. Overriding what it captured would let a card
+    claim a deployment that was never evaluated."""
+
+    inputs = [load_run("crm", runs("crm", "r1", platform_version="pulse-A").name)]
+
+    with pytest.raises(mod.CombineError, match="contradicts"):
+        mod.combine(inputs, platform_version="pulse-B")
+
+
+def test_a_combine_time_tag_is_disclosed_on_the_card(runs, tmp_path: Path) -> None:
+    """A baseline is permanent, so how its key was obtained has to be visible."""
+
+    inputs = [load_run("crm", runs("crm", "r1", platform_version="").name)]
+
+    out = mod.combine(
+        inputs, out_dir=tmp_path / "out", platform_version="pulse-2026.09"
+    ).out_dir
+    text = (out / "scorecard.md").read_text()
+
+    assert "supplied at combine time" in text
