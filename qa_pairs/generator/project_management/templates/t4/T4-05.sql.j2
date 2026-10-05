@@ -1,0 +1,7 @@
+SELECT t.status AS entity, COUNT(*) AS metric
+FROM projects p
+INNER JOIN tasks t ON p.project_id = t.project_id
+INNER JOIN time_entries te ON t.task_id = te.task_id
+WHERE p.status = {{ project_status | sqlstr }}
+GROUP BY t.status
+ORDER BY metric DESC, entity ASC;
