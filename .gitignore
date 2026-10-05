@@ -14,6 +14,7 @@ release/
 
 # Judge-owned local state
 judge/.judge_cache/
+judge/.certs/
 judge/.calibration/
 # Legacy run location. Nothing writes here since runs moved under release/, but
 # earlier runs still hold live-platform payloads worth keeping on disk.

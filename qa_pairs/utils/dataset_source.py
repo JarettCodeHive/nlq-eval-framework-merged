@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from .release_bundle import active_release_version, existing_component_dir
+
 
 @dataclass(frozen=True)
 class DatasetSource:
@@ -48,14 +50,26 @@ def resolve_dataset_source(qa_root: Path, profile: str, generator_dir: str) -> D
     repo_root = qa_root.parent
     release_config_path = repo_root / dataset["release_config_path"]
     release_config = json.loads(release_config_path.read_text(encoding="utf-8"))
-    dataset_version = str(release_config["dataset_version"])
+    dataset_version = active_release_version(release_config)
     source_path = str(sources[profile]).format(
         dataset_version=dataset_version,
+        release_version=dataset_version,
+        domain=config["domain"],
+        profile=profile,
     )
+    if profile == "full":
+        csv_dir = existing_component_dir(
+            config["domain"],
+            "dataset",
+            dataset_version,
+            repo_root=repo_root,
+        )
+    else:
+        csv_dir = repo_root / source_path
     resolved = DatasetSource(
         profile=profile,
         dataset_version=dataset_version,
-        csv_dir=repo_root / source_path,
+        csv_dir=csv_dir,
         base_config_path=repo_root / dataset["base_config_path"],
         release_config_path=release_config_path,
         ddl_path=repo_root / dataset["schema_ddl_path"],

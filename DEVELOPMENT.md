@@ -51,9 +51,9 @@ python main.py build-dataset --domain "$DOMAIN" --profile full
 
 The `dev` profile writes staged output under
 `tmp/generated/<domain>/dev/`. The `full` profile writes a versioned release
-under `release/<domain>/`, runs persisted-data and reproducibility checks, and
-writes `manifest.json` last to seal the release. Corrections to a sealed release
-require a new dataset version.
+under `release/<version>/<domain>/dataset/`, runs persisted-data and
+reproducibility checks, and writes `manifest.json` last to seal the release.
+Corrections to a sealed release require a new release version.
 
 ## Q&A Pair Workflow
 
@@ -91,12 +91,12 @@ confirm that release first, then run:
 python main.py qa-build --domain crm --profile full
 ```
 
-Replace `crm` with `sales` for Sales. The Q&A package has its own version,
-independent from the dataset version, and is written to the location configured
-in `qa_pairs/generator/<domain>/config.json`:
+Replace `crm` with `sales` for Sales. The Q&A package shares the dataset's
+release version and is written to the location configured in
+`qa_pairs/generator/<domain>/config.json`:
 
 ```text
-release/<domain>/qa-pairs-v<qa_version>/
+release/<version>/<domain>/qa_pairs/
 ```
 
 `qa-build` runs these production stages in order:
@@ -190,29 +190,16 @@ CSV contains identifiers but no answers. The judge joins them on the unique
 `natural_language_question` value when the judge input file is absent. Build it
 deliberately after changing the pairs when you want to inspect the result:
 
-```bash
-python main.py judge-build-input --domain crm --profile full
-```
+The judge reads the Q&A contract CSV directly — `<domain>_qa_pairs.csv` —
+because it carries `question_id` and `tier`. There is no derived judge-input
+file and no join step to remember.
 
-The explicit dispatcher command is currently CRM-only; normal `judge` runs
-perform the join on demand.
+`--pulse sql` executes each pair's `reference_sql` against the selected CSV
+dataset; it verifies that pairs and dataset agree (§14.2) and does not evaluate
+the live platform, so its runs are PREVIEW-only.
 
-### Offline and live runs
-
-Use the heuristic test double with local DuckDB execution to validate the
-pipeline without calling Pulse or a semantic judge:
-
-```bash
-python main.py judge --domain crm --profile full \
-  --judge heuristic \
-  --pulse sql \
-  --limit 3
-```
-
-The heuristic judge is deterministic development/CI scaffolding and is never
-release-eligible. `--pulse sql` executes each pair's `reference_sql` against
-the selected CSV dataset; it verifies the pairs and does not evaluate the live
-platform.
+Note it still calls the judge: Anthropic via Floodgate is the only backend, and
+the heuristic test double was removed, so there is no zero-cost offline path.
 
 For a live LLM preview against Pulse:
 
@@ -260,15 +247,15 @@ Each judge run uses one `run_id` across two append-only directories. Earlier
 runs are never rewritten:
 
 ```text
-release/<domain>/
-├── dataset-v<version>/             sealed dataset package
-├── qa-pairs-v<version>/            sealed Q&A package
-├── scorecards/<run_id>/            per-domain §11 deliverables
+release/<version>/<domain>/
+├── dataset/                         sealed dataset package
+├── qa_pairs/                        sealed Q&A package
+├── scorecard/<run_id>/              per-domain §11 deliverables
 │   ├── scorecard.pdf               stakeholder summary
 │   ├── scorecard.md                Markdown summary
 │   ├── scorecard_summary.csv       domain and tier aggregates
 │   └── question_results.csv        one row per question
-└── eval-runs/<run_id>/             evidence and provenance
+└── judge/<run_id>/                  evidence and provenance
     ├── results.json                machine-readable results
     ├── run_manifest.json           commit, input hash, and arguments
     ├── run_log.jsonl               timestamped event stream
@@ -286,7 +273,7 @@ evidence already collected.
 ### Combined scorecards
 
 Combine the latest completed runs for selected domains into a preview
-scorecard under `release/scorecards/<run_id>/`:
+scorecard under `release/<version>/scorecard/<run_id>/`:
 
 ```bash
 python main.py score --domains crm,sales

@@ -14,15 +14,18 @@ def test_dev_source_is_generator_imperfect_preview() -> None:
     source = resolve_dataset_source(QA_ROOT, "dev", "crm")
 
     assert source.source_label == "tmp/generated/crm/dev/imperfect"
-    assert source.dataset_version == "dataset-v1.0.0"
+    assert source.dataset_version == "v1.0.0"
 
 
 def test_full_source_uses_configured_dataset_version() -> None:
     source = resolve_dataset_source(QA_ROOT, "full", "crm")
     release_config = json.loads(source.release_config_path.read_text(encoding="utf-8"))
-    expected_version = release_config["dataset_version"]
+    expected_version = release_config["release_version"]
 
-    assert source.source_label == f"release/crm/{expected_version}"
+    assert source.source_label in {
+        f"release/{expected_version}/crm/dataset",
+        f"release/crm/{expected_version}/dataset",
+    }
     assert source.ddl_path.name == "crm_ddl.sql"
     assert source.dbml_path.name == "crm_er.dbml"
 

@@ -1,5 +1,6 @@
 {
-  "model": "gpt-4o-mini",
+  "_note": "Defaults for every domain's LLM-as-Judge run. Per-domain overrides go in config/judge/<domain>.json and carry ONLY the fields that differ; the `release` and `calibration` blocks merge per key, so overriding one field there keeps the rest of the block.",
+  "model": "anthropic.claude-sonnet-4-6",
   "temperature": 0.0,
   "seed": 42,
   "max_tokens": 1024,
@@ -12,5 +13,18 @@
   "mode": "combined",
   "json_mode": true,
   "cache_enabled": true,
-  "run_output_root": "release/{domain}/eval-runs"
+  "run_output_root": "release/{release_version}/{domain}/judge",
+
+  "calibration": {
+    "_note": "Section 10.2 acceptance protocol. min_anchors and agreement_pct are fixed by the Execution Scope (>=10 anchors per domain, within +-1 on >=90% per dimension) — they live here to be reviewable without reading Python, not because they are ours to tune.",
+    "_gate_note": "Two gates, both OPT-IN. require_calibration is the SCORING gate: set it true for a domain and an LLM run refuses that domain until a passing marker exists. Left false, runs proceed and no flag is needed. --allow-uncalibrated still works and is then a no-op.",
+    "_release_note": "require_calibration_for_release is the RELEASE gate, FALSE by project decision: a --release scorecard and its immutable baseline can be produced before the calibration session happens. A deliberate departure from Section 10.2's last line, recorded here rather than buried in code. What is NOT configurable is the labelling — every artifact still records calibrated state, so a baseline established this way can never be mistaken for a calibrated one.",
+    "anchors_path": "judge/anchors/{domain}.json",
+    "marker_path": "judge/.calibration/{domain}.passed.json",
+    "min_anchors": 10,
+    "agreement_pct": 90.0,
+    "allow_directional_flips": false,
+    "require_calibration": false,
+    "require_calibration_for_release": false
+  }
 }

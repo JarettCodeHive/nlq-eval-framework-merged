@@ -6,6 +6,7 @@ most is what they refuse to do. No network: the Studio client is faked.
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -60,6 +61,9 @@ def fake_platform(monkeypatch, tmp_path):
 
         def __exit__(self, *_a):
             return None
+
+        def delete_entity(self, entity_id):
+            state["deleted"].append(entity_id)
 
     # Patch the class, not the module: studio.upload imports helpers from
     # studio.client, and replacing the whole module breaks those imports.
@@ -166,6 +170,49 @@ def test_upload_exits_non_zero_when_rows_are_not_verified(
     assert "Do not evaluate" in str(excinfo.value)
 
 
+def test_partial_upload_writes_ownership_manifest(fake_platform) -> None:
+    outcome = fake_platform["Outcome"]([fake_platform["Table"]("accounts")])
+
+    def fail_upload(*_args, on_outcome, **_kwargs):
+        on_outcome(outcome)
+        raise RuntimeError("load failed")
+
+    fake_platform["set_upload"](fail_upload)
+
+    with pytest.raises(RuntimeError, match="load failed"):
+        main_module.run_dataset_upload(_args("dataset-upload"))
+
+    assert Path(fake_platform["manifest"]).is_file()
+
+
+def test_run_owned_cleanup_deletes_recorded_ids_and_keeps_manifest(
+    fake_platform, capsys
+) -> None:
+    from studio.upload import TableOutcome, UploadOutcome
+
+    outcome = UploadOutcome(domain="crm", profile="full", csv_dir=Path("dataset"))
+    outcome.tables = [
+        TableOutcome(
+            table="accounts", entity_id=101, created_by_run=True
+        ),
+        TableOutcome(
+            table="contacts", entity_id=102, created_by_run=True
+        ),
+    ]
+    args = argparse.Namespace(
+        domain="crm",
+        profile="full",
+        release_version="v1.0.0",
+        upload_outcome=outcome,
+    )
+
+    main_module.run_uploaded_data_cleanup(args)
+
+    assert fake_platform["deleted"] == [102, 101]
+    assert Path(fake_platform["manifest"]).is_file()
+    assert "2/2 run-owned platform entities" in capsys.readouterr().out
+
+
 def test_upload_is_quiet_when_everything_verified(fake_platform) -> None:
     outcome = fake_platform["Outcome"]([fake_platform["Table"]("accounts")])
     fake_platform["set_upload"](lambda *a, **k: outcome)
@@ -176,9 +223,11 @@ def test_upload_is_quiet_when_everything_verified(fake_platform) -> None:
 def test_upload_passes_replace_through(fake_platform) -> None:
     seen = {}
 
-    def _upload(domain, profile, *, client, replace, progress):
+    def _upload(domain, profile, *, client, replace, progress, on_outcome):
         seen["replace"] = replace
-        return fake_platform["Outcome"]([])
+        outcome = fake_platform["Outcome"]([])
+        on_outcome(outcome)
+        return outcome
 
     fake_platform["set_upload"](_upload)
 
@@ -240,3 +289,76 @@ def test_dry_run_delete_needs_no_confirmation(fake_platform, capsys) -> None:
     main_module.run_dataset_delete(_args("dataset-delete", "--dry-run"))
 
     assert "nothing was sent" in capsys.readouterr().out
+
+
+def test_no_top_level_flag_shadows_a_passthrough_subcommand_flag() -> None:
+    """`judge` and `score` parse their own argv, so a top-level flag of the same
+    name is consumed by main.py's parser before it ever reaches them.
+
+    This is not hypothetical: adding `--run` for `anchors-export` silently broke
+    `score --run DOMAIN=RUN_ID`, which combined the most recent runs instead of
+    the pinned ones and gave no error at all.
+    """
+
+    from judge.cli import build_argparser as judge_parser
+    from main import build_parser
+    from scorecard.combine import build_argparser as score_parser
+
+    def flags(parser):
+        return {s for a in parser._actions for s in a.option_strings}
+
+    # --domain/--profile are shared on purpose: main.py forwards them.
+    allowed = {"-h", "--help", "--domain", "--profile"}
+    top = flags(build_parser())
+    for name, parser in (("judge", judge_parser()), ("score", score_parser())):
+        clash = (top & flags(parser)) - allowed
+        assert not clash, f"top-level flag(s) {sorted(clash)} shadow `{name}`'s own"
+
+
+def test_every_command_body_resolves_its_globals() -> None:
+    """A registered handler can be importable and still broken.
+
+    `judge-build-input` shipped calling `build_judge_input` with no import for
+    it: the module imported, the command appeared in `--help`, and the handler
+    was a perfectly valid callable — it raised NameError the moment it ran.
+    Checking that a command is registered does not check that it works, so this
+    reads each handler's referenced globals and confirms the module can supply
+    them, which costs nothing and catches a dead command without invoking it.
+    """
+
+    import builtins
+
+    available = set(vars(main_module)) | set(vars(builtins))
+    missing: dict[str, list[str]] = {}
+
+    for command, handler in COMMANDS.items():
+        code = getattr(handler, "__code__", None)
+        if code is None:  # a partial or callable object, nothing to inspect
+            continue
+        unresolved = sorted(
+            name
+            for name in code.co_names
+            # co_names also holds attribute names (`args.domain` -> "domain"),
+            # which are not globals; a global reference is loaded by LOAD_GLOBAL.
+            if name in _loaded_globals(code) and name not in available
+        )
+        if unresolved:
+            missing[command] = unresolved
+
+    assert not missing, f"commands referencing undefined globals: {missing}"
+
+
+def _loaded_globals(code) -> set[str]:
+    """The names a code object actually loads as globals, including nested defs."""
+
+    import dis
+
+    names = {
+        instruction.argval
+        for instruction in dis.get_instructions(code)
+        if instruction.opname in {"LOAD_GLOBAL", "STORE_GLOBAL", "DELETE_GLOBAL"}
+    }
+    for constant in code.co_consts:
+        if hasattr(constant, "co_names"):
+            names |= _loaded_globals(constant)
+    return names

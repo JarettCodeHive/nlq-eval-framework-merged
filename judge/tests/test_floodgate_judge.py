@@ -521,7 +521,7 @@ async def test_malformed_output_is_retried_and_every_attempt_is_audited(tmp_path
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    """Isolate from judge/.env, which load_env() reads with override=True."""
+    """Isolate from .env, which load_env() reads with override=True."""
     monkeypatch.setattr("judge.config.load_env", lambda env_file=None: None)
     for name in (
         "LLM_PROVIDER",
@@ -570,18 +570,6 @@ def test_oidc_without_the_appleconnect_cli_says_what_to_do_instead(clean_env):
 
     with pytest.raises(MissingCredentials, match="FLOODGATE_NARRATIVE_CERT"):
         load_llm_settings()
-
-
-def test_azure_still_wins_when_no_floodgate_credential_is_present(clean_env):
-    from judge.config import AzureSettings, load_llm_settings
-
-    clean_env.setenv("AZURE_OPENAI_ENDPOINT", "https://x.openai.azure.com")
-    clean_env.setenv("AZURE_OPENAI_DEPLOYMENT", "dep")
-    clean_env.setenv("AZURE_OPENAI_API_VERSION", "2024-06-01")
-    clean_env.setenv("AZURE_OPENAI_API_KEY", "k")
-
-    assert isinstance(load_llm_settings(), AzureSettings)
-
 
 def test_floodgate_model_takes_precedence_over_the_default_config(clean_env):
     # `sales` declares no model of its own, so the environment (tier 2) is what

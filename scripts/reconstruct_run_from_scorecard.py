@@ -3,11 +3,11 @@
 WHEN YOU NEED THIS
 ------------------
 An evaluation run writes two things: its own evidence under
-`release/<domain>/eval-runs/<run_id>/` (gitignored — `results.json`,
+`release/<version>/<domain>/judge/<run_id>/` (`results.json`,
 `prompts_log.jsonl`, `pulse_raw/`) and its scorecard under
-`release/<domain>/scorecards/<run_id>/` (tracked). If the evidence is lost but
-the scorecard survives, this recovers enough to re-render scorecards and to feed
-`main.py score`.
+`release/<version>/<domain>/scorecard/<run_id>/`. If the evidence is lost but
+the scorecard survives, this recovers enough to re-render scorecards and to
+feed `main.py score`.
 
 WHAT IS AND IS NOT RECOVERED
 ----------------------------
@@ -35,6 +35,9 @@ import argparse
 import csv
 import json
 from pathlib import Path
+
+from qa_pairs.utils.release_bundle import component_dir
+from qa_pairs.utils.release_bundle import existing_component_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -131,9 +134,21 @@ def rebuild_summary(summary_csv: Path) -> dict:
     }
 
 
-def reconstruct(domain: str, scorecard_id: str, *, repo_root: Path | None = None) -> Path:
+def reconstruct(
+    domain: str,
+    scorecard_id: str,
+    *,
+    version: str | None = None,
+    repo_root: Path | None = None,
+) -> Path:
     root = repo_root or REPO_ROOT
-    source = root / "release" / domain / "scorecards" / scorecard_id
+    source = existing_component_path(
+        domain,
+        "scorecard",
+        scorecard_id,
+        version=version,
+        repo_root=root,
+    )
     question_csv = source / "question_results.csv"
     summary_csv = source / "scorecard_summary.csv"
     for path in (question_csv, summary_csv):
@@ -149,7 +164,9 @@ def reconstruct(domain: str, scorecard_id: str, *, repo_root: Path | None = None
         )
 
     run_id = f"{scorecard_id}-RECONSTRUCTED"
-    target = root / "release" / domain / "eval-runs" / run_id
+    target = component_dir(
+        domain, "judge", version=version, repo_root=root
+    ) / run_id
     target.mkdir(parents=True, exist_ok=True)
 
     payload = {
@@ -201,12 +218,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--domain", default="crm")
     parser.add_argument(
+        "--version",
+        default=None,
+        help="release version; defaults to the domain configuration",
+    )
+    parser.add_argument(
         "--scorecard",
         required=True,
-        help="the scorecard directory name under release/<domain>/scorecards/",
+        help=(
+            "scorecard directory name under "
+            "release/<version>/<domain>/scorecard/"
+        ),
     )
     args = parser.parse_args()
-    target = reconstruct(args.domain, args.scorecard)
+    target = reconstruct(args.domain, args.scorecard, version=args.version)
     rows = json.loads((target / "results.json").read_text())["rows"]
     print(f"reconstructed {len(rows)} row(s) -> {target}")
     print(f"now: python main.py score --run {args.domain}={target.name}")

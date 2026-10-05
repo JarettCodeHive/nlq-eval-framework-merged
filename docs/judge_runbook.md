@@ -22,7 +22,7 @@ SQL**, then scores that response two independent ways:
 | Scorer | Question it answers | Output |
 |---|---|---|
 | **exact-match** (`judge/exact_match.py`) | Are the numbers exactly right? (§HC-3, zero tolerance) | PASS / FAIL / NOT_APPLICABLE / ERROR |
-| **LLM-as-judge** (`judge/openai_judge.py`) | Is the answer complete, correctly formatted, coherent, and is the SQL plausible? (§10) | 4 integer scores 1–5 + a rationale each |
+| **LLM-as-judge** (`judge/floodgate_judge.py`) | Is the answer complete, correctly formatted, coherent, and is the SQL plausible? (§10) | 4 integer scores 1–5 + a rationale each |
 
 The two are always reported **side by side, never blended** (§11.3). Results
 aggregate into a **scorecard** (`scorecard/`): per domain × tier, compared to an
@@ -268,10 +268,10 @@ exit `4` if any domain trips the regression flag.
 
 ## 5. Reading the output
 
-Each run writes two directories under `release/<domain>/`, sharing one
-`run_id`. The §11 deliverables go to `scorecards/<UTC-timestamp>/` and the
-provenance to `eval-runs/<UTC-timestamp>/` — see the repository README for the
-tree and the `config/` keys that control both roots.
+Each run writes two directories under `release/<version>/<domain>/`, sharing
+one `run_id`. The §11 deliverables go to `scorecard/<UTC-timestamp>/` and the
+provenance to `judge/<UTC-timestamp>/` — see the repository README for the tree
+and the `config/` keys that control both roots.
 
 | File | What |
 |---|---|

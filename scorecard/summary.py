@@ -104,6 +104,12 @@ class RunContext:
     judge_seed_enforced: bool = True
     # §9.5 rephrase-group findings, rendered in the human-readable scorecard.
     rephrase_findings: tuple[str, ...] | list[str] = ()
+    # True when the run deliberately scored a SUBSET of the pair set (--limit, or
+    # an explicit --input-csv that is not the resolved package). The §9.1 quota
+    # comparison is withheld for such a run: it cannot tell "a pair left the set"
+    # (§14.2 condition 4) from "the operator scored ten questions", and inferring
+    # it from the count would hide the one-pair shortfall that IS the breach.
+    partial_run: bool = False
     # §11.1 reports dataset_version per row, and a combined scorecard spans
     # domains that were each built from their own dataset and Q&A release. Where
     # this is populated it wins over `dataset_version` for that domain's rows;

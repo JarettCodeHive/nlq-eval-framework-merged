@@ -76,7 +76,7 @@ def _client(handler, **settings_kw) -> PulseClient:
 
 
 def test_load_pulse_settings_missing_creds_is_loud(monkeypatch):
-    # Don't let a developer's real judge/.env leak into the test.
+    # Don't let a developer's real .env leak into the test.
     monkeypatch.setattr("judge.pulse_client.load_env", lambda *a, **k: None)
     for var in ("PULSE_BASE_URL", "PULSE_AUTH_TOKEN", "PULSE_ORG_ID"):
         monkeypatch.delenv(var, raising=False)

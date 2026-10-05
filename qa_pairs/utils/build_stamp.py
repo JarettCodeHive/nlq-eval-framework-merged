@@ -24,7 +24,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from utils.dataset_source import resolve_dataset_source
+from qa_pairs.utils.dataset_source import resolve_dataset_source
 
 STAMP_TABLE = "_build_stamp"
 _RS = b"\x1e"  # ASCII record separator between serialized rows

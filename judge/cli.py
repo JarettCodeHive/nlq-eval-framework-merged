@@ -12,14 +12,13 @@ arguments `build-dataset` and `qa-build` take. Everything they already determine
 is resolved in `judge/resolve.py`; pass the matching flag to override any of it.
 
   python -m judge.cli --domain crm --profile full          # live platform + LLM judge
-  python -m judge.cli --domain crm --profile full \\
-      --judge heuristic --pulse sql                        # offline reference_sql replay
+  python -m judge.cli --domain crm --profile full --pulse sql   # offline reference_sql replay
   python -m judge.cli --mode per_dimension                 # 4 judge prompts, no halo effect
   python -m judge.cli --input-csv pairs.csv                # an explicit pair set
 
-Writes release/<domain>/eval-runs/<UTC-timestamp>/ — results.json + the §11
-scorecard files. The root comes from `run_output_root` in config/judge/, so it
-sits alongside the dataset and Q&A release packages.
+Writes `release/<version>/<domain>/judge/<UTC-timestamp>/` — results.json and
+the supporting judge evidence. The scorecard is written to the sibling
+`scorecard/<UTC-timestamp>/` directory.
 """
 
 from __future__ import annotations
@@ -33,16 +32,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from judge.calibration import JudgeFingerprint, check_calibrated
+from judge.calibration import JudgeFingerprint, check_calibrated, thresholds_for
 from judge.checks import CheckStatus, check_null_handling, check_rephrase_groups
 from judge.client import JudgeClient
 from judge.config import (
-    AzureSettings,
     FloodgateNarrativeSettings,
     FloodgateOIDCSettings,
     JudgeConfig,
     MissingCredentials,
-    REPO_ROOT,
     load_judge_config,
     load_llm_settings,
     trust_os_ca_store,
@@ -61,10 +58,8 @@ from judge.exact_match import (
     evaluate_answer,
 )
 from judge.input_contract import InputRow, load_input_csv
-from judge.resolve import ResolutionError, apply_resolved_defaults
-from judge.heuristic_judge import HeuristicJudge
+from judge.resolve import ResolutionError, apply_resolved_defaults, judge_input_csv
 from judge.sql_pulse import SQLPulse
-from judge.openai_judge import OpenAIJudge
 from judge.prompts import prompt_version
 from scorecard.baseline import BaselineExists, establish_baseline, load_baseline
 from scorecard.config import report_output_dir
@@ -75,6 +70,7 @@ from scorecard.summary import (
     write_question_results_csv,
     write_scorecard_summary_csv,
 )
+from qa_pairs.utils.release_bundle import component_dir
 
 # Non-live Pulse sources (fixtures / offline stand-ins). A --release run against
 # one of these still produces artifacts, but its baseline is marked provisional
@@ -94,8 +90,7 @@ def run_output_dir(domain: str, run_id: str, cfg: JudgeConfig) -> Path:
     launched from a subdirectory still lands in the same place.
     """
 
-    root = cfg.run_output_root.format(domain=domain)
-    return REPO_ROOT / root / run_id
+    return component_dir(domain, "judge") / run_id
 
 
 # Measured against org 4104 on the crm_dataset_v2 full profile.
@@ -105,15 +100,11 @@ SECONDS_PER_QUESTION = 140.0
 def _model_version(settings, cfg) -> str:
     """The string identifying this judge in verdicts, cache keys and manifests.
 
-    It has to distinguish deployments and proxies, not just models: Azure routes
-    on a deployment name, and the same Anthropic model through Floodgate is not
-    an interchangeable measurement with the same model elsewhere.
+    It has to distinguish the proxy, not just the model: the same Anthropic model
+    through Floodgate is not an interchangeable measurement with the same model
+    reached directly, so the prefix stays in verdicts, cache keys and manifests.
     """
-    if isinstance(settings, AzureSettings):
-        return f"azure/{settings.deployment}"
-    if isinstance(settings, (FloodgateOIDCSettings, FloodgateNarrativeSettings)):
-        return f"floodgate/{cfg.model}"
-    return cfg.model
+    return f"floodgate/{cfg.model}"
 
 
 def _judge_fingerprint(args: argparse.Namespace) -> JudgeFingerprint | None:
@@ -162,21 +153,13 @@ def _make_llm_judge(
     prompt_log_path: Path | None,
     judge_run_id: str,
 ) -> JudgeClient:
-    """Pick the transport for the detected provider. Everything downstream —
-    caching, audit records, scoring modes — is identical either way."""
-    if isinstance(settings, (FloodgateOIDCSettings, FloodgateNarrativeSettings)):
-        # Imported here so the `anthropic` SDK is only required by runs that
-        # actually go through Floodgate.
-        from judge.floodgate_judge import FloodgateJudge
+    """Build the Floodgate transport. Everything downstream — caching, audit
+    records, scoring modes — lives in `BaseLLMJudge` and is transport-agnostic,
+    which is why this stayed a separate function after the other backends went."""
+    # Imported here so the `anthropic` SDK is only required by runs that score.
+    from judge.floodgate_judge import FloodgateJudge
 
-        return FloodgateJudge(
-            settings,
-            cfg,
-            cache_dir=cache_dir,
-            prompt_log_path=prompt_log_path,
-            judge_run_id=judge_run_id,
-        )
-    return OpenAIJudge(
+    return FloodgateJudge(
         settings,
         cfg,
         cache_dir=cache_dir,
@@ -194,11 +177,6 @@ def _build_judge(
     judge_run_id: str,
 ) -> tuple[JudgeClient, dict]:
     """Return (judge, provenance) — provenance goes into the run manifest."""
-    if name == "heuristic":
-        return HeuristicJudge(), {
-            "provider": "heuristic",
-            "model": "heuristic-test-double-v1",
-        }
     if name == "llm":
         settings = load_llm_settings()
         cfg = load_judge_config(domain).model_copy(
@@ -341,11 +319,12 @@ async def _collect_and_score(
             # One line per question as it lands. A live question costs ~30s and a
             # full domain is tens of minutes; batching this leaves the operator
             # unable to tell a slow run from a hung one.
+            # stdout: per-question progress is output. Only the error detail
+            # below goes to stderr, because that one IS a diagnostic.
             print(
                 f"[judge] platform {n:>4}/{total}  {elapsed:6.1f}s  "
                 f"{'ERROR' if err else 'clarify' if clarify else 'ok':<7} "
-                f"{pair['question_id']}",
-                file=sys.stderr,
+                f"{pair['question_id']}"
             )
             if err:
                 print(f"[judge]            {err[:160]}", file=sys.stderr)
@@ -371,8 +350,7 @@ async def _collect_and_score(
                 m = counts["scored"]
             print(
                 f"[judge] scored   {m:>4}/{total}  "
-                f"{f'clarification={CLARIFICATION_SCORE}':<28} {pair['question_id']}",
-                file=sys.stderr,
+                f"{f'clarification={CLARIFICATION_SCORE}':<28} {pair['question_id']}"
             )
             return (
                 pair,
@@ -396,10 +374,7 @@ async def _collect_and_score(
             if isinstance(verdict, Exception)
             else f"overall={verdict.overall_score:.2f}"
         )
-        print(
-            f"[judge] scored   {m:>4}/{total}  {detail:<28} {pair['question_id']}",
-            file=sys.stderr,
-        )
+        print(f"[judge] scored   {m:>4}/{total}  {detail:<28} {pair['question_id']}")
         return pair, req, None, verdict
 
     return await asyncio.gather(*(one(p) for p in pairs))
@@ -656,9 +631,7 @@ def _resolve_scorecard_mode(
         return "PREVIEW", []
     blockers: list[str] = []
     if args.judge != "llm":
-        blockers.append(
-            "a release run requires --judge llm (the heuristic test double never scores for real)"
-        )
+        blockers.append(f"a release run requires --judge llm, not {args.judge!r}")
     if args.pulse in _STANDIN_PULSE:
         # HC-4: all evaluation goes through the platform. A baseline built from
         # anything else measures our own reference SQL, not the system under
@@ -667,7 +640,7 @@ def _resolve_scorecard_mode(
             f"a release run requires --pulse live; {args.pulse!r} does not reach "
             "the platform (HC-4)"
         )
-    if not calibrated:
+    if not calibrated and thresholds_for(args.domain).require_calibration_for_release:
         blockers.append(
             f"domain {args.domain!r} is not calibrated for this judge (§10.2)"
             + (f": {calibration_reason}" if calibration_reason else "")
@@ -731,9 +704,7 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"[judge] {exc}", file=sys.stderr)
         return 2
 
-    # §10.2 gate: uncalibrated scores never enter the scorecard. The gate
-    # applies to LLM judges only — the test double is a heuristic, plainly
-    # labelled, and never used for real scoring.
+    # §10.2 gate: uncalibrated scores never enter the scorecard.
     #
     # The marker must vouch for THIS judge, not for the domain in the abstract:
     # a pass earned on one model, prompt revision or scoring mode says nothing
@@ -745,7 +716,18 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
     calibration = check_calibrated(args.domain, fingerprint)
     calibrated = calibration.calibrated
-    if args.judge == "llm" and not calibrated and not args.allow_uncalibrated:
+    # Whether the gate is enforced is a per-domain config decision
+    # (`calibration.require_calibration`), defaulting to true because §10.2 is
+    # explicit. `--allow-uncalibrated` remains the per-run smoke-test escape and
+    # still labels the run calibrated=false either way, so turning the gate off in
+    # config cannot quietly promote an uncalibrated run to a release.
+    gate_enforced = thresholds_for(args.domain).require_calibration
+    if (
+        args.judge == "llm"
+        and gate_enforced
+        and not calibrated
+        and not args.allow_uncalibrated
+    ):
         if calibration.stale:
             remedy = (
                 "Re-run calibration for this configuration: the marker cannot "
@@ -837,6 +819,19 @@ async def _run(args: argparse.Namespace) -> int:
     # Sales pair set with no `domain` column is silently scored, cached and
     # reported as CRM.
     pairs = _rows_from_input(load_input_csv(args.input_csv, default_domain=args.domain))
+    # Did this run deliberately score a SUBSET? --limit obviously does; so does an
+    # --input-csv pointing somewhere other than the package the domain resolves
+    # to. The scorecard needs to know, because the §9.1 quota comparison is only
+    # meaningful over a complete set — see RunContext.partial_run.
+    partial_run = bool(args.limit)
+    try:
+        resolved_input = judge_input_csv(args.domain, args.profile)
+        if Path(args.input_csv).resolve() != resolved_input.resolve():
+            partial_run = True
+    except Exception:
+        # No resolvable package (an ad-hoc CSV, a judge-only domain): treat the
+        # run as a subset rather than asserting a quota it cannot be checked against.
+        partial_run = True
     if args.limit:
         pairs = pairs[: args.limit]
 
@@ -935,27 +930,22 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"[judge] unknown --pulse source {args.pulse!r}", file=sys.stderr)
         return 2
 
-    if args.judge == "heuristic" and args.mode == "per_dimension":
-        print(
-            "[judge] NOTE: --mode per_dimension has no effect with --judge "
-            "heuristic — the test double never renders a prompt. Use --judge llm.",
-            file=sys.stderr,
-        )
-
     provisional_pulse = args.pulse in _STANDIN_PULSE
-    calibration_state = "CALIBRATED" if calibrated else "UNCALIBRATED"
+    # Reported only when it passed — an uncalibrated run is silent on the
+    # subject rather than carrying a negative badge. The machine-readable
+    # summary still records `calibrated`, which is what the combine gate reads.
+    calibration_state = "  [CALIBRATED]" if calibrated else ""
     print(
         f"[judge] judge={args.judge}  mode={args.mode}  "
         f"pulse={pulse_label}  pairs={len(pairs)}  "
-        f"domain={args.domain} [{calibration_state}]  scorecard={scorecard_mode}"
+        f"domain={args.domain}{calibration_state}  scorecard={scorecard_mode}"
     )
     print(f"[judge] provider provenance: {json.dumps(provenance)}")
 
     print(
         f"[judge] pipelining {len(pairs)} pair(s): platform "
         f"concurrency={args.pulse_concurrency}, judge concurrency={args.concurrency} "
-        "— scoring starts as soon as the first answer lands",
-        file=sys.stderr,
+        "— scoring starts as soon as the first answer lands"
     )
     run_log.event(
         "pipeline.start",
@@ -1043,6 +1033,10 @@ async def _run(args: argparse.Namespace) -> int:
 
     summary = _summarise(results)
     summary["calibrated"] = calibrated
+    # Recorded on the artifact, not just held in RunContext, because `score`
+    # reads results.json to build the combined card and has no other way to know
+    # this run was a subset.
+    summary["partial_run"] = partial_run
     summary["calibration"] = {
         "state": "calibrated" if calibrated else "uncalibrated",
         "reason": calibration.reason,
@@ -1128,6 +1122,7 @@ async def _run(args: argparse.Namespace) -> int:
             for f in rephrase_findings
             if f.is_platform_finding or f.is_dataset_finding
         ],
+        partial_run=partial_run,
     )
     out_dir = _write_run(
         run_id, args.judge, args.mode, args.pulse, ctx, results, summary, out_dir
@@ -1163,17 +1158,7 @@ async def _run(args: argparse.Namespace) -> int:
         exit_reason="ok" if not summary["judge_errors"] else "judge_errors",
     )
 
-    if args.judge == "heuristic":
-        print(
-            "\n[judge] NOTE: the heuristic judge is a test double — scores are NOT "
-            "semantic. Use --judge llm for real evaluation."
-        )
-    if not summary["calibrated"] and args.judge == "llm":
-        print(
-            "\n[judge] NOTE: judge is uncalibrated (§10.2). These scores are "
-            "diagnostic only and are labelled `calibrated=false` in the summary. "
-            "They must NOT be fed to a scorecard until calibration passes."
-        )
+
     if hasattr(judge, "cache_stats"):
         stats = judge.cache_stats()
         if stats.get("enabled"):
@@ -1515,13 +1500,15 @@ def run_check_auth(domain: str = "crm") -> int:
 def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
     """Judge argparser, callable standalone or from main.py's `judge` command."""
     ap = argparse.ArgumentParser(prog=prog, description="judge end-to-end demo runner")
+    # One backend, but the flag stays: a release run asserts `--judge llm`
+    # (`_scorecard_mode`), and dropping the flag would turn that guard into a
+    # comparison against a value nothing sets.
     ap.add_argument(
         "--judge",
-        choices=["llm", "heuristic"],
+        choices=["llm"],
         default="llm",
-        help="llm = the real LLM judge (default). heuristic = deterministic "
-        "test double for CI/dev — string overlap, NOT semantic scoring. Never "
-        "release-eligible.",
+        help="llm = the LLM judge via Floodgate. The only judge; kept as a flag "
+        "so a release run can still assert it explicitly.",
     )
     ap.add_argument(
         "--mode",
@@ -1535,7 +1522,7 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
         default="live",
         help="Answer source. live = the real platform API (HC-4) — the default, "
         "and the ONLY source a release run accepts; needs the PULSE_* creds in "
-        "judge/.env and --input-csv. sql = executes each pair's reference_sql in "
+        ".env and --input-csv. sql = executes each pair's reference_sql in "
         "DuckDB (§14.2 ground-truth verification of pairs against the dataset; "
         "requires --input-csv AND --pulse-data). sql never scores the platform "
         "and its runs are PREVIEW-only.",
@@ -1572,7 +1559,9 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
         "--allow-uncalibrated",
         action="store_true",
         help="§10.2 override: run the LLM judge without a calibration marker. "
-        "Scores are labelled uncalibrated and MUST NOT feed a scorecard.",
+        "Only needed where a domain sets calibration.require_calibration=true; "
+        "the gate is opt-in and off by default, so this is otherwise a no-op. "
+        "Scores are labelled uncalibrated either way.",
     )
     ap.add_argument(
         "--release",

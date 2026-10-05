@@ -1,0 +1,12 @@
+{
+  "platform_version": "pulse-2026.09",
+  "dataset_version": "multiple \u2014 see per-domain rows",
+  "established_run_id": "combined-20261005T090228Z",
+  "established_timestamp_iso": "2026-10-05T09:02:28.757489+00:00",
+  "recorded_at_iso": "2026-10-05T09:02:28.790623+00:00",
+  "provisional": false,
+  "domains": {
+    "crm": 52.8409,
+    "sales": 64.4231
+  }
+}

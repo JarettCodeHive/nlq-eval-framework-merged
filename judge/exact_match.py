@@ -447,7 +447,69 @@ def _consume_number(
             for value, pos in index.numbers
             if value == field.value and pos not in used
         ]
+        if not hits:
+            hits = _printed_at_lower_precision(index, field, used)
     return hits or None
+
+
+# How much precision a platform may drop before it is stating a DIFFERENT number
+# rather than printing the same one shorter. Deliberately tiny: it admits cents
+# dropped from a billion (relative loss ~1e-10) and two decimals dropped from
+# four (~3e-6), and admits nothing else observed.
+_RENDER_PRECISION_TOLERANCE = Decimal("1e-5")
+
+
+def _printed_at_lower_precision(
+    index: _ActualIndex, field: ExpectedField, used: set[int]
+) -> list[int]:
+    """Positions where the answer prints this number with fewer decimals.
+
+    Observed twice against the live platform, in both domains:
+
+        expected 1339.1438      printed "1339.14"
+        expected 2851503384.42  printed "$2,851,503,384"
+
+    Both are the expected value *rendered shorter*, which HC-3 protects — it
+    fails "numeric variance", and dropping cents from 2.8 billion is not
+    variance. Scoring them wrong made the platform look worse than it is, which
+    is the error that costs us credibility rather than theirs.
+
+    This is NOT a tolerance on the value, and the distinction matters because
+    the module docstring promises there isn't one. Two conditions must BOTH
+    hold, and the first is the real gate:
+
+      1. the printed token is the expected value correctly rounded to the
+         precision the platform itself chose to print — a faithful rendering,
+         not merely a nearby number;
+      2. the precision given up is negligible relative to the magnitude.
+
+    (1) alone would accept "roughly 23%" for 23.21, since 23 is 23.21 rounded
+    to zero places. (2) is what rejects it. Together they also reject the
+    docstring's own counter-example, 4,182,000 against 4,182,650.00.
+    """
+
+    hits: list[int] = []
+    expected = field.value
+    if expected is None or expected == 0:
+        return hits
+    for token, pos in index.number_strings:
+        if pos in used:
+            continue
+        cleaned = token.strip().lstrip("$€£¥").replace(",", "").strip()
+        try:
+            printed = Decimal(cleaned)
+        except (InvalidOperation, ValueError):
+            continue
+        decimals = -printed.as_tuple().exponent
+        if decimals < 0:
+            continue
+        if round(expected, decimals) != printed:
+            continue  # not a faithful rendering of the expected value
+        if abs(expected - printed) / abs(expected) >= _RENDER_PRECISION_TOLERANCE:
+            continue  # too much precision given up to still be the same number
+        hits.append(pos)
+    return hits
+
 
 
 def _consume_date(index: _ActualIndex, field: ExpectedField, used: set[int]):

@@ -120,7 +120,7 @@ class FinanceDataDictionaryGenerator:
         lines = [
             "# Finance Data Dictionary",
             "",
-            f"Dataset version: `{self.settings.dataset_version}`",
+            f"Release version: `{self.settings.release_version}`",
             "",
             f"Schema source: `{self.finance_config['schema_source']}`",
             "",

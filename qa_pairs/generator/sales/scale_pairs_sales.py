@@ -25,15 +25,15 @@ import sys
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(BASE))
+sys.path.insert(0, str(BASE.parent))
 
-from utils import build_stamp, verify  # noqa: E402
-from utils.duckdb_io import connect_typed, distinct  # noqa: E402
-from utils.labels import label  # noqa: E402
-from utils.labels import load as load_labels  # noqa: E402
-from utils.output_paths import resolve_qa_output_dir  # noqa: E402
-from utils.sampling import combos, even_sample  # noqa: E402
-from utils.sql import jinja_env  # noqa: E402
+from qa_pairs.utils import build_stamp, verify  # noqa: E402
+from qa_pairs.utils.duckdb_io import connect_typed, distinct  # noqa: E402
+from qa_pairs.utils.labels import label  # noqa: E402
+from qa_pairs.utils.labels import load as load_labels  # noqa: E402
+from qa_pairs.utils.output_paths import resolve_qa_output_dir  # noqa: E402
+from qa_pairs.utils.sampling import combos, even_sample  # noqa: E402
+from qa_pairs.utils.sql import jinja_env  # noqa: E402
 
 GEN = BASE / "generator" / "sales"
 CONFIG = json.loads((GEN / "config.json").read_text())

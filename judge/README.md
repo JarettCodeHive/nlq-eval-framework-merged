@@ -31,10 +31,8 @@ Deterministic exact-match (§HC-3) and judge scores are reported side by side,
 judge/
   contracts.py            Pydantic contracts: JudgeRequest, JudgeVerdict, DIMENSIONS
   client.py               Abstract JudgeClient (judge_many, aclose)
-  heuristic_judge.py      Deterministic test double — CI/dev only, NOT semantic scoring
-  llm_judge.py            Provider-independent judge scaffolding (cache, audit, modes)
-  openai_judge.py         Azure/OpenAI backend (async, cached, prompt-logged)
-  floodgate_judge.py      Anthropic-via-Floodgate backend (Apple's model proxy)
+  llm_judge.py            Transport-independent judge scaffolding (cache, audit, modes)
+  floodgate_judge.py      Anthropic-via-Floodgate backend — the only backend
   cache.py                Content-addressed judge cache (sha256 over prompt+model)
   calibration.py          §10.2 gate: uncalibrated LLM judges refuse to score
   exact_match.py          Deterministic answer comparison — zero-tolerance numeric
@@ -49,16 +47,16 @@ judge/
   pulse_client.py         Real platform API client (HC-4) — `--pulse live`
   templates/judge/        Jinja prompt templates (combined + per-dimension)
   anchors/                Calibration anchor sets per domain
-  tests/                  Judge module tests
-  .env.example            Copy to judge/.env — Azure/OpenAI/Floodgate + PULSE_* creds
+  tests/                  Judge module tests (stub_judge.py = test-only JudgeClient)
 ```
+
+Credentials live in `.env` at the **repository root** (see `.env.example`) — one
+file for the judge provider, the Pulse client and the Studio uploader.
 
 (Per-domain judge configs live at `config/judge/*.json`, per §13.1.)
 
 ## Modes
 
-- `--judge heuristic` — deterministic test double (CI/dev only, string overlap,
-  NOT semantic scoring; never release-eligible).
 - `--judge llm --mode combined` — 1 prompt for all 4 dimensions.
 - `--judge llm --mode per_dimension` — 4 prompts, no halo effect between dims.
 
@@ -68,7 +66,12 @@ Platform (Pulse) source is chosen with `--pulse`:
   release run accepts.** POSTs to
   `{PULSE_BASE_URL}/api-proxy/org/{PULSE_ORG_ID}/ai-svc/v2/tco/chat` (QA:
   `https://api-qa.platform.claris.com`); needs `PULSE_AUTH_TOKEN` + `PULSE_ORG_ID`
-  in `judge/.env`, and the `TCOApiV2Feature` flag enabled for the org. Verified
+  in `.env`, and the `TCOApiV2Feature` flag enabled for the org. Both values are
+  captured from a Studio QA browser session — `.env.example` documents exactly
+  where, along with the **three** hosts a corporate proxy must allow
+  (`cognito-idp.us-west-2.amazonaws.com`, `studio-qa.platform.claris.com`,
+  `api-qa.platform.claris.com`) and why a blocked `studio-qa` looks like a
+  platform fault rather than a proxy one. Verified
   against QA org 4104: the answer comes from `response.analysis`, and the SQL from
   **every** `analysis_request` entry — not only the one labelled `primary`, which
   is often a supporting breakdown rather than the statement that answers the
@@ -109,27 +112,21 @@ explicitly, and the derived values are echoed at the top of every run.
 
 ```bash
 python -m pip install -r requirements.txt
-python -m judge.cli --domain crm --profile full --judge heuristic --pulse sql
+cp .env.example .env               # then fill in the PULSE_* block — see below
+python -m judge.cli --domain crm --profile full --pulse live
 ```
 
-For live LLM runs:
-
-```bash
-cp judge/.env.example judge/.env   # then fill in AZURE_OPENAI_* or OPENAI_API_KEY
-python -m judge.cli --domain crm --profile full --judge llm --pulse live
-```
+`--pulse sql` replaces the platform with a local DuckDB replay of each pair's
+`reference_sql`. It verifies that pairs and dataset agree (§14.2) and never
+scores the platform, so its runs are PREVIEW-only. It still spends judge quota:
+there is no offline judge any more.
 
 ## Judge provider
 
-`--judge llm` picks its backend from the environment (`judge/.env`); nothing
-downstream changes. Caching, audit records, scoring modes and the calibration
-gate are identical across providers.
-
-| `LLM_PROVIDER` | Backend | Credential |
-|---|---|---|
-| `openai` (default) | OpenAI or any OpenAI-compatible gateway | `OPENAI_API_KEY` |
-| `azure` | Azure OpenAI | `AZURE_OPENAI_*` |
-| `floodgate` | Anthropic through Apple's Floodgate proxy | AppleConnect token or Narrative cert |
+Anthropic through Floodgate is the only backend. `LLM_PROVIDER` is optional and
+accepts only `floodgate`; any other value is refused with a message rather than
+silently ignored, so a leftover `LLM_PROVIDER=azure` in a shell cannot quietly
+produce a run labelled as something it was not.
 
 ### Anthropic through Floodgate
 
@@ -188,10 +185,10 @@ the interpolated score levels 2 and 4) is against that exact revision.
 
 ## Scorecard output
 
-The scorecard package lives at the repo top level (`scorecard/`, per §13.1).
-A run writes to two roots, sharing one `run_id`. The §11 deliverables go to
-`release/<domain>/scorecards/<UTC-timestamp>/` (`report_output_root` in
-`config/scorecard/`):
+The scorecard package code lives at the repo top level (`scorecard/`, per
+§13.1). A run writes to two roots, sharing one `run_id`. The §11 deliverables
+go to `release/<version>/<domain>/scorecard/<UTC-timestamp>/`
+(`report_output_root` in `config/scorecard/`):
 
 - `scorecard_summary.csv` — §11.1 one row per domain + per-tier breakout, with
   `baseline_exact_match_pct` / `delta_pct` / `regression_flag`
@@ -200,7 +197,8 @@ A run writes to two roots, sharing one `run_id`. The §11 deliverables go to
 - `scorecard.md` — GitHub-renderable summary
 - `scorecard.pdf` — stakeholder deliverable (Phase-4 exit-gate item; §11.3)
 
-The run's own artifacts go to `release/<domain>/eval-runs/<UTC-timestamp>/`
+The run's own artifacts go to
+`release/<version>/<domain>/judge/<UTC-timestamp>/`
 (`run_output_root` in `config/judge/`):
 
 - `results.json` — question-level drill-down per §11.2
@@ -427,6 +425,36 @@ evaluation out of scope.
   resolve the same ground-truth values. Disagreement is reported as a *platform*
   finding. Variants declaring different `expected_answer`s are reported
   separately as a *dataset* defect, since a group asks one underlying question.
+
+## Authoring anchors (§10.2)
+
+Calibration needs ≥10 human-graded anchors per domain, and nothing in the
+pipeline produced any — which is why calibration, and therefore every release
+scorecard, has been blocked. Two commands, separated by a human:
+
+```bash
+python main.py anchors-export --domain crm --profile full
+#   -> release/crm/eval-runs/<run>/crm_anchor_candidates.csv
+# fill the human_* columns, reconcile between BOTH graders, then:
+python main.py anchors-import --domain crm --sheet <that file>
+#   -> judge/anchors/crm.json
+```
+
+`judge/anchors_io.py` owns both. Three things it does deliberately:
+
+- **The sheet carries no judge scores.** §10.2 asks that the judge be scored
+  blind to the human grades; the converse matters as much, because a grader shown
+  the judge's 4 returns a 4. The sheet gets the question, the platform answer and
+  the SQL. `exact_match_result` is included — it is a deterministic fact about the
+  numbers, not an opinion about quality.
+- **Candidates are stratified** across exact-match outcome and tier, weighted
+  toward failures, because §10.2's most consequential case is a judge that never
+  scores 1 and only a wrong-number anchor can catch it. Taking the first N rows
+  would hand the graders a page of T1 scalars everything gets right — which is
+  how `crm.provisional.json` ended up unusable.
+- **Import validates before writing.** A set that a constant-scoring judge would
+  pass is refused here, not after a calibration run has spent provider budget.
+  `--force` writes a work-in-progress set; calibration still refuses it.
 
 ## Calibration gate (§10.2)
 

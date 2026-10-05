@@ -28,25 +28,25 @@ def test_qa_commands_accept_supported_profiles(command: str, profile: str) -> No
 
 
 @pytest.mark.parametrize("profile", ("dev", "full"))
-def test_qa_build_runs_only_production_steps_in_order(
+def test_crm_qa_build_runs_complete_release_steps_in_order(
     profile: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     calls: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        main_module,
-        "stage_qa_dataset",
+    monkeypatch.setitem(
+        main_module.QA_STAGE,
+        "crm",
         lambda selected: calls.append(("stage", selected)),
     )
-    monkeypatch.setattr(
-        main_module,
-        "validate_qa_dataset",
+    monkeypatch.setitem(
+        main_module.QA_VALIDATE,
+        "crm",
         lambda selected: calls.append(("validate", selected)),
     )
-    monkeypatch.setattr(
-        main_module,
-        "generate_pairs",
+    monkeypatch.setitem(
+        main_module.QA_GENERATE,
+        "crm",
         lambda selected: calls.append(("pairs", selected)),
     )
     monkeypatch.setattr(
@@ -69,20 +69,39 @@ def test_qa_build_runs_only_production_steps_in_order(
         ("stage", profile),
         ("validate", profile),
         ("pairs", profile),
+        ("rephrases", profile),
     ]
     output = capsys.readouterr().out
-    assert "Step 1/3:" in output
-    assert "Step 2/3:" in output
-    assert "Step 3/3:" in output
-    assert "CRM Q&A pair build passed" in output
+    assert "Step 1/4:" in output
+    assert "Step 2/4:" in output
+    assert "Step 3/4:" in output
+    assert "Step 4/4:" in output
+    assert "crm Q&A pair build passed" in output
 
 
 @pytest.mark.parametrize("domain", ("sales", "finance"))
-def test_qa_build_remains_crm_only(domain: str) -> None:
+def test_other_domain_qa_builds_run_three_release_steps(
+    domain: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setitem(
+        main_module.QA_STAGE,
+        domain,
+        lambda selected: calls.append(("stage", selected)),
+    )
+    monkeypatch.setitem(
+        main_module.QA_VALIDATE,
+        domain,
+        lambda selected: calls.append(("validate", selected)),
+    )
+    monkeypatch.setitem(
+        main_module.QA_GENERATE,
+        domain,
+        lambda selected: calls.append(("pairs", selected)),
+    )
     args = build_parser().parse_args(["qa-build", "--domain", domain])
 
-    with pytest.raises(
-        NotImplementedError,
-        match="Q&A commands currently support only crm",
-    ):
-        run_qa_build(args)
+    run_qa_build(args)
+
+    assert calls == [("stage", "dev"), ("validate", "dev"), ("pairs", "dev")]

@@ -23,11 +23,13 @@ import argparse
 import json
 from pathlib import Path
 
+from qa_pairs.utils.release_bundle import existing_component_path
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load(domain: str, run_id: str) -> dict[str, dict]:
-    path = REPO_ROOT / "release" / domain / "eval-runs" / run_id / "results.json"
+    path = existing_component_path(domain, "judge", run_id, "results.json")
     if not path.is_file():
         raise SystemExit(f"no results.json for run {run_id} ({path})")
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -101,14 +103,8 @@ def compare(domain: str, base_id: str, new_id: str) -> int:
         finds nothing, which is exactly how this check reported zero
         clarifications on a run that had eleven. Parse, then look.
         """
-        raw = (
-            REPO_ROOT
-            / "release"
-            / domain
-            / "eval-runs"
-            / run_id
-            / "pulse_raw"
-            / f"{qid}.json"
+        raw = existing_component_path(
+            domain, "judge", run_id, "pulse_raw", f"{qid}.json"
         )
         if not raw.is_file():
             return False

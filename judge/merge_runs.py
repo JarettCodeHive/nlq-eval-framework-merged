@@ -37,6 +37,7 @@ from scorecard.summary import (
     write_question_results_csv,
     write_scorecard_summary_csv,
 )
+from qa_pairs.utils.release_bundle import existing_component_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -46,7 +47,7 @@ class PlatformError(RuntimeError):
 
 
 def _run_dir(domain: str, run_id: str) -> Path:
-    return REPO_ROOT / "release" / domain / "eval-runs" / run_id
+    return existing_component_path(domain, "judge", run_id)
 
 
 def _load(domain: str, run_id: str) -> dict:
@@ -120,8 +121,8 @@ def merge(domain: str, base_id: str, new_id: str) -> Path:
     base_rows = {r["question_id"]: r for r in base["rows"]}
     new_rows = {r["question_id"]: r for r in new["rows"]}
 
-    qa = (
-        REPO_ROOT / "release" / domain / "qa-pairs-v0.3.0" / f"{domain}_judge_input.csv"
+    qa = existing_component_path(
+        domain, "qa_pairs", f"{domain}_judge_input.csv"
     )
     refs: dict[str, str] = {}
     if qa.is_file():

@@ -90,14 +90,74 @@ three-question judge pass with one command:
 
 ```bash
 python main.py run-pipeline --domain crm --profile dev
+python main.py run-pipeline --domain crm --profile full --version v1.0.0
 ```
 
-> **Warning:** `run-pipeline` confirms `dataset-delete` internally. It deletes
-> and re-uploads the selected domain/profile on the configured platform before
-> judging. Its judge stage uses `--allow-uncalibrated --limit 3`, so the result
-> is a preview and cannot certify a release.
+Platform entities uploaded by `run-pipeline` are temporary and are deleted by
+entity ID after the judge finishes. To retain the uploaded entities for
+debugging, opt out explicitly:
 
-Before running it, configure `judge/.env` and verify both the judge-provider and
+```bash
+python main.py run-pipeline \
+  --domain crm \
+  --profile full \
+  --version v1.0.0 \
+  --keep-platform-data
+```
+
+`--version` is the single evaluation-release version shared by the dataset,
+Q&A pairs, judge evidence, and scorecard. A full run writes all artifacts under
+one bundle root:
+
+```text
+release/v1.0.0/
+  crm/
+    dataset/
+    qa_pairs/
+    judge/<run_id>/
+    scorecard/<run_id>/
+    platform/
+  scorecard/<combined_run_id>/
+```
+
+If `--version` is omitted, the domain's `release_version` in
+`config/generation/<domain>/release.json` is used. Existing bundle versions are
+immutable: changing either the dataset or the Q&A pairs requires a new release
+version. The Claris/Pulse platform version remains separate and is recorded in
+the judge and scorecard metadata so the same evaluation release can measure
+multiple application versions.
+
+Older `release/<domain>/<version>/` bundles remain readable for migration
+purposes and emit a compatibility warning. All new artifacts are written only
+to the version-first layout shown above.
+
+The end-to-end command uses one console format across dataset generation, Q&A,
+platform refresh, upload verification, and judging:
+
+```text
+00:00:00.000 | INFO  | pipeline        | [1/6] START  Build and validate dataset
+00:00:00.142 | INFO  | dataset         | Step 1/6: Validate CRM configuration and expected row caps
+00:00:02.918 | INFO  | pipeline        | [1/6] DONE   Build and validate dataset (00:00:02.918)
+...
+00:00:41.204 | INFO  | pipeline        | SUCCESS domain=crm profile=dev elapsed=00:00:41.204
+```
+
+Every non-empty line carries elapsed time, severity, and component. The six
+top-level stages emit `START`, `DONE`, or `FAILED`, while detailed output from
+older subcommands is normalized under the active component. The format is plain
+text by design, so it remains readable in terminals, CI systems, redirected log
+files, and demo recordings. A failure names the stage and elapsed time before
+the command exits non-zero.
+
+> **Warning:** `run-pipeline` confirms `dataset-delete` internally. It deletes
+> and re-uploads the selected domain/profile before judging. After judging, it
+> deletes only entity IDs created by that upload invocation; it never discovers
+> cleanup targets by table name. Cleanup also runs after upload or judge
+> failures. A cleanup failure makes the command fail and remains recorded in
+> the platform manifest. Use `dataset-delete --yes` for deliberate manual
+> cleanup of retained data.
+
+Before running it, configure `.env` at the repository root and verify both the judge-provider and
 Pulse credentials:
 
 ```bash
@@ -110,12 +170,13 @@ Use `build-dataset` for the complete generation and validation workflow:
 
 ```bash
 python main.py build-dataset --domain crm --profile dev
-python main.py build-dataset --domain crm --profile full
+python main.py build-dataset --domain crm --profile full --version v1.0.0
 ```
 
 Replace `crm` with `sales`, `finance`, `project_management`, or `logistics`.
 The `dev` profile writes staged output under `tmp/generated/<domain>/dev/`.
-The `full` profile writes a versioned release under `release/<domain>/`, runs
+The `full` profile writes the dataset under
+`release/<version>/<domain>/dataset/`, runs
 the persisted-data and reproducibility checks, and writes `manifest.json`
 last to seal the release.
 
@@ -148,55 +209,91 @@ The `full` profile reads the selected domain's frozen dataset release. After
 that release is available, run:
 
 ```bash
-python main.py qa-build --domain crm --profile full
+python main.py qa-build --domain crm --profile full --version v1.0.0
 ```
 
 Replace `crm` with `sales` for the Sales Q&A workflow. The final pair package is
-written to the independently versioned Q&A release directory configured in
-`qa_pairs/generator/<domain>/config.json`:
+written under the same evaluation-release version as its dataset:
 
 ```text
-release/<domain>/qa-pairs-v<qa_version>/
+release/<version>/<domain>/qa_pairs/
 ```
 
+The Q&A build refuses to select a different or "latest" dataset release. The
+single CLI/config release version resolves both components, preventing a pair
+set from being verified against the wrong dataset.
+
 `qa-build` stages the selected generated dataset, validates it, and generates
-the complete SQL-verified pair set. It does not create review fixtures or
-rephrase variants.
+the complete SQL-verified pair set. For CRM it also generates the required
+rephrase-group variants; review-only seed fixtures remain a separate command.
 
 ### Judge and Scorecard Workflow
 
-Before a live judge run, copy `judge/.env.example` to `judge/.env`, add the
-judge-provider and Pulse credentials, and verify both connections:
+Before a live judge run, copy `.env.example` to `.env` **at the repository root**
+— one file configures the judge, the Pulse client and the Studio uploader — then
+add the credentials and verify both connections:
 
 ```bash
 python main.py check-auth --domain crm
 ```
 
-After `qa-build`, the judge input can be built explicitly. This step is useful
-for inspection but optional because `judge` builds the input on demand:
+#### Getting the Pulse credentials
+
+There is no API-key page; every value is captured from a browser session. Sign in
+to Claris Studio QA in Chrome, open a chat, open DevTools → Network. **Two
+requests carry everything.**
+
+**1. `GET https://api-qa.platform.claris.com/org/<ORG_ID>/chat?query=<base64>`**
+— the chat-history request the UI fires whenever a chat is open.
+
+- `PULSE_AUTH_TOKEN` — the `Authorization: Bearer …` request header (~1 hour life)
+- `PULSE_ORG_ID` — the integer path segment, `/org/<ORG_ID>/chat` (QA: `4104`)
+
+**2. `POST https://api-qa.platform.claris.com/auth/token`** — read the **request
+body**, not a header, and not the response.
+
+- `PULSE_REFRESH_TOKEN` — the long-lived Cognito refresh token. With it the client
+  re-mints hour-long tokens by itself, which is what makes a 2-hour run possible.
+- `PULSE_COGNITO_CLIENT_ID` — the `clientID` field in the same body.
+
+Verify the chain before a long run: `python judge/pulse_auth.py --probe`
+
+> **Corporate network — three hosts must be reachable**, each a separate
+> allowlist entry: `cognito-idp.us-west-2.amazonaws.com` (Cognito refresh),
+> `studio-qa.platform.claris.com` (token exchange), and
+> `api-qa.platform.claris.com` (the chat endpoint). A blocked `studio-qa` is the
+> one that bites — it is only reached after Cognito succeeds, so the failure reads
+> as a platform fault rather than a missing entry. `floodgate.g.apple.com` is
+> needed for the judge, separately.
+
+Run an offline check that replays each pair's `reference_sql` in DuckDB, or a
+three-question live preview:
 
 ```bash
-python main.py judge-build-input --domain crm --profile dev
-```
-
-Run an offline development check with the heuristic test double and local SQL,
-or run a three-question live LLM preview:
-
-```bash
-python main.py judge --domain crm --profile dev --judge heuristic --pulse sql
-python main.py judge --domain crm --profile dev --judge llm --pulse live \
+python main.py judge --domain crm --profile dev --pulse sql
+python main.py judge --domain crm --profile dev --pulse live \
   --limit 3 --allow-uncalibrated
 ```
 
-The heuristic judge is for development only. An uncalibrated LLM run is also a
-preview and must not be used for an official scorecard. Once independently
-reviewed anchors are available, calibrate the configured judge before a release
-run:
+Anthropic via Floodgate is the only judge backend, so `--pulse sql` still spends
+provider quota — it verifies that pairs and dataset agree (§14.2) and never
+scores the platform, which is why its runs are PREVIEW-only.
+
+An uncalibrated run is a preview and is labelled `calibrated: false` on every
+artifact. Calibration needs ≥10 human-graded anchors per domain (§10.2); export
+candidates from a scored run, grade them, import them back:
 
 ```bash
+python main.py anchors-export --domain crm --profile full
+# fill the human_* columns, reconcile between BOTH graders, then:
+python main.py anchors-import --domain crm --sheet <the filled sheet>
 python main.py calibrate --domain crm
 python main.py rubric
 ```
+
+The grading sheet deliberately carries no judge scores — a grader shown the
+judge's 4 hands back a 4, and the measurement is agreement between two
+independent opinions. Import refuses a set a constant-scoring judge would pass.
 
 To combine completed per-domain judge runs into a preview scorecard, use:
 

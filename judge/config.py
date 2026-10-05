@@ -1,13 +1,14 @@
-"""Judge configuration — provider-agnostic (OpenAI direct, Azure OpenAI, or
-Anthropic via Apple's Floodgate proxy) plus per-domain JSON configs.
+"""Judge configuration — Anthropic via Apple's Floodgate proxy, plus per-domain
+JSON configs.
 
-Provider selection is auto-detected:
-- If `LLM_PROVIDER=floodgate`, or a Floodgate credential is present → Floodgate.
-- Else if `AZURE_OPENAI_ENDPOINT` is set → use Azure OpenAI (`AsyncAzureOpenAI`).
-- Else if `OPENAI_API_KEY` is set → use OpenAI direct (`AsyncOpenAI`).
-- Else → `MissingCredentials` with an actionable message.
+Floodgate is the only backend. Apple policy routes externally-hosted models
+through it, so an OpenAI or Azure path was never usable here in practice; both
+were removed rather than left as dead branches that a stray `LLM_PROVIDER`
+could still select.
 
-The `LLM_PROVIDER` env var can force selection: `azure`, `openai`, or `floodgate`.
+Credential shape is auto-detected: a Narrative certificate pair means an
+unattended run (CI, a pod, a Bolt task), otherwise an AppleConnect token on a
+developer's Mac.
 """
 
 from __future__ import annotations
@@ -15,11 +16,12 @@ from __future__ import annotations
 import json
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Literal, Union
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 MODULE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = MODULE_ROOT.parent
@@ -75,54 +77,6 @@ def trust_os_ca_store() -> bool:
 
 class MissingCredentials(RuntimeError):
     """Raised with an actionable message rather than letting the SDK fail opaquely."""
-
-
-class OpenAISettings(BaseModel):
-    """OpenAI direct API settings."""
-
-    provider: Literal["openai"] = "openai"
-    api_key: str
-    model: str = "gpt-4o-mini"
-    base_url: str | None = None
-    organization: str | None = None
-
-    @property
-    def redacted(self) -> dict[str, str | None]:
-        """Safe to write into a run manifest."""
-        return {
-            "provider": "openai",
-            "model": self.model,
-            "base_url": self.base_url,
-            "organization": self.organization,
-        }
-
-
-class AzureSettings(BaseModel):
-    """Azure OpenAI settings.
-
-    Azure calls the model a `deployment`. The rest of the app uses `model` as a
-    display string so scorecard rows can be compared across providers.
-    """
-
-    provider: Literal["azure"] = "azure"
-    endpoint: str
-    api_key: str
-    api_version: str
-    deployment: str
-
-    @property
-    def model(self) -> str:
-        """Uniform accessor across providers — used as `model_version` in verdicts."""
-        return f"azure/{self.deployment}"
-
-    @property
-    def redacted(self) -> dict[str, str]:
-        return {
-            "provider": "azure",
-            "endpoint_host": self.endpoint.split("//")[-1].split("/")[0],
-            "api_version": self.api_version,
-            "deployment": self.deployment,
-        }
 
 
 class _FloodgateSettings(BaseModel):
@@ -206,11 +160,54 @@ class FloodgateNarrativeSettings(_FloodgateSettings):
 
 
 FloodgateSettings = Union[FloodgateOIDCSettings, FloodgateNarrativeSettings]
-LLMSettings = Union[OpenAISettings, AzureSettings, FloodgateSettings]
+# One backend, but the alias stays: every call site is written against
+# "whatever the configured judge provider is", not against Floodgate
+# specifically, and the two credential shapes are already a union.
+LLMSettings = FloodgateSettings
+
+
+class CalibrationConfig(BaseModel):
+    """§10.2 acceptance thresholds and where the anchors and marker live.
+
+    These were module constants, which made the protocol unreviewable without
+    reading Python: the numbers the spec fixes (≥10 anchors, ±1 on ≥90%) were
+    indistinguishable from numbers someone happened to choose.
+
+    `require_calibration` defaults to true because §10.2 is explicit that
+    uncalibrated scores must not enter a scorecard. Turning it off is therefore a
+    deliberate, recorded config change per domain rather than a flag someone
+    remembers to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    anchors_path: str = "judge/anchors/{domain}.json"
+    marker_path: str = "judge/.calibration/{domain}.passed.json"
+    min_anchors: int = Field(default=10, ge=1)
+    agreement_pct: float = Field(default=90.0, gt=0, le=100)
+    # §10.2: "never disagrees on direction ... on any anchor". Separate from the
+    # ±1 threshold because it is a hard zero, not a percentage.
+    allow_directional_flips: bool = False
+    # Gate on SCORING: refuse to run an LLM judge against a domain with no
+    # passing marker. FALSE by default — the gate exists but is opt-in, so a run
+    # proceeds unless a domain's config asks for it. §10.2 reads the other way;
+    # that departure is a recorded project decision, and the mitigation is the
+    # same as for the release gate: the label is not configurable, so every
+    # artifact still says calibrated: false.
+    require_calibration: bool = False
+    # Gate on RELEASE: whether a --release scorecard additionally requires that
+    # marker. Defaults FALSE by project decision — §10.2's last line says
+    # uncalibrated scores must not enter a scorecard, so this is a deliberate
+    # departure, taken because a baseline is needed before the calibration
+    # session can be scheduled. What is NOT negotiable is the labelling: every
+    # artifact still records `calibrated: false`, so a card produced this way
+    # cannot be mistaken for a calibrated one after the fact.
+    require_calibration_for_release: bool = False
 
 
 class JudgeConfig(BaseModel):
     model: str
+    domain: str = ""
     temperature: float = 0.0
     seed: int | None = 42
     max_tokens: int = 1024
@@ -223,12 +220,13 @@ class JudgeConfig(BaseModel):
     mode: str = "combined"  # combined | per_dimension
     json_mode: bool = True
     cache_enabled: bool = True
+    calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
     # Where a scoring run writes its artifacts, mirroring how the dataset and
     # Q&A stages resolve their own release paths from config. `{domain}` is
     # interpolated; the path is relative to the repository root. Run outputs are
     # per-run and append-only, unlike the sealed single-version dataset and Q&A
     # packages that sit beside them under release/.
-    run_output_root: str = "release/{domain}/eval-runs"
+    run_output_root: str = "release/{release_version}/{domain}/judge"
     # §11.1 version tag for the platform under evaluation. Empty by default and
     # overridden by PLATFORM_VERSION or --platform-version — unlike the model,
     # this describes whichever deployment a machine is pointed at, so the
@@ -249,6 +247,19 @@ def _load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _without_notes(config: dict) -> dict:
+    """Drop `_`-prefixed documentation keys, at the top level and one nesting in."""
+
+    cleaned = {}
+    for key, value in config.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, dict):
+            value = {k: v for k, v in value.items() if not k.startswith("_")}
+        cleaned[key] = value
+    return cleaned
+
+
 def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfig:
     """Merge `default.json` with the `<domain>.json` override.
 
@@ -257,13 +268,8 @@ def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfi
     gateway/deployment):
 
       1. `model` set in `<domain>.json`  — an explicit per-domain choice wins
-      2. FLOODGATE_MODEL / OPENAI_MODEL / LLM_MODEL — the environment's model
+      2. FLOODGATE_MODEL / LLM_MODEL — the environment's model
       3. `model` in `default.json`       — the project-wide default
-
-    On Azure this value is display-only: the SDK routes on the DEPLOYMENT name
-    from `AZURE_OPENAI_DEPLOYMENT`, which is per-engineer and must never come
-    from shared JSON, or everyone with a differently-named deployment gets a
-    404 DeploymentNotFound.
 
     On Floodgate the model is an Anthropic id with no provider prefix, e.g.
     `anthropic.claude-sonnet-5`. `FloodgateJudge` rejects anything that isn't,
@@ -273,7 +279,22 @@ def load_judge_config(domain: str, config_dir: Path | None = None) -> JudgeConfi
     root = config_dir or CONFIGS_DIR
     base = _load_json(root / f"{DEFAULT_DOMAIN_CONFIG}.json")
     override = _load_json(root / f"{domain}.json")
+    # Shallow-merging would make a domain that overrides one calibration field
+    # silently lose the rest of the block, which is the sort of thing that only
+    # surfaces as a weird threshold months later. Nested sections merge per key.
     merged = {**base, **override}
+    for section in ("release", "calibration"):
+        base_section = base.get(section)
+        override_section = override.get(section)
+        if isinstance(base_section, dict) and isinstance(override_section, dict):
+            merged[section] = {**base_section, **override_section}
+    merged.setdefault("domain", domain)
+    # `_note` keys document these files, exactly as they do in
+    # config/generation/ and qa_pairs/generator/. They are stripped rather than
+    # allowed through, so the models can keep extra="forbid" and still catch a
+    # real typo — `min_anchor` instead of `min_anchors` must fail loudly, not be
+    # silently ignored as if it were a comment.
+    merged = _without_notes(merged)
 
     env_model = (
         os.getenv("FLOODGATE_MODEL")
@@ -293,37 +314,37 @@ def load_env(env_file: Path | None = None) -> None:
     """Load the first existing candidate env file. Explicit `env_file` wins.
 
     Shared by `load_llm_settings` and `judge.pulse_client.load_pulse_settings`
-    so both read the same `judge/.env`.
+    so both read the same `.env`.
 
-    `override=True` is deliberate: a stale `OPENAI_API_KEY` (or similar) inherited
-    from the shell will silently take precedence over the .env file otherwise, and
-    the module will happily send the WRONG key to Azure and get a 401. The .env
-    file is authoritative for judge creds — that's the whole point of dropping
-    them there.
+    The file lives at the repo root, because it configures the whole pipeline —
+    the judge, the platform client and the Studio uploader all read it — not the
+    judge alone. `.env` is still honoured as a fallback so an existing
+    checkout keeps working, and warns once so it gets moved rather than
+    silently diverging from the root file.
+
+    `override=True` is deliberate: a stale credential inherited from the shell
+    will silently take precedence over the .env file otherwise, and the module
+    will happily send the WRONG key and get a 401. The .env file is
+    authoritative for credentials — that's the whole point of dropping them
+    there.
     """
     if env_file is not None:
         load_dotenv(env_file, override=True)
         return
-    for name in _ENV_CANDIDATES:
-        p = MODULE_ROOT / name
-        if p.is_file():
-            load_dotenv(p, override=True)
-            return
+    for root in (REPO_ROOT, MODULE_ROOT):
+        for name in _ENV_CANDIDATES:
+            p = root / name
+            if p.is_file():
+                if root is MODULE_ROOT:
+                    warnings.warn(
+                        f"{p} is a legacy location — move it to "
+                        f"{REPO_ROOT / name}, which the whole pipeline reads.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                load_dotenv(p, override=True)
+                return
     # No candidate file — rely purely on the process environment.
-
-
-def _detect_provider() -> Literal["openai", "azure", "floodgate"]:
-    forced = (os.getenv("LLM_PROVIDER") or "").strip().lower()
-    if forced in ("openai", "azure", "floodgate"):
-        return forced  # type: ignore[return-value]
-    # A Narrative certificate or a project token is only ever set for Floodgate,
-    # so its presence is unambiguous. An OIDC run has no distinguishing env var
-    # — that one has to be forced with LLM_PROVIDER=floodgate.
-    if os.getenv("FLOODGATE_NARRATIVE_CERT") or os.getenv("FLOODGATE_PROJECT_TOKEN"):
-        return "floodgate"
-    if os.getenv("AZURE_OPENAI_ENDPOINT"):
-        return "azure"
-    return "openai"
 
 
 def _load_floodgate_settings() -> FloodgateSettings:
@@ -372,62 +393,22 @@ def _load_floodgate_settings() -> FloodgateSettings:
 
 
 def load_llm_settings(env_file: Path | None = None) -> LLMSettings:
-    """Read credentials from .env / process env, return the provider's settings.
+    """Read credentials from .env / process env, return the judge's settings.
 
-    Fails loudly with actionable messages — SDK errors from missing keys are
-    404s / 401s on URLs the user can't see, which is miserable to debug.
+    Fails loudly with actionable messages — SDK errors from missing credentials
+    surface as 401s on URLs the caller cannot see, which is miserable to debug.
+
+    `LLM_PROVIDER` is still read, but only to reject a value that no longer
+    exists: a leftover `LLM_PROVIDER=azure` in someone's environment should say
+    so, not silently score through Floodgate and label the run as if it had been
+    asked for.
     """
     load_env(env_file)
-    provider = _detect_provider()
-
-    if provider == "floodgate":
-        return _load_floodgate_settings()
-
-    if provider == "azure":
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION")
-        # Azure OpenAI key may live under AZURE_OPENAI_API_KEY or (commonly)
-        # under the plain OPENAI_API_KEY. Prefer the explicit name.
-        api_key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        missing = [
-            name
-            for name, val in [
-                ("AZURE_OPENAI_ENDPOINT", endpoint),
-                ("AZURE_OPENAI_DEPLOYMENT", deployment),
-                ("AZURE_OPENAI_API_VERSION", api_version),
-                ("AZURE_OPENAI_API_KEY or OPENAI_API_KEY", api_key),
-            ]
-            if not val
-        ]
-        if missing:
-            raise MissingCredentials(
-                "LLM_PROVIDER=azure but missing: "
-                + ", ".join(missing)
-                + "\nCopy .env.example → .env and fill it in, or set LLM_PROVIDER=openai."
-            )
-        return AzureSettings(
-            endpoint=endpoint,
-            api_key=api_key,
-            api_version=api_version,
-            deployment=deployment,
-        )
-
-    # OpenAI direct
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    requested = (os.getenv("LLM_PROVIDER") or "").strip().lower()
+    if requested and requested != "floodgate":
         raise MissingCredentials(
-            "Missing OPENAI_API_KEY (and no AZURE_OPENAI_ENDPOINT to fall back to Azure).\n"
-            "Copy .env.example → .env in the judge/ folder and fill in your key."
+            f"LLM_PROVIDER={requested!r} is not supported — Floodgate is the only "
+            "judge backend (Apple policy routes externally-hosted models through "
+            "it). Unset LLM_PROVIDER, or set it to 'floodgate'."
         )
-    return OpenAISettings(
-        api_key=api_key,
-        model=os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL") or "gpt-4o-mini",
-        base_url=os.getenv("OPENAI_BASE_URL"),
-        organization=os.getenv("OPENAI_ORG"),
-    )
-
-
-# Backwards-compatible name; some code paths still call this.
-def load_openai_settings(env_file: Path | None = None) -> LLMSettings:
-    return load_llm_settings(env_file)
+    return _load_floodgate_settings()

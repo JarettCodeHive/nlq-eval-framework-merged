@@ -4,7 +4,7 @@ This directory owns Finance-specific dataset configuration. The entry point is
 `config/generation/finance.json`; the shared domain loader composes these files
 in descriptor order.
 
-- `release.json` defines dataset identity, fixed references, output paths,
+- `release.json` defines evaluation-release identity, fixed references, output paths,
   release rules, table order, and fixed-point precision metadata.
 - `schema.json` mirrors the signed Finance DDL and CSV-header contract,
   including row targets, physical keys, hierarchy, and the analytical FX
@@ -46,7 +46,7 @@ python main.py show-config --domain finance --profile dev
 ```
 
 The `dev` profile writes previews only under `tmp/generated/finance/dev/`. The
-`full` profile targets `release/finance/dataset-v1.0.0/`. Generate the manifest
+`full` profile targets `release/finance/v1.0.0/dataset/`. Generate the manifest
 only after CSV export, exported-data validation, hashes, schema SQL, data
 dictionary, and reproducibility checks; the manifest makes that release
 immutable.
