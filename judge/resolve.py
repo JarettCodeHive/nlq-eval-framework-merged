@@ -290,12 +290,12 @@ def apply_resolved_defaults(args, *, repo_root: Path | None = None) -> ResolvedI
             derived["--platform-version"] = version
 
     if derived:
-        print(
-            f"[judge] resolved from --domain {domain} --profile {profile}:",
-            file=sys.stderr,
-        )
+        # stdout, not stderr: an echo of what was derived is output, not a
+        # diagnostic. The pipeline reporter logs a child's stderr as WARN, so
+        # these four lines were four warnings on every clean run.
+        print(f"[judge] resolved from --domain {domain} --profile {profile}:")
         for flag, value in derived.items():
-            print(f"[judge]   {flag:<18} {value}", file=sys.stderr)
+            print(f"[judge]   {flag:<18} {value}")
 
     return ResolvedInputs(
         domain=domain,

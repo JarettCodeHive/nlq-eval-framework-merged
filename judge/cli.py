@@ -319,11 +319,12 @@ async def _collect_and_score(
             # One line per question as it lands. A live question costs ~30s and a
             # full domain is tens of minutes; batching this leaves the operator
             # unable to tell a slow run from a hung one.
+            # stdout: per-question progress is output. Only the error detail
+            # below goes to stderr, because that one IS a diagnostic.
             print(
                 f"[judge] platform {n:>4}/{total}  {elapsed:6.1f}s  "
                 f"{'ERROR' if err else 'clarify' if clarify else 'ok':<7} "
-                f"{pair['question_id']}",
-                file=sys.stderr,
+                f"{pair['question_id']}"
             )
             if err:
                 print(f"[judge]            {err[:160]}", file=sys.stderr)
@@ -349,8 +350,7 @@ async def _collect_and_score(
                 m = counts["scored"]
             print(
                 f"[judge] scored   {m:>4}/{total}  "
-                f"{f'clarification={CLARIFICATION_SCORE}':<28} {pair['question_id']}",
-                file=sys.stderr,
+                f"{f'clarification={CLARIFICATION_SCORE}':<28} {pair['question_id']}"
             )
             return (
                 pair,
@@ -374,10 +374,7 @@ async def _collect_and_score(
             if isinstance(verdict, Exception)
             else f"overall={verdict.overall_score:.2f}"
         )
-        print(
-            f"[judge] scored   {m:>4}/{total}  {detail:<28} {pair['question_id']}",
-            file=sys.stderr,
-        )
+        print(f"[judge] scored   {m:>4}/{total}  {detail:<28} {pair['question_id']}")
         return pair, req, None, verdict
 
     return await asyncio.gather(*(one(p) for p in pairs))
@@ -948,8 +945,7 @@ async def _run(args: argparse.Namespace) -> int:
     print(
         f"[judge] pipelining {len(pairs)} pair(s): platform "
         f"concurrency={args.pulse_concurrency}, judge concurrency={args.concurrency} "
-        "— scoring starts as soon as the first answer lands",
-        file=sys.stderr,
+        "— scoring starts as soon as the first answer lands"
     )
     run_log.event(
         "pipeline.start",
