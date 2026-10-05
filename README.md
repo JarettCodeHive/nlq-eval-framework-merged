@@ -202,13 +202,6 @@ Verify the chain before a long run: `python judge/pulse_auth.py --probe`
 > as a platform fault rather than a missing entry. `floodgate.g.apple.com` is
 > needed for the judge, separately.
 
-After `qa-build`, the judge input can be built explicitly. This step is useful
-for inspection but optional because `judge` builds the input on demand:
-
-```bash
-python main.py judge-build-input --domain crm --profile dev
-```
-
 Run an offline check that replays each pair's `reference_sql` in DuckDB, or a
 three-question live preview:
 

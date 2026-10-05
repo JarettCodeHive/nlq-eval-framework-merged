@@ -125,7 +125,7 @@ def merge(domain: str, base_id: str, new_id: str) -> Path:
     from judge.resolve import judge_input_csv
 
     try:
-        qa = judge_input_csv(domain, "full", build_if_missing=False)
+        qa = judge_input_csv(domain, "full")
     except Exception:
         qa = REPO_ROOT / "release" / domain / "__missing__"
     refs: dict[str, str] = {}

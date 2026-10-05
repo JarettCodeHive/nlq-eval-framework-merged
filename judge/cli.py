@@ -829,7 +829,7 @@ async def _run(args: argparse.Namespace) -> int:
     # meaningful over a complete set — see RunContext.partial_run.
     partial_run = bool(args.limit)
     try:
-        resolved_input = judge_input_csv(args.domain, args.profile, build_if_missing=False)
+        resolved_input = judge_input_csv(args.domain, args.profile)
         if Path(args.input_csv).resolve() != resolved_input.resolve():
             partial_run = True
     except Exception:

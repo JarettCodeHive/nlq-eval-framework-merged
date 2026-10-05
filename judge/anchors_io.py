@@ -98,7 +98,7 @@ def _judge_reference_by_id(domain: str, profile: str) -> dict[str, dict[str, str
     from judge.resolve import judge_input_csv
 
     try:
-        path = judge_input_csv(domain, profile, build_if_missing=False)
+        path = judge_input_csv(domain, profile)
     except Exception:
         return {}
     if not path.is_file():

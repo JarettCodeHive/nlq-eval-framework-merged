@@ -190,22 +190,9 @@ CSV contains identifiers but no answers. The judge joins them on the unique
 `natural_language_question` value when the judge input file is absent. Build it
 deliberately after changing the pairs when you want to inspect the result:
 
-```bash
-python main.py judge-build-input --domain crm --profile full
-```
-
-The explicit dispatcher command is currently CRM-only; normal `judge` runs
-perform the join on demand.
-
-### Offline and live runs
-
-Use local DuckDB execution to validate the pipeline without calling Pulse:
-
-```bash
-python main.py judge --domain crm --profile full \
-  --pulse sql \
-  --limit 3
-```
+The judge reads the Q&A contract CSV directly — `<domain>_qa_pairs.csv` —
+because it carries `question_id` and `tier`. There is no derived judge-input
+file and no join step to remember.
 
 `--pulse sql` executes each pair's `reference_sql` against the selected CSV
 dataset; it verifies that pairs and dataset agree (§14.2) and does not evaluate

@@ -139,8 +139,10 @@ def main() -> None:
 
     from judge.resolve import qa_release_dir
 
+    from judge.resolve import judge_input_csv
+
     qa_dir = qa_release_dir(args.domain, "full")
-    input_csv = args.input_csv or qa_dir / f"{args.domain}_judge_input.csv"
+    input_csv = args.input_csv or judge_input_csv(args.domain, "full")
     output = args.output or qa_dir / f"{args.domain}_rerun_{args.run}.csv"
     build(run_dir, input_csv, output, include_ambiguous=args.include_ambiguous)
 

@@ -132,24 +132,31 @@ def test_dev_profile_resolves_the_disposable_package(tmp_path: Path) -> None:
     )
 
 
-def test_the_judge_input_is_joined_on_demand_when_absent(tmp_path: Path) -> None:
+def test_the_contract_csv_is_the_judge_input(tmp_path: Path) -> None:
+    """No derived file any more. The Q&A contract carries question_id and tier,
+    so the old join added only `family` and `scoring_mode` — neither of which is
+    read anywhere in judge/ or scorecard/."""
+
     repo = _repo(tmp_path)
     package = _qa_package(repo, "0.3.0")
 
     resolved = judge_input_csv("crm", "full", repo_root=repo)
 
-    assert resolved == package / "crm_judge_input.csv"
-    assert "CRM-T1-01-01" in resolved.read_text(encoding="utf-8")
+    assert resolved == package / "crm_qa_pairs.csv"
+    assert not (package / "crm_judge_input.csv").exists(), "nothing is generated"
 
 
-def test_an_existing_judge_input_is_never_rebuilt(tmp_path: Path) -> None:
+def test_a_pre_joined_input_is_still_honoured(tmp_path: Path) -> None:
+    """An older release package that ships the derived file keeps working, and a
+    run against it stays byte-for-byte what it always was."""
+
     repo = _repo(tmp_path)
     package = _qa_package(repo, "0.3.0", joined=True)
 
     resolved = judge_input_csv("crm", "full", repo_root=repo)
 
-    assert resolved.read_text(encoding="utf-8") == "question_id\n"
     assert resolved == package / "crm_judge_input.csv"
+    assert resolved.read_text(encoding="utf-8") == "question_id\n"
 
 
 def test_a_missing_package_names_the_command_that_creates_it(tmp_path: Path) -> None:

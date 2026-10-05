@@ -23,7 +23,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from judge.build_input import build as build_judge_input
 from judge.config import REPO_ROOT, ReleaseConfig, load_env, load_judge_config
 
 PROFILES: tuple[str, ...] = ("dev", "full")
@@ -180,37 +179,37 @@ def judge_input_csv(
     profile: str,
     *,
     repo_root: Path | None = None,
-    build_if_missing: bool = True,
 ) -> Path:
-    """The joined pair CSV the judge consumes, built on demand if it is absent.
+    """The pair CSV the judge consumes: the Q&A contract file itself.
 
-    The Q&A release deliberately splits the §9.3 contract from the identifiers,
-    so the joined file is a judge-side artifact rather than part of the sealed
-    package. Building it here is the same deterministic join `judge-build-input`
-    performs — same release in, byte-identical CSV out — which makes "did you
-    remember to run judge-build-input first?" a question nobody has to answer.
+    There used to be a derived `<domain>_judge_input.csv`, joined from the
+    contract plus its companion, because the §9.3 contract carried only the seven
+    answer fields and the companion was the only source of `question_id` and
+    `tier`. Since the Q&A side put both into the contract — every domain's
+    generator now emits them — the join added exactly two columns, `family` and
+    `scoring_mode`, and neither is read anywhere in `judge/` or `scorecard/`.
+
+    So the derived file is gone and this resolves the contract directly. A
+    pre-joined file is still honoured where one exists, so an older release
+    package keeps working untouched.
     """
 
     release = _release(domain)
     qa_dir = qa_release_dir(domain, profile, repo_root=repo_root)
-    csv_path = qa_dir / _fmt(release.input_csv_name, domain=domain)
-    if csv_path.is_file():
-        return csv_path
+
+    joined = qa_dir / _fmt(release.input_csv_name, domain=domain)
+    if joined.is_file():
+        # An older package that still ships the derived file. Preferred over the
+        # contract so a run against it is byte-for-byte what it always was.
+        return joined
 
     contract = qa_dir / _fmt(release.pairs_csv_name, domain=domain)
-    companion = qa_dir / _fmt(release.companion_csv_name, domain=domain)
-    if build_if_missing and contract.is_file() and companion.is_file():
-        print(
-            f"[judge] {csv_path.name} is missing — joining it from {qa_dir}",
-            file=sys.stderr,
-        )
-        build_judge_input(qa_dir, domain, csv_path)
-        return csv_path
+    if contract.is_file():
+        return contract
 
-    missing = [p.name for p in (contract, companion) if not p.is_file()]
     raise ResolutionError(
-        f"no judge input for domain={domain!r} profile={profile!r}: {qa_dir} "
-        f"is missing {', '.join(missing) or csv_path.name}.\n"
+        f"no pair set for domain={domain!r} profile={profile!r}: {qa_dir} "
+        f"is missing {contract.name}.\n"
         f"Generate the pairs first: python main.py qa-build --domain {domain} "
         f"--profile {profile}"
     )
