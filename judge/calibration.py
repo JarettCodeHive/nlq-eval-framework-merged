@@ -50,8 +50,12 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from judge.contracts import DIMENSIONS, JudgeVerdict
+
+if TYPE_CHECKING:  # import cycle at runtime; the annotation is a string
+    from judge.config import CalibrationConfig
 
 MODULE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = MODULE_ROOT.parent

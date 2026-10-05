@@ -1030,12 +1030,6 @@ def write_scorecard_pdf(
         leading=12,
         alignment=TA_LEFT,
     )
-    warn = ParagraphStyle(
-        "warn",
-        parent=body,
-        textColor=colors.HexColor("#b42318"),
-        fontName=_FONT_BOLD,
-    )
     section = ParagraphStyle(
         "section",
         parent=styles["Heading3"],

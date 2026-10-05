@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-import httpx
 import pytest
 
 from judge.cache import JudgeCache, cache_key
@@ -238,23 +237,8 @@ async def test_malformed_output_fails_loudly_after_retry_limit(tmp_path):
 async def test_cache_hit_replays_full_trace_with_current_run_id(tmp_path):
     log_path = tmp_path / "prompts.jsonl"
     judge = _StubLLMJudge([GOOD], log_path, cache_path=tmp_path / "cache")
-    fresh = await judge.judge(REQ)
-    cached = await judge.judge(REQ)
-def _temp_rejection() -> object:
-    from openai import APIStatusError
-
-    resp = httpx.Response(
-        400,
-        request=httpx.Request("POST", "https://gw.test"),
-        json={"error": {"message": "temperature does not support 0"}},
-    )
-    return APIStatusError(
-        "temperature unsupported",
-        response=resp,
-        body={"error": {"message": "'temperature' is not supported"}},
-    )
-
-
+    await judge.judge(REQ)          # populates the cache
+    await judge.judge(REQ)          # served from it
 # --- cache ----------------------------------------------------------------
 
 

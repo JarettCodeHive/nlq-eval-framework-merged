@@ -24,8 +24,25 @@ from judge.contracts import DIMENSIONS
 _SPREAD = [1, 3, 5, 2, 4, 1, 5, 3, 2, 4, 5, 1]
 
 
+RELEASE_VERSION = "v1.0.0"
+
+
 def _run(tmp_path: Path, rows: list[dict], run_id: str = "20260101T000000Z") -> Path:
-    run_dir = tmp_path / "release" / "crm" / "eval-runs" / run_id
+    """A scored run inside a release bundle, in the canonical layout.
+
+    The bundle is version-first — release/<version>/<domain>/judge/<run_id> — and
+    `component_dir` resolves it from the domain's generation config, so the
+    fixture has to provide that config too. Writing the run directory alone
+    passed while the layout was domain-first and stopped the day it changed.
+    """
+
+    config = tmp_path / "config" / "generation" / "crm"
+    config.mkdir(parents=True, exist_ok=True)
+    (config / "release.json").write_text(
+        json.dumps({"domain": "crm", "release_version": RELEASE_VERSION}),
+        encoding="utf-8",
+    )
+    run_dir = tmp_path / "release" / RELEASE_VERSION / "crm" / "judge" / run_id
     run_dir.mkdir(parents=True)
     (run_dir / "results.json").write_text(json.dumps({"rows": rows}), encoding="utf-8")
     return run_dir
@@ -174,5 +191,12 @@ def test_force_writes_a_weak_set_as_a_work_in_progress(tmp_path):
 
 
 def test_no_scored_run_says_how_to_make_one(tmp_path):
+    """A CONFIGURED domain with nothing scored yet — the error must name the
+    command that produces a run, not complain about the release config."""
+
+    _run(tmp_path, _rows(1))                      # creates the release config
+    import shutil
+    shutil.rmtree(tmp_path / "release")           # ...then remove every run
+
     with pytest.raises(AnchorExportError, match="python main.py judge --domain crm"):
         export_candidates("crm", repo_root=tmp_path)

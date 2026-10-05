@@ -41,7 +41,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from judge.calibration import AnchorSetTooWeak, anchor_strength, anchors_path_for
-from judge.config import REPO_ROOT, load_judge_config
+from judge.config import load_judge_config
 from judge.contracts import DIMENSIONS
 
 # Written by export, read back by import. The `human_*` columns are the graders'
@@ -71,8 +71,13 @@ class AnchorExportError(RuntimeError):
 
 
 def _run_dir(domain: str, run_id: str | None, repo_root: Path | None = None) -> Path:
-    root = repo_root or REPO_ROOT
-    runs = root / load_judge_config(domain).run_output_root.format(domain=domain)
+    # `component_dir` is the pipeline's canonical resolver for a release bundle,
+    # and it carries the legacy-layout fallback. Formatting run_output_root here
+    # broke the moment the layout gained {release_version}: the template needs
+    # two substitutions and this only ever supplied {domain}.
+    from qa_pairs.utils.release_bundle import component_dir
+
+    runs = component_dir(domain, "judge", repo_root=repo_root)
     if run_id:
         candidate = runs / run_id
         if not (candidate / "results.json").is_file():
