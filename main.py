@@ -583,6 +583,11 @@ QA_GENERATE: dict[str, CommandHandler] = {
     "logistics": generate_logistics_pairs,
     "project_management": generate_project_management_pairs,
 }
+# A domain without a rephrase-group generator yet simply skips that step in
+# qa-build (see total/step-numbering below) - this is additive, not a gate.
+QA_REPHRASE: dict[str, CommandHandler] = {
+    "crm": generate_rephrases,
+}
 
 
 def _qa_domain_fn(mapping: dict[str, CommandHandler], domain: str) -> CommandHandler:
@@ -606,8 +611,9 @@ def run_qa_build(args: argparse.Namespace) -> None:
     stage = _qa_domain_fn(QA_STAGE, args.domain)
     validate = _qa_domain_fn(QA_VALIDATE, args.domain)
     generate = _qa_domain_fn(QA_GENERATE, args.domain)
+    rephrase = QA_REPHRASE.get(args.domain)
     progress = ProgressReporter()
-    total = 4 if args.domain == "crm" else 3
+    total = 4 if rephrase else 3
 
     with use_release_version(getattr(args, "release_version", None)):
         progress.report(
@@ -622,9 +628,11 @@ def run_qa_build(args: argparse.Namespace) -> None:
             f"Step 3/{total}: Generate and verify the {args.domain} Q&A pair set"
         )
         generate(args.profile)
-        if args.domain == "crm":
-            progress.report("Step 4/4: Generate and verify CRM rephrase-group variants")
-            generate_rephrases(args.profile)
+        if rephrase:
+            progress.report(
+                f"Step 4/{total}: Generate and verify {args.domain} rephrase-group variants"
+            )
+            rephrase(args.profile)
 
     print(f"{args.domain} Q&A pair build passed")
     print(f"domain: {args.domain}")
@@ -651,10 +659,9 @@ def run_qa_generate_pairs(args: argparse.Namespace) -> None:
 
 
 def run_qa_generate_rephrases(args: argparse.Namespace) -> None:
-    """Generate verified rephrase groups for the CRM Q&A pair set."""
+    """Generate verified rephrase groups for a domain's Q&A pair set."""
 
-    _ensure_crm(args.domain)
-    generate_rephrases(args.profile)
+    _qa_domain_fn(QA_REPHRASE, args.domain)(args.profile)
 
 
 def _write_preview_tables(
