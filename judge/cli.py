@@ -444,9 +444,7 @@ def _summarise_null_handling(results: list) -> dict:
 def _report_checks(results: list, rephrase_findings: list) -> None:
     """Print the §9.2 / §9.5 diagnostics that are not part of either score."""
     clarifications = [
-        pair
-        for pair, _req, v, _em in results
-        if isinstance(v, ClarificationVerdict)
+        pair for pair, _req, v, _em in results if isinstance(v, ClarificationVerdict)
     ]
     if clarifications:
         # Said loudly because these rows LEAVE the exact-match denominator. A
@@ -1157,7 +1155,6 @@ async def _run(args: argparse.Namespace) -> int:
         summary=summary,
         exit_reason="ok" if not summary["judge_errors"] else "judge_errors",
     )
-
 
     if hasattr(judge, "cache_stats"):
         stats = judge.cache_stats()

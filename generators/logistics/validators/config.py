@@ -102,7 +102,11 @@ def _validate_required_sections(config: dict[str, Any]) -> None:
             )
         fields = table["fields"]
         names = [field.get("name") for field in fields]
-        if not fields or any(not name for name in names) or len(names) != len(set(names)):
+        if (
+            not fields
+            or any(not name for name in names)
+            or len(names) != len(set(names))
+        ):
             raise ValueError(f"{table_name}.fields has missing or duplicate names")
         for field in fields:
             missing_field = {"name", "type", "nullable"} - set(field)
@@ -124,7 +128,9 @@ def _validate_fixed_references(
     }
     for name, reference in expected.items():
         if config["fixed_values"].get(name) != reference:
-            raise ValueError(f"Logistics fixed_values.{name} must reference {reference}")
+            raise ValueError(
+                f"Logistics fixed_values.{name} must reference {reference}"
+            )
     if not config["fixed_values"].get("manifest_generated_at"):
         raise ValueError("Logistics manifest_generated_at is required")
     if config["generation_notes"].get("row_cap_source") != (
@@ -263,10 +269,19 @@ def _validate_generation_rules(
     """Validate Logistics dates, mappings, ranges, weights, and probabilities."""
 
     rules = config["generation_rules"]
-    expected = {"date_windows", "carriers", "warehouses", "orders", "shipments", "inventory"}
+    expected = {
+        "date_windows",
+        "carriers",
+        "warehouses",
+        "orders",
+        "shipments",
+        "inventory",
+    }
     if set(rules) != expected:
         raise ValueError("Logistics generation_rules groups differ from contract")
-    windows = {name: date.fromisoformat(value) for name, value in rules["date_windows"].items()}
+    windows = {
+        name: date.fromisoformat(value) for name, value in rules["date_windows"].items()
+    }
     if not (
         windows["entity_created_start"]
         <= windows["order_activity_start"]
@@ -315,8 +330,7 @@ def _validate_generation_targets(
         if set(table["row_targets"]) != profiles:
             raise ValueError(f"{table_name} row targets differ from profiles")
         if any(
-            not _positive_integer(count)
-            or count > base_config["max_rows_per_table"]
+            not _positive_integer(count) or count > base_config["max_rows_per_table"]
             for count in table["row_targets"].values()
         ):
             raise ValueError(f"{table_name} has an invalid row target")
@@ -340,9 +354,10 @@ def _validate_generation_targets(
     duplicate_pct = float(base_config["imperfections"]["duplicate_pct"])
     for profile in profiles:
         shipment_rows = config["tables"]["shipments"]["row_targets"][profile]
-        if shipment_rows + count_from_pct(shipment_rows, duplicate_pct) > base_config[
-            "max_rows_per_table"
-        ]:
+        if (
+            shipment_rows + count_from_pct(shipment_rows, duplicate_pct)
+            > base_config["max_rows_per_table"]
+        ):
             raise ValueError(f"Final shipments exceed row cap for {profile}")
 
 
@@ -488,7 +503,12 @@ def _explicit_references(value: Any, path: str = "") -> list[tuple[str, str]]:
                 key == "synthetic_source"
                 and isinstance(child, str)
                 and child.split(".", 1)[0]
-                in {"business_mappings", "distributions", "domain_values", "generation_rules"}
+                in {
+                    "business_mappings",
+                    "distributions",
+                    "domain_values",
+                    "generation_rules",
+                }
             )
             if isinstance(child, str) and (is_reference or is_dotted_synthetic):
                 references.append((child_path, child))
@@ -567,12 +587,15 @@ def _validate_weights(mapping: Any, values: list[str]) -> None:
 
     if not isinstance(mapping, dict) or set(mapping) != set(values):
         raise ValueError("Logistics weights must cover configured values")
-    if any(
-        not isinstance(weight, (int, float))
-        or isinstance(weight, bool)
-        or weight < 0
-        for weight in mapping.values()
-    ) or abs(sum(mapping.values()) - 1.0) > 1e-9:
+    if (
+        any(
+            not isinstance(weight, (int, float))
+            or isinstance(weight, bool)
+            or weight < 0
+            for weight in mapping.values()
+        )
+        or abs(sum(mapping.values()) - 1.0) > 1e-9
+    ):
         raise ValueError("Logistics weights are invalid")
 
 

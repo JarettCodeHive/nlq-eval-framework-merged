@@ -14,9 +14,7 @@ class LogisticsSchemaSQLGenerator:
 
     def __init__(self, generator: DeterministicGenerator) -> None:
         if generator.settings.domain != "logistics":
-            raise ValueError(
-                "LogisticsSchemaSQLGenerator only supports logistics"
-            )
+            raise ValueError("LogisticsSchemaSQLGenerator only supports logistics")
         validate_logistics_config()
         self.generator = generator
         self.settings = generator.settings

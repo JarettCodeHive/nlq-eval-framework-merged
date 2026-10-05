@@ -10,9 +10,7 @@ from generators.logistics.validators.relational import LogisticsRelationalValida
 
 @pytest.fixture(scope="module")
 def final_tables() -> dict[str, Any]:
-    return LogisticsImperfectionInjector.for_profile(
-        "dev"
-    ).generate_imperfect_tables()
+    return LogisticsImperfectionInjector.for_profile("dev").generate_imperfect_tables()
 
 
 @pytest.fixture(scope="module")
@@ -58,7 +56,9 @@ def test_relational_validator_rejects_shipment_chronology_violation(
     final_tables: dict[str, Any],
 ) -> None:
     changed = _copy_tables(final_tables)
-    position = int(changed["shipments"].index[changed["shipments"]["ship_date"] != ""][0])
+    position = int(
+        changed["shipments"].index[changed["shipments"]["ship_date"] != ""][0]
+    )
     changed["shipments"].at[position, "ship_date"] = "1800-01-01"
     failures = _failures(validator.validate_tables(changed))
 
@@ -90,9 +90,12 @@ def test_relational_validator_rejects_byte_identical_duplicate(
     base_count = validator.generator.row_count("shipments")
     duplicate_position = base_count
     tracking = changed["shipments"].at[duplicate_position, "tracking_number"]
-    source = changed["shipments"].iloc[:base_count].loc[
-        changed["shipments"].iloc[:base_count]["tracking_number"] == tracking
-    ].iloc[0]
+    source = (
+        changed["shipments"]
+        .iloc[:base_count]
+        .loc[changed["shipments"].iloc[:base_count]["tracking_number"] == tracking]
+        .iloc[0]
+    )
     changed["shipments"].at[duplicate_position, "shipping_cost"] = source[
         "shipping_cost"
     ]

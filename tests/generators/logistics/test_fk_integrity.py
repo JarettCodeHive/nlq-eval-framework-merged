@@ -13,9 +13,7 @@ from generators.logistics.validators.fk_integrity import MANUAL_FK_CHECKS
 
 @pytest.fixture(scope="module")
 def imperfect_tables() -> dict:
-    return LogisticsImperfectionInjector.for_profile(
-        "dev"
-    ).generate_imperfect_tables()
+    return LogisticsImperfectionInjector.for_profile("dev").generate_imperfect_tables()
 
 
 def test_validator_uses_canonical_schema_and_explicit_checks() -> None:
@@ -27,15 +25,11 @@ def test_validator_uses_canonical_schema_and_explicit_checks() -> None:
         "shipments.carrier_id.fk",
         "inventory.warehouse_id.fk",
     }
-    assert "pragma foreign_key_check" not in " ".join(
-        MANUAL_FK_CHECKS.values()
-    ).lower()
+    assert "pragma foreign_key_check" not in " ".join(MANUAL_FK_CHECKS.values()).lower()
 
 
 def test_generated_fk_and_declared_orphan_validation_passes() -> None:
-    results = LogisticsDuckDBFKValidator.for_profile(
-        "dev"
-    ).generate_and_validate()
+    results = LogisticsDuckDBFKValidator.for_profile("dev").generate_and_validate()
     checks = _results_by_name(results)
 
     assert len(results) == 12

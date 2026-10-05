@@ -209,9 +209,7 @@ def test_list_envelopes_are_normalised(payload) -> None:
 
 
 def test_a_429_is_retried_then_succeeds() -> None:
-    http = _FakeHTTP(
-        [_Response(429, text="slow down"), _Response(200, {"Id": 25})]
-    )
+    http = _FakeHTTP([_Response(429, text="slow down"), _Response(200, {"Id": 25})])
     client = StudioClient(_settings(), client=http, token_provider=lambda: "t")
 
     assert client.create_entity({"Name": "accounts", "Fields": []}) == 25

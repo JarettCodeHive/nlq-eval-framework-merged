@@ -147,14 +147,7 @@ def test_a_domain_with_no_runs_names_the_command_that_makes_one(runs) -> None:
 def test_only_directories_with_results_count(runs, tmp_path: Path) -> None:
     runs("crm", "20260923T120000Z")
     # A run that died before writing results.json must not be picked as newest.
-    (
-        tmp_path
-        / "release"
-        / "v1.0.0"
-        / "crm"
-        / "judge"
-        / "20260924T999999Z"
-    ).mkdir(
+    (tmp_path / "release" / "v1.0.0" / "crm" / "judge" / "20260924T999999Z").mkdir(
         parents=True
     )
 
@@ -174,7 +167,9 @@ def test_several_domains_land_in_one_scorecard(runs, tmp_path: Path) -> None:
 
     domains = {r["domain"] for r in outcome.rows}
     assert domains == {"crm", "sales"}
-    roll_ups = {r["domain"]: r["exact_match_pct"] for r in outcome.rows if r["tier"] == "ALL"}
+    roll_ups = {
+        r["domain"]: r["exact_match_pct"] for r in outcome.rows if r["tier"] == "ALL"
+    }
     assert roll_ups == {"crm": 75.0, "sales": 25.0}
 
 
@@ -250,8 +245,10 @@ def test_inputs_are_never_modified(runs, tmp_path: Path) -> None:
 
 
 def test_a_clean_set_has_no_blockers(runs) -> None:
-    inputs = [load_run("crm", runs("crm", "r1").name),
-              load_run("sales", runs("sales", "r1").name)]
+    inputs = [
+        load_run("crm", runs("crm", "r1").name),
+        load_run("sales", runs("sales", "r1").name),
+    ]
 
     assert release_blockers(inputs) == []
 
@@ -381,9 +378,7 @@ def test_a_preview_run_never_establishes_a_baseline(runs, tmp_path: Path) -> Non
     assert not (tmp_path / "baselines").exists()
 
 
-def test_a_second_release_compares_and_flags_a_regression(
-    runs, tmp_path: Path
-) -> None:
+def test_a_second_release_compares_and_flags_a_regression(runs, tmp_path: Path) -> None:
     """The whole point of the baseline: catch a drop of 5 pp or more."""
 
     first = [load_run("crm", runs("crm", "r1", passes=4, fails=0).name)]  # 100%
@@ -421,13 +416,17 @@ def test_exit_codes(runs, tmp_path: Path, monkeypatch) -> None:
     assert run_from_args(_args("--domains", "crm", "--out", str(tmp_path / "a"))) == 0
     # clean release establishes -> 0
     assert (
-        run_from_args(_args("--domains", "crm", "--release", "--out", str(tmp_path / "b")))
+        run_from_args(
+            _args("--domains", "crm", "--release", "--out", str(tmp_path / "b"))
+        )
         == 0
     )
     # a regression against that baseline -> 4
     runs("crm", "r2", passes=1, fails=3)
     assert (
-        run_from_args(_args("--domains", "crm", "--release", "--out", str(tmp_path / "c")))
+        run_from_args(
+            _args("--domains", "crm", "--release", "--out", str(tmp_path / "c"))
+        )
         == 4
     )
 

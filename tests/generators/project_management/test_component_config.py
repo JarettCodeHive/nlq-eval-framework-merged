@@ -177,9 +177,8 @@ def test_profile_capacities_support_required_cardinality() -> None:
         assert targets["milestones"] >= targets["projects"]
         assert targets["time_entries"] >= targets["task_resources"]
         for table_name in TABLE_ORDER:
-            assert (
-                config["tables"][table_name]["row_targets"][profile]
-                == (targets[table_name])
+            assert config["tables"][table_name]["row_targets"][profile] == (
+                targets[table_name]
             )
 
 

@@ -63,8 +63,9 @@ JOB_FAILED_STATUSES: frozenset[str] = frozenset(
 )
 # The verified success value. Listed so an unfamiliar terminal status can be
 # called out rather than quietly accepted as success.
-JOB_SUCCESS_STATUSES: frozenset[str] = frozenset({"succeeded", "success", "complete",
-                                                  "completed", "done", "finished"})
+JOB_SUCCESS_STATUSES: frozenset[str] = frozenset(
+    {"succeeded", "success", "complete", "completed", "done", "finished"}
+)
 
 
 class StudioError(RuntimeError):
@@ -197,8 +198,10 @@ class StudioClient:
             except Exception:  # noqa: BLE001 — refresh is optional, not required
                 token_provider = None
         self._token_provider = token_provider
-        if token_provider is not None and not dry_run and _token_is_expired(
-            settings.auth_token
+        if (
+            token_provider is not None
+            and not dry_run
+            and _token_is_expired(settings.auth_token)
         ):
             # Every request would otherwise 401 once before re-minting. Harmless
             # but noisy, and it makes a real 401 harder to spot in a long upload.
@@ -431,9 +434,7 @@ class StudioClient:
             return self._job_route or None
 
         for template in JOB_ROUTE_CANDIDATES:
-            path = template.format(
-                org=self.org_path, entity=entity_id, job=job_id
-            )
+            path = template.format(org=self.org_path, entity=entity_id, job=job_id)
             try:
                 response = self._client.request(
                     "GET", path, json=None, params=None, headers=self._headers()

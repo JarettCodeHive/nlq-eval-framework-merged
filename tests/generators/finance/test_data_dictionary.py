@@ -37,7 +37,10 @@ def test_dictionary_documents_values_distributions_and_generation_rules() -> Non
     markdown = FinanceDataDictionaryGenerator.for_profile("full").generate_markdown()
 
     assert "## Allowed Domain Values" in markdown
-    assert "`USD`, `EUR`, `GBP`, `INR`, `JPY`, `CAD`, `AUD`, `CHF`, `SGD`, `AED`" in markdown
+    assert (
+        "`USD`, `EUR`, `GBP`, `INR`, `JPY`, `CAD`, `AUD`, `CHF`, `SGD`, `AED`"
+        in markdown
+    )
     assert "`Asset`, `Liability`, `Equity`, `Revenue`, `Expense`" in markdown
     assert "## Base Generation Rules" in markdown
     assert '"unposted_to_ledger_fraction": 0.05' in markdown
@@ -73,7 +76,9 @@ def test_dictionary_documents_decimal_accounting_and_reversal_rules() -> None:
     assert "Debit and credit totals both equal `transactions.total_amount`" in markdown
     assert "swap debit and credit orientation" in markdown
     assert "do not apply a second negative multiplier" in markdown
-    assert "Five percent of transactions intentionally have no ledger entries" in markdown
+    assert (
+        "Five percent of transactions intentionally have no ledger entries" in markdown
+    )
 
 
 def test_dictionary_documents_fx_and_derived_metric_semantics() -> None:
@@ -87,7 +92,10 @@ def test_dictionary_documents_fx_and_derived_metric_semantics() -> None:
     assert "Debit-normal account" in markdown
     assert "credit-normal account" in markdown
     assert "`budget_amount - actual_amount`" in markdown
-    assert "`transaction_date`, `posted_at`, `transaction_id`, `line_number`, `entry_id`" in markdown
+    assert (
+        "`transaction_date`, `posted_at`, `transaction_id`, `line_number`, `entry_id`"
+        in markdown
+    )
 
 
 def test_dictionary_distinguishes_nulls_and_documents_imperfections() -> None:
@@ -157,7 +165,6 @@ def test_type_text_formats_finance_types() -> None:
     assert _type_text({"type": "varchar", "max_length": 255}) == "varchar(255)"
     assert _type_text({"type": "char", "max_length": 3}) == "char(3)"
     assert (
-        _type_text({"type": "decimal", "precision": 19, "scale": 4})
-        == "decimal(19,4)"
+        _type_text({"type": "decimal", "precision": 19, "scale": 4}) == "decimal(19,4)"
     )
     assert _type_text({"type": "timestamp"}) == "timestamp"

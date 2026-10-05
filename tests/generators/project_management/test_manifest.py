@@ -96,9 +96,7 @@ def test_pm_manifest_includes_complete_contract(
 
     assert manifest["manifest_schema_version"] == "1.0"
     assert manifest["domain"] == "project_management"
-    assert manifest["output_path"] == (
-        "release/v1.0.0/project_management/dataset"
-    )
+    assert manifest["output_path"] == ("release/v1.0.0/project_management/dataset")
     assert manifest["table_order"] == [
         "projects",
         "resources",
@@ -135,12 +133,14 @@ def test_pm_manifest_includes_complete_contract(
         "time_entry_frequency",
         "date_clustering",
     }
-    assert manifest["imperfection_observations"][
-        "near_duplicate_time_entries"
-    ]["observed"] == 1500
-    assert manifest["validation_status"]["capabilities"]["reproducibility"][
-        "status"
-    ] == "pending_step_24"
+    assert (
+        manifest["imperfection_observations"]["near_duplicate_time_entries"]["observed"]
+        == 1500
+    )
+    assert (
+        manifest["validation_status"]["capabilities"]["reproducibility"]["status"]
+        == "pending_step_24"
+    )
 
 
 def test_pm_manifest_rejects_header_drift(
@@ -293,7 +293,10 @@ def _write_contract_csvs(
             writer = csv.writer(csv_file, lineterminator="\n")
             writer.writerow([field["name"] for field in fields])
             writer.writerow(
-                [_fixture_value(table_name, field["name"], field["type"]) for field in fields]
+                [
+                    _fixture_value(table_name, field["name"], field["type"])
+                    for field in fields
+                ]
             )
 
 

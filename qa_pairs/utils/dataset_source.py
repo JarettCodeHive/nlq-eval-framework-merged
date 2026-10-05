@@ -29,7 +29,9 @@ class DatasetSource:
         return self.csv_dir.relative_to(self.repo_root).as_posix()
 
 
-def resolve_dataset_source(qa_root: Path, profile: str, generator_dir: str) -> DatasetSource:
+def resolve_dataset_source(
+    qa_root: Path, profile: str, generator_dir: str
+) -> DatasetSource:
     """Resolve a profile to generator-owned CSV and schema paths.
 
     Paths in ``generator/<generator_dir>/config.json`` are relative to the

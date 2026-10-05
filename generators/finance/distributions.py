@@ -161,9 +161,7 @@ class FinanceDistributionApplier:
         )
         reference = self.settings.reference_today
 
-        account_rng = self.generator.rng_for(
-            "distribution:finance:accounts:created_at"
-        )
+        account_rng = self.generator.rng_for("distribution:finance:accounts:created_at")
         tables["accounts"]["created_at"] = gaussian_mixture_timestamps(
             account_rng,
             count=len(tables["accounts"]),
@@ -188,9 +186,7 @@ class FinanceDistributionApplier:
 
         transactions = tables["transactions"]
         boundaries = set(self.base_config["imperfections"]["boundary_dates"])
-        regular_dates = sorted(
-            set(tables["fx_rates"]["rate_date"]) - boundaries
-        )
+        regular_dates = sorted(set(tables["fx_rates"]["rate_date"]) - boundaries)
         rng = self.generator.rng_for("distribution:finance:transactions:dates")
         offsets = gaussian_mixture_offsets(
             rng,
@@ -213,9 +209,7 @@ class FinanceDistributionApplier:
         lag = self.generation_rules["transactions"]["posted_lag_days"]
         posted_values: list[str] = []
         for transaction_date in selected_dates:
-            day_lag = int(
-                rng.integers(int(lag["minimum"]), int(lag["maximum"]) + 1)
-            )
+            day_lag = int(rng.integers(int(lag["minimum"]), int(lag["maximum"]) + 1))
             second = int(rng.integers(0, 24 * 60 * 60))
             posted = datetime.combine(
                 date.fromisoformat(transaction_date) + timedelta(days=day_lag),
@@ -310,7 +304,9 @@ class FinanceDistributionApplier:
         pd = _require_pandas()
         transactions = tables["transactions"]
         accounts = tables["accounts"]
-        posted_ids = sorted(set(int(value) for value in source_ledger["transaction_id"]))
+        posted_ids = sorted(
+            set(int(value) for value in source_ledger["transaction_id"])
+        )
         total_pairs = self.generator.row_count("ledger_entries") // 2
         frequency_rng = self.generator.rng_for(
             "distribution:finance:ledger_entries:frequency"

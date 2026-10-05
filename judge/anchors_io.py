@@ -285,7 +285,9 @@ def import_grades(
     minimum = config.calibration.min_anchors
     problems: list[str] = []
     if len(anchors) < minimum:
-        problems.append(f"§10.2 requires ≥{minimum} anchors; the sheet has {len(anchors)}")
+        problems.append(
+            f"§10.2 requires ≥{minimum} anchors; the sheet has {len(anchors)}"
+        )
     for dimension, strength in anchor_strength(anchors).items():
         if not strength.passes:
             problems.append(f"{dimension}: {strength.reason}")

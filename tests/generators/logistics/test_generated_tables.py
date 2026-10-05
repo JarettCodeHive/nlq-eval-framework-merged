@@ -66,9 +66,9 @@ def test_generated_tables_guard_rejects_status_date_drift(
 ) -> None:
     generator, clean = generated
     tables = _copy(clean)
-    position = tables["shipments"].index[
-        tables["shipments"]["status"] == "Delivered"
-    ][0]
+    position = tables["shipments"].index[tables["shipments"]["status"] == "Delivered"][
+        0
+    ]
     tables["shipments"].loc[position, "delivery_date"] = ""
 
     with pytest.raises(ValueError, match="invalid delivery_date"):

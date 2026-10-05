@@ -96,9 +96,7 @@ class LogisticsDataDictionaryGenerator:
 
     def __init__(self, generator: DeterministicGenerator) -> None:
         if generator.settings.domain != "logistics":
-            raise ValueError(
-                "LogisticsDataDictionaryGenerator only supports logistics"
-            )
+            raise ValueError("LogisticsDataDictionaryGenerator only supports logistics")
         validate_logistics_config()
         self.generator = generator
         self.settings = generator.settings
@@ -215,8 +213,7 @@ class LogisticsDataDictionaryGenerator:
             )
         elif analytical:
             reference_text = (
-                f"`{analytical['table']}.{analytical['field']}` "
-                "(analytical only)"
+                f"`{analytical['table']}.{analytical['field']}` " "(analytical only)"
             )
         else:
             reference_text = ""
@@ -355,9 +352,7 @@ class LogisticsDataDictionaryGenerator:
         targets = self.logistics_config["imperfection_targets"]
         outlier = targets["order_total_outliers"]
         orphan = targets["orphaned_order_warehouses"]
-        boundaries = ", ".join(
-            f"`{value}`" for value in config["boundary_dates"]
-        )
+        boundaries = ", ".join(f"`{value}`" for value in config["boundary_dates"])
         return [
             "## Controlled Imperfections",
             "",
@@ -385,9 +380,7 @@ def _type_text(field: dict[str, Any]) -> str:
 def _generation_text(field: dict[str, Any]) -> str:
     source = field.get("synthetic_source", "deterministic entity identifier")
     distribution = (
-        f"; distribution `{field['distribution']}`"
-        if field.get("distribution")
-        else ""
+        f"; distribution `{field['distribution']}`" if field.get("distribution") else ""
     )
     return f"Source `{source}`{distribution}."
 

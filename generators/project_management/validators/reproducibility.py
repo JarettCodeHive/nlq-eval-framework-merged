@@ -109,9 +109,9 @@ class ProjectManagementReproducibilityValidator:
         """Compare ordered artifacts, full manifests, and validation outcomes."""
 
         expected_names = self._expected_artifact_names()
-        if len(first.artifacts) != len(expected_names) or len(
-            second.artifacts
-        ) != len(expected_names):
+        if len(first.artifacts) != len(expected_names) or len(second.artifacts) != len(
+            expected_names
+        ):
             return [
                 failed(
                     "reproducibility.file_count",
@@ -187,9 +187,7 @@ class ProjectManagementReproducibilityValidator:
         clean_generator = DeterministicGenerator(clean_settings)
 
         ProjectManagementCSVExporter(clean_generator).export_full_profile_csvs()
-        ProjectManagementSchemaSQLGenerator(
-            clean_generator
-        ).write_release_schema()
+        ProjectManagementSchemaSQLGenerator(clean_generator).write_release_schema()
         ProjectManagementDataDictionaryGenerator(
             clean_generator
         ).write_release_dictionary()
@@ -204,8 +202,7 @@ class ProjectManagementReproducibilityValidator:
             manifest_path,
         ]
         artifacts = tuple(
-            _fingerprint(path, is_csv=path.suffix == ".csv")
-            for path in artifact_paths
+            _fingerprint(path, is_csv=path.suffix == ".csv") for path in artifact_paths
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         return ProjectManagementReleaseSnapshot(

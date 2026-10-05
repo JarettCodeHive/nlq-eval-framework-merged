@@ -124,9 +124,10 @@ def test_finance_manifest_includes_complete_finance_contract(
     assert manifest["accounting_rules"] == config["accounting_rules"]
     assert manifest["conversion_rules"] == config["conversion_rules"]
     assert manifest["currency_contract"]["reporting_currency"] == "USD"
-    assert manifest["currency_contract"]["supported_pairs"] == config[
-        "generation_rules"
-    ]["fx_calendar"]["currency_pairs"]
+    assert (
+        manifest["currency_contract"]["supported_pairs"]
+        == config["generation_rules"]["fx_calendar"]["currency_pairs"]
+    )
     distribution = manifest["distribution_configuration"]
     assert set(distribution["settings"]) == {
         "transaction_amount",
@@ -140,9 +141,10 @@ def test_finance_manifest_includes_complete_finance_contract(
     assert manifest["fx_summary"]["unique_composite_keys"] == 1
     assert manifest["fx_summary"]["transaction_rows_without_lookup"] == 0
     assert manifest["imperfection_observations"]["missing_fx_rates"]["observed"] == 0
-    assert manifest["validation_status"]["capabilities"]["reproducibility"][
-        "status"
-    ] == "pending_step_24"
+    assert (
+        manifest["validation_status"]["capabilities"]["reproducibility"]["status"]
+        == "pending_step_24"
+    )
 
 
 def test_finance_manifest_rejects_header_drift(
@@ -320,7 +322,9 @@ def _write_contract_csvs(
             for field in generator.finance_config["tables"][table_name]["fields"]
             if omit != (table_name, field["name"])
         ]
-        row = [_fixture_value(table_name, field["name"], field["type"]) for field in fields]
+        row = [
+            _fixture_value(table_name, field["name"], field["type"]) for field in fields
+        ]
         with (output_path / f"{table_name}.csv").open(
             "w", encoding="utf-8", newline=""
         ) as csv_file:

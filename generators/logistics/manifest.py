@@ -109,32 +109,20 @@ class LogisticsManifestGenerator:
             "imperfection_observations": self._imperfection_observations(),
             "domain_values": dict(self.logistics_config["domain_values"]),
             "generation_rules": dict(self.logistics_config["generation_rules"]),
-            "business_mappings": dict(
-                self.logistics_config["business_mappings"]
-            ),
+            "business_mappings": dict(self.logistics_config["business_mappings"]),
             "decimal_policy": dict(self.logistics_config["decimal_policy"]),
             "date_rules": list(self.logistics_config["date_rules"]),
             "decimal_rules": list(self.logistics_config["decimal_rules"]),
             "currency_rules": list(self.logistics_config["currency_rules"]),
-            "imperfection_rules": list(
-                self.logistics_config["imperfection_rules"]
-            ),
-            "distribution_targets": dict(
-                self.logistics_config["distribution_targets"]
-            ),
-            "imperfection_targets": dict(
-                self.logistics_config["imperfection_targets"]
-            ),
+            "imperfection_rules": list(self.logistics_config["imperfection_rules"]),
+            "distribution_targets": dict(self.logistics_config["distribution_targets"]),
+            "imperfection_targets": dict(self.logistics_config["imperfection_targets"]),
             "relationships": list(self.logistics_config["relationships"]),
             "join_path_requirements": list(
                 self.logistics_config["join_path_requirements"]
             ),
-            "orphan_exclusions": list(
-                self.logistics_config["orphan_exclusions"]
-            ),
-            "consistency_rules": list(
-                self.logistics_config["consistency_rules"]
-            ),
+            "orphan_exclusions": list(self.logistics_config["orphan_exclusions"]),
+            "consistency_rules": list(self.logistics_config["consistency_rules"]),
             "release_validation_rules": list(
                 self.logistics_config["release_validation_rules"]
             ),
@@ -210,9 +198,7 @@ class LogisticsManifestGenerator:
                 "Missing: " + ", ".join(str(path) for path in missing)
             )
         if release_schema.read_bytes() != canonical_ddl.read_bytes():
-            raise ValueError(
-                "Release schema.sql differs from canonical Logistics DDL"
-            )
+            raise ValueError("Release schema.sql differs from canonical Logistics DDL")
         expected_dictionary = (
             LogisticsDataDictionaryGenerator(self.generator)
             .generate_markdown()
@@ -322,20 +308,17 @@ class LogisticsManifestGenerator:
         duplicate_count = sum(count - 1 for count in shipment_counts.values())
 
         warehouse_ids = {row["warehouse_id"] for row in warehouse_rows}
-        null_warehouse_count = sum(
-            row["warehouse_id"] == "" for row in order_rows
-        )
+        null_warehouse_count = sum(row["warehouse_id"] == "" for row in order_rows)
         orphan_rows = [
             row
             for row in order_rows
-            if row["warehouse_id"]
-            and row["warehouse_id"] not in warehouse_ids
+            if row["warehouse_id"] and row["warehouse_id"] not in warehouse_ids
         ]
         outlier_minimum = Decimal(
             str(
-                self.logistics_config["imperfection_targets"][
-                    "order_total_outliers"
-                ]["minimum_value"]
+                self.logistics_config["imperfection_targets"]["order_total_outliers"][
+                    "minimum_value"
+                ]
             )
         )
         outlier_count = sum(
@@ -358,9 +341,7 @@ class LogisticsManifestGenerator:
                 for row in table_rows[table_name]
                 if row[field_name]
             )
-            boundary_counts[qualified] = {
-                value: values[value] for value in boundaries
-            }
+            boundary_counts[qualified] = {value: values[value] for value in boundaries}
 
         return {
             "near_duplicate_shipments": {

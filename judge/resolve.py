@@ -81,9 +81,7 @@ def _templated_qa_dir(domain: str, profile: str, repo_root: Path | None) -> Path
     generation = dataset_release_config(domain, repo_root=repo_root)
     version = active_release_version(generation)
     if profile == "full":
-        return existing_component_dir(
-            domain, "qa_pairs", version, repo_root=root
-        )
+        return existing_component_dir(domain, "qa_pairs", version, repo_root=root)
     return root / str(template).format(
         domain=domain,
         qa_version=version,
@@ -92,9 +90,7 @@ def _templated_qa_dir(domain: str, profile: str, repo_root: Path | None) -> Path
     )
 
 
-def qa_release_dir(
-    domain: str, profile: str, *, repo_root: Path | None = None
-) -> Path:
+def qa_release_dir(domain: str, profile: str, *, repo_root: Path | None = None) -> Path:
     """Return the selected bundle's Q&A directory without guessing a version.
 
     Falling back to whichever release happens to be newest can mix a dataset
@@ -185,9 +181,7 @@ def dataset_csv_dir(
     raw = (config.get("output_paths") or {}).get(profile)
     if profile == "full" and config:
         version = active_release_version(config)
-        base = existing_component_dir(
-            domain, "dataset", version, repo_root=root
-        )
+        base = existing_component_dir(domain, "dataset", version, repo_root=root)
     elif raw:
         base = root / str(raw).format(
             domain=domain,

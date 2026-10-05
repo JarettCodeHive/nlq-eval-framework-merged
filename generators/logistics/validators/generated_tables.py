@@ -153,9 +153,7 @@ class LogisticsGeneratedTablesValidator:
             raise ValueError("Base Logistics orders contain warehouse NULLs")
         if set(orders["warehouse_id"]) - warehouse_ids:
             raise ValueError("Base Logistics orders contain warehouse orphans")
-        if shipments.duplicated(
-            ["order_id", "carrier_id", "tracking_number"]
-        ).any():
+        if shipments.duplicated(["order_id", "carrier_id", "tracking_number"]).any():
             raise ValueError("Base Logistics shipments contain duplicate business keys")
         if shipments["tracking_number"].duplicated().any():
             raise ValueError("Base Logistics tracking numbers are not unique")
@@ -178,7 +176,9 @@ class LogisticsGeneratedTablesValidator:
                 ship_date is None or delivery_date < ship_date
             ):
                 raise ValueError("Shipment delivery chronology is invalid")
-            if ship_date is not None and created > datetime.combine(ship_date, time.max):
+            if ship_date is not None and created > datetime.combine(
+                ship_date, time.max
+            ):
                 raise ValueError("Shipment creation follows its first event date")
             _validate_shipment_status_dates(row.status, ship_date, delivery_date)
 

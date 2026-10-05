@@ -25,12 +25,10 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(scope="module")
-def valid_generation() -> (
-    tuple[
-        ProjectManagementBaseEntityGenerator,
-        dict[str, object],
-    ]
-):
+def valid_generation() -> tuple[
+    ProjectManagementBaseEntityGenerator,
+    dict[str, object],
+]:
     generator = ProjectManagementBaseEntityGenerator.for_profile("dev")
     return generator, generator.generate_tables()
 

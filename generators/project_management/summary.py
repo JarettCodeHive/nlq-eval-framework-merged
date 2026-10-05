@@ -96,7 +96,9 @@ def print_imperfection_summary(
     estimates = tasks.loc[
         tasks["estimate_hours"].astype(str).ne(""), "estimate_hours"
     ].astype(float)
-    print(f"  task_estimate_outliers_ge_{int(minimum)}: {int(estimates.ge(minimum).sum())}")
+    print(
+        f"  task_estimate_outliers_ge_{int(minimum)}: {int(estimates.ge(minimum).sum())}"
+    )
     print(
         "  task_boundary_start_dates: "
         f"{int(tasks['start_date'].astype(str).isin(boundaries).sum())}"

@@ -47,9 +47,7 @@ class FinanceRelationalValidator:
     def generate_and_validate(self) -> list[IntegrityCheckResult]:
         """Generate final imperfect Finance tables and validate them."""
 
-        tables = FinanceImperfectionInjector(
-            self.generator
-        ).generate_imperfect_tables()
+        tables = FinanceImperfectionInjector(self.generator).generate_imperfect_tables()
         return self.validate_tables(tables)
 
     def validate_tables(self, tables: dict[str, Any]) -> list[IntegrityCheckResult]:
@@ -398,9 +396,9 @@ class FinanceRelationalValidator:
                     row.created_at
                 ) < datetime.fromisoformat(transaction["posted_at"])
             if row.account_id in accounts.index:
-                account_currency += row.currency_code != accounts.at[
-                    row.account_id, "currency_code"
-                ]
+                account_currency += (
+                    row.currency_code != accounts.at[row.account_id, "currency_code"]
+                )
                 try:
                     signed_ledger_amount(
                         None if debit_blank else row.debit_amount,
@@ -416,9 +414,7 @@ class FinanceRelationalValidator:
         balance = 0
         transaction_total = 0
         for transaction_id, lines in ledger.groupby("transaction_id", sort=False):
-            sequence += lines["line_number"].tolist() != list(
-                range(1, len(lines) + 1)
-            )
+            sequence += lines["line_number"].tolist() != list(range(1, len(lines) + 1))
             odd_lines += len(lines) % 2 != 0
             debit_total = sum(
                 Decimal(value) for value in lines["debit_amount"] if value != ""
@@ -620,9 +616,9 @@ class FinanceRelationalValidator:
             rate = Decimal(str(value))
             invalid_values += rate <= 0 or rate.as_tuple().exponent != -6
 
-        rate_lookup = fx_rates.set_index(
-            ["from_currency", "to_currency", "rate_date"]
-        )["rate"]
+        rate_lookup = fx_rates.set_index(["from_currency", "to_currency", "rate_date"])[
+            "rate"
+        ]
         conversion_errors = 0
         examples = 0
         for row in transactions.itertuples(index=False):
@@ -759,8 +755,10 @@ def _result(
     passed_message: str,
     failed_message: str,
 ) -> IntegrityCheckResult:
-    return passed(check_name, passed_message) if condition else failed(
-        check_name, failed_message
+    return (
+        passed(check_name, passed_message)
+        if condition
+        else failed(check_name, failed_message)
     )
 
 

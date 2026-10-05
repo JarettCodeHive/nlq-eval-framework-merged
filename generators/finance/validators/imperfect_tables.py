@@ -151,7 +151,10 @@ class FinanceImperfectTablesValidator:
         parent_map: dict[int, int | None] = {}
         account_lookup = accounts.set_index("account_id")
         for row in accounts.itertuples(index=False):
-            if row.account_subtype not in mappings["account_subtypes"][row.account_type]:
+            if (
+                row.account_subtype
+                not in mappings["account_subtypes"][row.account_type]
+            ):
                 raise ValueError("Finance account subtype differs from account type")
             if (
                 row.normal_balance
@@ -176,9 +179,7 @@ class FinanceImperfectTablesValidator:
         if len(duplicate_rows) != expected:
             raise ValueError("Near-duplicate budget count differs from config")
 
-        target = self.finance_config["imperfection_targets"][
-            "near_duplicate_budgets"
-        ]
+        target = self.finance_config["imperfection_targets"]["near_duplicate_budgets"]
         business_keys = target["business_key_fields"]
         variation_fields = set(target["variation_fields"])
         if base_rows.duplicated(business_keys).any():
@@ -193,9 +194,7 @@ class FinanceImperfectTablesValidator:
             raise ValueError("Near-duplicate budget IDs are not fresh and sequential")
 
         source_by_key = base_rows.set_index(business_keys, drop=False)
-        unchanged_fields = (
-            set(budgets.columns) - variation_fields - {"budget_id"}
-        )
+        unchanged_fields = set(budgets.columns) - variation_fields - {"budget_id"}
         for row in duplicate_rows.itertuples(index=False):
             key = tuple(getattr(row, field) for field in business_keys)
             lookup_key: Any = key[0] if len(key) == 1 else key
@@ -203,9 +202,7 @@ class FinanceImperfectTablesValidator:
                 raise ValueError("Near-duplicate budget has no source business key")
             source = source_by_key.loc[lookup_key]
             if any(getattr(row, field) != source[field] for field in unchanged_fields):
-                raise ValueError(
-                    "Near-duplicate budget changed a non-variation field"
-                )
+                raise ValueError("Near-duplicate budget changed a non-variation field")
             if not any(
                 getattr(row, field) != source[field] for field in variation_fields
             ):
@@ -293,13 +290,17 @@ class FinanceImperfectTablesValidator:
                     raise ValueError("A transaction outlier exceeds its maximum")
                 outlier_ids.add(int(row.transaction_id))
             elif amount > base_maximum:
-                raise ValueError("A transaction amount falls between normal and outlier ranges")
+                raise ValueError(
+                    "A transaction amount falls between normal and outlier ranges"
+                )
         if len(outlier_ids) != expected:
             raise ValueError(
                 "Transaction outlier count differs from configured rate: "
                 f"expected {expected}, got {len(outlier_ids)}"
             )
-        posted_ids = set(int(value) for value in tables["ledger_entries"]["transaction_id"])
+        posted_ids = set(
+            int(value) for value in tables["ledger_entries"]["transaction_id"]
+        )
         if not outlier_ids.issubset(posted_ids):
             raise ValueError("A transaction outlier has no ledger entries")
 
@@ -312,11 +313,15 @@ class FinanceImperfectTablesValidator:
         boundary_rows = transactions[transactions["transaction_date"].isin(expected)]
         counts = boundary_rows["transaction_date"].value_counts().to_dict()
         if any(counts.get(value, 0) != 1 for value in expected):
-            raise ValueError("Finance transaction boundary dates are missing or repeated")
+            raise ValueError(
+                "Finance transaction boundary dates are missing or repeated"
+            )
 
         lag_rules = self.generation_rules["transactions"]["posted_lag_days"]
         maximum_lag = int(lag_rules["maximum"])
-        posted_ids = set(int(value) for value in tables["ledger_entries"]["transaction_id"])
+        posted_ids = set(
+            int(value) for value in tables["ledger_entries"]["transaction_id"]
+        )
         for row in boundary_rows.itertuples(index=False):
             if int(row.transaction_id) not in posted_ids:
                 raise ValueError("A boundary transaction has no ledger entries")
@@ -359,9 +364,9 @@ class FinanceImperfectTablesValidator:
                 bool(transaction["reversed"]) != (row.posting_type == "Reversal")
             ):
                 raise ValueError("Finance ledger posting type is invalid")
-            created_lag = datetime.fromisoformat(row.created_at) - datetime.fromisoformat(
-                transaction["posted_at"]
-            )
+            created_lag = datetime.fromisoformat(
+                row.created_at
+            ) - datetime.fromisoformat(transaction["posted_at"])
             if created_lag < minimum_lag or created_lag > maximum_lag:
                 raise ValueError("Finance ledger creation is outside lag rules")
 
@@ -386,13 +391,16 @@ class FinanceImperfectTablesValidator:
         expected_unposted = round(
             len(transactions)
             * float(
-                self.generation_rules["transactions"][
-                    "unposted_to_ledger_fraction"
-                ]
+                self.generation_rules["transactions"]["unposted_to_ledger_fraction"]
             )
         )
-        if len(set(int(value) for value in transactions.index) - posted_ids) != expected_unposted:
-            raise ValueError("Finance zero-ledger transaction count differs from config")
+        if (
+            len(set(int(value) for value in transactions.index) - posted_ids)
+            != expected_unposted
+        ):
+            raise ValueError(
+                "Finance zero-ledger transaction count differs from config"
+            )
         if ledger.groupby("transaction_id")["account_id"].nunique().max() < 2:
             raise ValueError("Finance lacks a transaction using multiple accounts")
         if ledger.groupby("account_id")["transaction_id"].nunique().max() < 2:
@@ -413,9 +421,9 @@ class FinanceImperfectTablesValidator:
                     f"{table_name} columns changed during imperfection injection"
                 )
             for column_name in source.columns:
-                if column_name not in IMPERFECTION_MUTABLE_FIELDS[table_name] and not source[
-                    column_name
-                ].equals(result[column_name]):
+                if column_name not in IMPERFECTION_MUTABLE_FIELDS[
+                    table_name
+                ] and not source[column_name].equals(result[column_name]):
                     raise ValueError(
                         f"{table_name}.{column_name} changed unexpectedly during "
                         "imperfection injection"

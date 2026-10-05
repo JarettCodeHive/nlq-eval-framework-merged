@@ -135,7 +135,9 @@ def log_payload(
 
 def write_payload(log_dir: Path, name: str, payload: dict) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
-    (log_dir / f"{name}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    (log_dir / f"{name}.json").write_text(
+        json.dumps(payload, indent=2), encoding="utf-8"
+    )
 
 
 def write_log(log_dir: Path, name: str, **kw) -> None:

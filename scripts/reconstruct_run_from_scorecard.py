@@ -96,7 +96,9 @@ def rebuild_rows(question_csv: Path) -> list[dict]:
                 # The per-dimension rationales were flattened into one string by
                 # the CSV; the same string is attributed to each dimension and
                 # labelled, rather than inventing four different ones.
-                combined = record.get("judge_rationale") or "recovered from scorecard CSV"
+                combined = (
+                    record.get("judge_rationale") or "recovered from scorecard CSV"
+                )
                 row["judge_rationales"] = {k: combined for k in _DIMENSION_COLUMNS}
                 row["judge_rationale"] = combined
                 row["judge_overall"] = _as_float(record.get("judge_overall"))
@@ -164,9 +166,7 @@ def reconstruct(
         )
 
     run_id = f"{scorecard_id}-RECONSTRUCTED"
-    target = component_dir(
-        domain, "judge", version=version, repo_root=root
-    ) / run_id
+    target = component_dir(domain, "judge", version=version, repo_root=root) / run_id
     target.mkdir(parents=True, exist_ok=True)
 
     payload = {
@@ -226,8 +226,7 @@ def main() -> None:
         "--scorecard",
         required=True,
         help=(
-            "scorecard directory name under "
-            "release/<version>/<domain>/scorecard/"
+            "scorecard directory name under " "release/<version>/<domain>/scorecard/"
         ),
     )
     args = parser.parse_args()

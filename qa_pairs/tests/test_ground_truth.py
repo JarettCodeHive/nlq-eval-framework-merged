@@ -29,7 +29,9 @@ def test_reference_sql_reproduces_expected_answer(pairs, companion, con):
         result, cols = _rows(con, r)
         assert result, f"zero rows now: {r['natural_language_question']}"
         answer = serialize(result, cols)
-        assert answer == r["expected_answer"], f"answer drift: {r['natural_language_question']}"
+        assert (
+            answer == r["expected_answer"]
+        ), f"answer drift: {r['natural_language_question']}"
         if r["is_release_160"] != "true":
             continue
         # result_hash = SHA-256 of the canonical serialized answer (portable)

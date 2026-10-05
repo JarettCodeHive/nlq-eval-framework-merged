@@ -244,9 +244,9 @@ def test_validation_rejects_non_chronological_date_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = deepcopy(load_project_management_config())
-    config["generation_rules"]["date_windows"]["time_entry_activity_start"] = (
-        "2028-01-01"
-    )
+    config["generation_rules"]["date_windows"][
+        "time_entry_activity_start"
+    ] = "2028-01-01"
 
     with pytest.raises(ValueError, match="date windows are not chronological"):
         _validate_with(monkeypatch, config)
@@ -307,9 +307,9 @@ def test_validation_rejects_unknown_join_condition_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = deepcopy(load_project_management_config())
-    config["join_path_requirements"][0]["join_condition"] = (
-        "tasks.missing_id = projects.project_id"
-    )
+    config["join_path_requirements"][0][
+        "join_condition"
+    ] = "tasks.missing_id = projects.project_id"
 
     with pytest.raises(ValueError, match="condition references unknown field"):
         _validate_with(monkeypatch, config)

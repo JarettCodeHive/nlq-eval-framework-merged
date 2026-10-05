@@ -30,7 +30,13 @@ from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 
 FK_CHECKS = [
     ("shipments.order_id -> orders", "shipments", "order_id", "orders", "order_id"),
-    ("shipments.carrier_id -> carriers", "shipments", "carrier_id", "carriers", "carrier_id"),
+    (
+        "shipments.carrier_id -> carriers",
+        "shipments",
+        "carrier_id",
+        "carriers",
+        "carrier_id",
+    ),
     (
         "inventory.warehouse_id -> warehouses",
         "inventory",
@@ -134,9 +140,13 @@ def validate(profile: str) -> None:
         print(f"  {mark} {label}: {n:,}")
 
     manifest = BASE / "dataset" / f"manifest_logistics_{profile}.json"
-    print(f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}")
+    print(
+        f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}"
+    )
 
-    print(f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}")
+    print(
+        f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}"
+    )
     con.close()
     if failures:
         raise ValueError(f"{failures} Q&A dataset validation check(s) failed")

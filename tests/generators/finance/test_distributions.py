@@ -116,12 +116,8 @@ def test_clustered_dates_preserve_calendar_keys_and_chronology(
     assert base["budgets"]["period_start"].equals(
         distributed["budgets"]["period_start"]
     )
-    assert base["budgets"]["period_end"].equals(
-        distributed["budgets"]["period_end"]
-    )
-    assert base["fx_rates"]["rate_date"].equals(
-        distributed["fx_rates"]["rate_date"]
-    )
+    assert base["budgets"]["period_end"].equals(distributed["budgets"]["period_end"])
+    assert base["fx_rates"]["rate_date"].equals(distributed["fx_rates"]["rate_date"])
 
     fx_keys = set(
         zip(
@@ -164,14 +160,18 @@ def test_fx_movement_changes_non_identity_rates_and_preserves_scale(
     identity = distributed["fx_rates"]["from_currency"] == "USD"
     non_identity = ~identity
 
-    assert not base["fx_rates"].loc[non_identity, "rate"].equals(
-        distributed["fx_rates"].loc[non_identity, "rate"]
+    assert (
+        not base["fx_rates"]
+        .loc[non_identity, "rate"]
+        .equals(distributed["fx_rates"].loc[non_identity, "rate"])
     )
     assert (distributed["fx_rates"].loc[identity, "rate"] == "1.000000").all()
     assert distributed["fx_rates"]["rate"].map(Decimal).gt(0).all()
-    assert distributed["fx_rates"]["rate"].map(
-        lambda value: Decimal(value).as_tuple().exponent == -6
-    ).all()
+    assert (
+        distributed["fx_rates"]["rate"]
+        .map(lambda value: Decimal(value).as_tuple().exponent == -6)
+        .all()
+    )
 
 
 def test_finance_distributed_generation_is_reproducible() -> None:

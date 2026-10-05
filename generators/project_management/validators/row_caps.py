@@ -27,8 +27,7 @@ class ProjectManagementRowCapValidator:
     def __init__(self, generator: DeterministicGenerator) -> None:
         if generator.settings.domain != "project_management":
             raise ValueError(
-                "ProjectManagementRowCapValidator only supports "
-                "project_management"
+                "ProjectManagementRowCapValidator only supports " "project_management"
             )
         validate_project_management_config()
         self.generator = generator

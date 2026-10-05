@@ -191,4 +191,3 @@ class ClarificationVerdict(BaseModel):
             f"the fixed {CLARIFICATION_SCORE} rather than judged, because the "
             "rubric dimensions anchor on an answer that was never given."
         )
-

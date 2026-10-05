@@ -31,9 +31,7 @@ def test_dictionary_covers_every_table_and_field() -> None:
 
 
 def test_dictionary_documents_logistics_contracts() -> None:
-    markdown = LogisticsDataDictionaryGenerator.for_profile(
-        "full"
-    ).generate_markdown()
+    markdown = LogisticsDataDictionaryGenerator.for_profile("full").generate_markdown()
 
     assert "## Distribution Configuration" in markdown
     assert "## Required Join Paths" in markdown
@@ -55,9 +53,7 @@ def test_dictionary_is_deterministic() -> None:
 
 def test_dictionary_write_guards_and_atomic_output(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="requires the full profile"):
-        LogisticsDataDictionaryGenerator.for_profile(
-            "dev"
-        ).write_release_dictionary()
+        LogisticsDataDictionaryGenerator.for_profile("dev").write_release_dictionary()
 
     generator = LogisticsDataDictionaryGenerator.for_profile("full")
     generator.settings = replace(generator.settings, output_path=tmp_path)

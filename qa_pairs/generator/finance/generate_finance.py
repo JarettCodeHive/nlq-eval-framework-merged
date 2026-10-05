@@ -75,7 +75,9 @@ def load_duckdb(con, csv_dir: Path, ddl_path: Path) -> list[dict]:
     """
     ddl_text, n = _SELF_REF_FK.subn("", ddl_path.read_text(encoding="utf-8"), count=1)
     if n != 1:
-        raise SystemExit("expected exactly one self-referencing accounts FK constraint in DDL")
+        raise SystemExit(
+            "expected exactly one self-referencing accounts FK constraint in DDL"
+        )
     con.execute(ddl_text)
     files = []
     for name in LOAD_ORDER:
@@ -175,7 +177,9 @@ def build(profile: str) -> None:
     (DATASET / f"manifest_finance_{profile}.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
     )
-    print(f"\ndataset/finance/{profile}/  +  {db_path.name}  +  manifest_finance_{profile}.json")
+    print(
+        f"\ndataset/finance/{profile}/  +  {db_path.name}  +  manifest_finance_{profile}.json"
+    )
     print(
         f"reference_today = {manifest['reference_today']}  "
         f"integrity: {integrity['row_cap_check']}, fk {integrity['fk_check']}"
@@ -206,7 +210,11 @@ def _integrity(con) -> dict:
         "AND NOT EXISTS (SELECT 1 FROM accounts p WHERE p.account_id = c.parent_account_id)"
     ).fetchone()[0]
     return {
-        "fk_check": "passed" if self_ref_orphans == 0 else f"FAILED ({self_ref_orphans} orphans)",
+        "fk_check": (
+            "passed"
+            if self_ref_orphans == 0
+            else f"FAILED ({self_ref_orphans} orphans)"
+        ),
         "row_cap_check": "passed" if over_cap <= 250000 else f"FAILED ({over_cap})",
         "inner_join_paths_verified": inner > 0,
         "left_join_unmatched_rows_present": left_unmatched > 0,

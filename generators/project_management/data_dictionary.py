@@ -238,10 +238,11 @@ class ProjectManagementDataDictionaryGenerator:
             "|---|---|---|---|---|",
         ]
         for key, spec in metadata.items():
-            overrides = _compact_json(spec["overrides"]) if spec["overrides"] else "None"
+            overrides = (
+                _compact_json(spec["overrides"]) if spec["overrides"] else "None"
+            )
             targets = ", ".join(
-                _distribution_target_text(target)
-                for target in spec["targets"].values()
+                _distribution_target_text(target) for target in spec["targets"].values()
             )
             lines.append(
                 f"| `{key}` | `{spec['preset']}` | {overrides} | "
@@ -259,7 +260,9 @@ class ProjectManagementDataDictionaryGenerator:
         ]
         for relationship in self.pm_config["relationships"]:
             if relationship["relationship_type"] == "foreign_key":
-                parent = f"`{relationship['parent_table']}.{relationship['parent_field']}`"
+                parent = (
+                    f"`{relationship['parent_table']}.{relationship['parent_field']}`"
+                )
                 child = f"`{relationship['child_table']}.{relationship['child_field']}`"
                 enforcement = "Physical FK."
             else:

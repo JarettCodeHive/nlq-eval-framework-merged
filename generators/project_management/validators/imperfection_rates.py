@@ -78,9 +78,9 @@ class ProjectManagementImperfectionRateValidator:
         source = ProjectManagementDistributionApplier(
             self.generator
         ).generate_distributed_tables()
-        tables = ProjectManagementImperfectionInjector(
-            self.generator
-        ).apply_to_tables(source)
+        tables = ProjectManagementImperfectionInjector(self.generator).apply_to_tables(
+            source
+        )
         return self.validate_tables(tables, source_tables=source)
 
     def validate_tables(
@@ -188,9 +188,7 @@ class ProjectManagementImperfectionRateValidator:
                     expected,
                 )
             )
-            invalid = int(
-                (~missing["status"].isin(target["eligible_statuses"])).sum()
-            )
+            invalid = int((~missing["status"].isin(target["eligible_statuses"])).sum())
             results.append(
                 _zero_count_result(
                     f"{target['table']}.{target['field']}.eligible_status",
@@ -208,7 +206,11 @@ class ProjectManagementImperfectionRateValidator:
         minimum = Decimal(str(target["minimum_value"]))
         maximum = Decimal(str(target["maximum_value"]))
         clean_maximum = Decimal(
-            str(self.pm_config["generation_rules"]["tasks"]["estimate_hours"]["maximum_amount"])
+            str(
+                self.pm_config["generation_rules"]["tasks"]["estimate_hours"][
+                    "maximum_amount"
+                ]
+            )
         )
         scale = int(target["scale"])
         outliers: list[Decimal] = []
@@ -281,9 +283,10 @@ class ProjectManagementImperfectionRateValidator:
         contract_errors = 0
         field_errors = 0
         mutable = _mutable_fields(self.pm_config)
-        if tuple(tables) != self.settings.table_order or tuple(
-            source_tables
-        ) != self.settings.table_order:
+        if (
+            tuple(tables) != self.settings.table_order
+            or tuple(source_tables) != self.settings.table_order
+        ):
             contract_errors += 1
         for table_name in self.settings.table_order:
             if table_name not in tables or table_name not in source_tables:
@@ -295,9 +298,7 @@ class ProjectManagementImperfectionRateValidator:
                 contract_errors += 1
                 continue
             expected_rows = len(source) + (
-                self.expected_duplicate_count()
-                if table_name == "time_entries"
-                else 0
+                self.expected_duplicate_count() if table_name == "time_entries" else 0
             )
             if len(result) != expected_rows:
                 contract_errors += 1
@@ -327,9 +328,9 @@ class ProjectManagementImperfectionRateValidator:
         self,
         tables: dict[str, Any],
     ) -> IntegrityCheckResult:
-        results = ProjectManagementRelationalValidator(
-            self.generator
-        ).validate_tables(tables)
+        results = ProjectManagementRelationalValidator(self.generator).validate_tables(
+            tables
+        )
         failures = [result.check_name for result in results if not result.passed]
         return _condition_result(
             "project_management.relational_date_invariants",
@@ -428,7 +429,11 @@ def _exact_count_result(
     actual: int,
     expected: int,
 ) -> IntegrityCheckResult:
-    return passed(check_name, f"{actual} row(s)") if actual == expected else failed(check_name, f"expected {expected}, got {actual}")
+    return (
+        passed(check_name, f"{actual} row(s)")
+        if actual == expected
+        else failed(check_name, f"expected {expected}, got {actual}")
+    )
 
 
 def _zero_count_result(
@@ -436,7 +441,11 @@ def _zero_count_result(
     count: int,
     message: str,
 ) -> IntegrityCheckResult:
-    return passed(check_name, "zero invalid rows") if count == 0 else failed(check_name, f"{count} {message}")
+    return (
+        passed(check_name, "zero invalid rows")
+        if count == 0
+        else failed(check_name, f"{count} {message}")
+    )
 
 
 def _condition_result(

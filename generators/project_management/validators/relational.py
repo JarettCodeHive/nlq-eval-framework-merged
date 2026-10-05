@@ -194,7 +194,9 @@ class ProjectManagementRelationalValidator:
                     f"blank columns={blank_columns}, duplicate rows={duplicate_count}",
                 )
             )
-        project_code_duplicates = int(tables["projects"]["project_code"].duplicated().sum())
+        project_code_duplicates = int(
+            tables["projects"]["project_code"].duplicated().sum()
+        )
         results.append(
             _result(
                 "projects.project_code.unique",
@@ -331,7 +333,9 @@ class ProjectManagementRelationalValidator:
                     if (table_name, field_name) in positive and amount <= 0:
                         invalid_sign += 1
                 qualified = f"{table_name}.{field_name}"
-                results.append(_count_result(f"{qualified}.fixed_decimal", invalid_format))
+                results.append(
+                    _count_result(f"{qualified}.fixed_decimal", invalid_format)
+                )
                 results.append(_count_result(f"{qualified}.non_negative", invalid_sign))
         return results
 
@@ -414,9 +418,7 @@ class ProjectManagementRelationalValidator:
 
         expected_total = Decimal(self.pm_config["decimal_policy"]["allocation_total"])
         totals = (
-            assignments.assign(
-                _allocation=assignments["allocation_pct"].map(Decimal)
-            )
+            assignments.assign(_allocation=assignments["allocation_pct"].map(Decimal))
             .groupby("task_id")["_allocation"]
             .sum()
         )
@@ -425,7 +427,9 @@ class ProjectManagementRelationalValidator:
         resource_coverage = set(tables["resources"]["resource_id"]) - set(
             assignments["resource_id"]
         )
-        multi_resource = int(assignments.groupby("task_id")["resource_id"].nunique().max())
+        multi_resource = int(
+            assignments.groupby("task_id")["resource_id"].nunique().max()
+        )
         multi_task = int(assignments.groupby("resource_id")["task_id"].nunique().max())
         return [
             _count_result("task_resources.unique_pairs", pair_duplicates),
@@ -458,9 +462,9 @@ class ProjectManagementRelationalValidator:
     ) -> list[IntegrityCheckResult]:
         projects = tables["projects"].set_index("project_id")
         milestones = tables["milestones"]
-        completed_status = self.pm_config["business_mappings"][
-            "milestone_completion"
-        ]["completed_status"]
+        completed_status = self.pm_config["business_mappings"]["milestone_completion"][
+            "completed_status"
+        ]
         chronology = 0
         parent_window = 0
         status_dates = 0
@@ -474,9 +478,9 @@ class ProjectManagementRelationalValidator:
             chronology += created > planned
             parent_window += planned < project_start
             parent_window += project_end is not None and planned > project_end
-            parent_window += (
-                actual is not None
-                and (actual < project_start or (project_end is not None and actual > project_end))
+            parent_window += actual is not None and (
+                actual < project_start
+                or (project_end is not None and actual > project_end)
             )
             status_dates += (row.status == completed_status) != (actual is not None)
         project_coverage = set(projects.index) - set(milestones["project_id"])
@@ -691,7 +695,11 @@ def _result(
     passed_message: str,
     failed_message: str,
 ) -> IntegrityCheckResult:
-    return passed(check_name, passed_message) if condition else failed(check_name, failed_message)
+    return (
+        passed(check_name, passed_message)
+        if condition
+        else failed(check_name, failed_message)
+    )
 
 
 def _count_result(check_name: str, violation_count: int) -> IntegrityCheckResult:

@@ -75,9 +75,10 @@ def test_row_cap_failure_identifies_table_and_source() -> None:
     }
 
     assert not checks["time_entries.row_cap.actual"].passed
-    assert "250001 rows exceeds cap 250000" in checks[
-        "time_entries.row_cap.actual"
-    ].message
+    assert (
+        "250001 rows exceeds cap 250000"
+        in checks["time_entries.row_cap.actual"].message
+    )
 
 
 def test_generated_dev_tables_pass_row_caps() -> None:

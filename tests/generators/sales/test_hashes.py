@@ -16,7 +16,9 @@ def test_sales_hash_computer_loads_full_profile_settings() -> None:
 
     assert computer.settings.domain == "sales"
     assert computer.settings.profile == "full"
-    assert computer.settings.output_path == Path("release/v1.0.0/sales/dataset").resolve()
+    assert (
+        computer.settings.output_path == Path("release/v1.0.0/sales/dataset").resolve()
+    )
 
 
 def test_sales_hash_computer_refuses_non_release_profile() -> None:

@@ -91,8 +91,7 @@ class ProjectManagementJoinPathValidator:
     def __init__(self, generator: DeterministicGenerator) -> None:
         if generator.settings.domain != "project_management":
             raise ValueError(
-                "ProjectManagementJoinPathValidator only supports "
-                "project_management"
+                "ProjectManagementJoinPathValidator only supports " "project_management"
             )
         validate_project_management_config()
         self.generator = generator
@@ -275,7 +274,11 @@ def _positive_count_result(
     count: int,
     zero_message: str,
 ) -> IntegrityCheckResult:
-    return passed(check_name, f"{count} qualifying row(s)") if count > 0 else failed(check_name, zero_message)
+    return (
+        passed(check_name, f"{count} qualifying row(s)")
+        if count > 0
+        else failed(check_name, zero_message)
+    )
 
 
 def _zero_count_result(
@@ -283,7 +286,11 @@ def _zero_count_result(
     count: int,
     nonzero_message: str,
 ) -> IntegrityCheckResult:
-    return passed(check_name, "zero invalid rows") if count == 0 else failed(check_name, f"{nonzero_message}: {count}")
+    return (
+        passed(check_name, "zero invalid rows")
+        if count == 0
+        else failed(check_name, f"{nonzero_message}: {count}")
+    )
 
 
 def _count(connection: Any, sql: str) -> int:

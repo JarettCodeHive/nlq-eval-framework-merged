@@ -106,9 +106,7 @@ class LogisticsDistributionApplier:
             scale=int(spec["scale"]),
         )
 
-    def _apply_shipment_frequency_distribution(
-        self, tables: dict[str, Any]
-    ) -> None:
+    def _apply_shipment_frequency_distribution(self, tables: dict[str, Any]) -> None:
         """Redistribute shipments while retaining eligible and unshipped orders."""
 
         shipments = tables["shipments"]
@@ -116,9 +114,7 @@ class LogisticsDistributionApplier:
         carrier_ids = [int(value) for value in tables["carriers"]["carrier_id"]]
         target = self.config["distribution_targets"]["shipment_frequency"]
         spec = self.settings.distributions[target["settings_key"]]
-        rng = self.generator.rng_for(
-            "distribution:logistics:shipments:frequency"
-        )
+        rng = self.generator.rng_for("distribution:logistics:shipments:frequency")
         counts = _exact_poisson_counts(
             rng,
             item_count=len(eligible_order_ids),
@@ -157,9 +153,7 @@ class LogisticsDistributionApplier:
             zip(tables["orders"]["order_id"], tables["orders"]["status"], strict=True)
         )
         weights = self.rules["shipments"]["status_weights"]
-        rng = self.generator.rng_for(
-            "distribution:logistics:shipments:statuses"
-        )
+        rng = self.generator.rng_for("distribution:logistics:shipments:statuses")
         seen: set[int] = set()
         statuses: list[str] = []
         for order_id in shipments["order_id"]:
@@ -205,9 +199,7 @@ class LogisticsDistributionApplier:
                 orders["order_id"], orders["order_date"], strict=True
             )
         }
-        order_created = dict(
-            zip(orders["order_id"], orders["created_at"], strict=True)
-        )
+        order_created = dict(zip(orders["order_id"], orders["created_at"], strict=True))
         start = date.fromisoformat(self.rules["date_windows"]["order_activity_start"])
         reference = self.settings.reference_today
         ship_samples = _clustered_dates(
@@ -268,24 +260,18 @@ class LogisticsDistributionApplier:
                 _format_timestamp(min(event_end, max(creation_start, old_created)))
             )
             ship_dates.append(ship_date.isoformat() if ship_date else "")
-            delivery_dates.append(
-                delivery_date.isoformat() if delivery_date else ""
-            )
+            delivery_dates.append(delivery_date.isoformat() if delivery_date else "")
         shipments["ship_date"] = ship_dates
         shipments["delivery_date"] = delivery_dates
         shipments["created_at"] = created_values
 
-    def _cluster_inventory_updates(
-        self, inventory: Any, spec: dict[str, Any]
-    ) -> None:
+    def _cluster_inventory_updates(self, inventory: Any, spec: dict[str, Any]) -> None:
         start = date.fromisoformat(
             self.rules["date_windows"]["inventory_activity_start"]
         )
         reference = self.settings.reference_today
         samples = _clustered_dates(
-            self.generator.rng_for(
-                "distribution:logistics:inventory:last_updated_at"
-            ),
+            self.generator.rng_for("distribution:logistics:inventory:last_updated_at"),
             len(inventory),
             start,
             reference,
@@ -298,9 +284,7 @@ class LogisticsDistributionApplier:
                     datetime.combine(date.fromisoformat(sample), time(12, 0)),
                 )
             )
-            for created_at, sample in zip(
-                inventory["created_at"], samples, strict=True
-            )
+            for created_at, sample in zip(inventory["created_at"], samples, strict=True)
         ]
 
     def _report(self, message: str) -> None:
@@ -325,7 +309,9 @@ def _exact_poisson_counts(
     remaining = total_count - required
     weights = poisson_weights(rng, item_count, lam)
     extras = rng.multinomial(remaining, weights)
-    return [minimum + int(extra) for minimum, extra in zip(minimums, extras, strict=True)]
+    return [
+        minimum + int(extra) for minimum, extra in zip(minimums, extras, strict=True)
+    ]
 
 
 def _compatible_status(

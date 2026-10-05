@@ -105,7 +105,9 @@ def _answer_schema(fam: dict, res, sql: str) -> str:
 
 
 def _numeric_components(res) -> str:
-    names = [c for c, t in zip(res.columns or [], res.col_types or []) if t in _NUMERIC_TYPES]
+    names = [
+        c for c, t in zip(res.columns or [], res.col_types or []) if t in _NUMERIC_TYPES
+    ]
     return "|".join(names) if names else "(none)"
 
 
@@ -129,7 +131,9 @@ def check_template_vars(fam: dict) -> None:
     src = ENV.loader.get_source(ENV, fam["template"])[0]
     missing = meta.find_undeclared_variables(ENV.parse(src)) - set(fam["params"])
     if missing:
-        raise SystemExit(f"{fam['family']} {fam['template']}: unbound vars {sorted(missing)}")
+        raise SystemExit(
+            f"{fam['family']} {fam['template']}: unbound vars {sorted(missing)}"
+        )
 
 
 def generate_pairs(profile: str) -> None:
@@ -145,7 +149,9 @@ def generate_pairs(profile: str) -> None:
     dv = manifest["dataset_version"]
     out = resolve_qa_output_dir(BASE, profile, "crm")
     con = connect_typed(BASE / "dataset" / f"crm_{profile}.duckdb")
-    build_stamp.require_fresh_db(con, manifest, BASE, profile, "crm", BASE / "dataset" / profile)
+    build_stamp.require_fresh_db(
+        con, manifest, BASE, profile, "crm", BASE / "dataset" / profile
+    )
     catalog = build_catalog(con)
 
     # Build the whole release in memory first. Nothing is written - and the
@@ -197,7 +203,9 @@ def generate_pairs(profile: str) -> None:
                         ),
                     )
                 )
-                q = fam["question"].format(**{k: label(v, LABELS) for k, v in ctx.items()})
+                q = fam["question"].format(
+                    **{k: label(v, LABELS) for k, v in ctx.items()}
+                )
                 pairs.append(
                     {
                         "question_id": qid,
@@ -225,8 +233,12 @@ def generate_pairs(profile: str) -> None:
                         "scoring_mode": mode,
                         "answer_schema": _answer_schema(fam, res, sql),
                         "numeric_components": _numeric_components(res),
-                        "judge_rubric_version": SCORING["judge_rubric_version"] if judged else "",
-                        "judge_prompt_version": SCORING["judge_prompt_version"] if judged else "",
+                        "judge_rubric_version": (
+                            SCORING["judge_rubric_version"] if judged else ""
+                        ),
+                        "judge_prompt_version": (
+                            SCORING["judge_prompt_version"] if judged else ""
+                        ),
                         "scorer_status": SCORING["scorer_status"],
                         "param_values": ";".join(f"{k}={v}" for k, v in ctx.items()),
                         "result_hash": res.result_hash,
@@ -251,7 +263,9 @@ def generate_pairs(profile: str) -> None:
         verify.write_payload(logs, name, payload)
     _write(out / "crm_qa_pairs.csv", CONTRACT, pairs)
     _write(
-        out / "crm_qa_pairs_companion.csv", COMPANION, sorted(comp, key=lambda r: r["question_id"])
+        out / "crm_qa_pairs_companion.csv",
+        COMPANION,
+        sorted(comp, key=lambda r: r["question_id"]),
     )
     print(f"[{profile}] {len(pairs)} pairs / {sum(quota.values())}")
     print(f"[{profile}] Q&A output: {out}")
@@ -266,7 +280,9 @@ def main() -> None:
 def _write(path: Path, fields: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+        w = csv.DictWriter(
+            fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n"
+        )
         w.writeheader()
         w.writerows({k: r[k] for k in fields} for r in rows)
 

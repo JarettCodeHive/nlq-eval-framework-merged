@@ -39,8 +39,7 @@ class FinanceHashComputer:
 
     def _csv_paths(self, directory: Path) -> tuple[Path, ...]:
         csv_paths = tuple(
-            directory / f"{table_name}.csv"
-            for table_name in self.settings.table_order
+            directory / f"{table_name}.csv" for table_name in self.settings.table_order
         )
         missing = [path for path in csv_paths if not path.exists()]
         if missing:
@@ -57,8 +56,7 @@ class FinanceHashComputer:
         if unexpected:
             raise ValueError(
                 "Finance release contains CSVs outside the configured table "
-                "contract: "
-                + ", ".join(str(path) for path in unexpected)
+                "contract: " + ", ".join(str(path) for path in unexpected)
             )
         return csv_paths
 

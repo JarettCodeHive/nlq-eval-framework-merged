@@ -184,4 +184,3 @@ def batched_within(
         size += row_bytes
     if batch:
         yield batch
-

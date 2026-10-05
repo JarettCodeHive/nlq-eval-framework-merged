@@ -129,8 +129,7 @@ class LogisticsRelationalValidator:
         results: list[IntegrityCheckResult] = []
         for table_name in self.settings.table_order:
             expected = [
-                field["name"]
-                for field in self.config["tables"][table_name]["fields"]
+                field["name"] for field in self.config["tables"][table_name]["fields"]
             ]
             actual = tables[table_name].columns.tolist()
             results.append(
@@ -586,7 +585,11 @@ def _result(
     passed_message: str,
     failed_message: str,
 ) -> IntegrityCheckResult:
-    return passed(check_name, passed_message) if condition else failed(check_name, failed_message)
+    return (
+        passed(check_name, passed_message)
+        if condition
+        else failed(check_name, failed_message)
+    )
 
 
 def _count_result(check_name: str, violation_count: int) -> IntegrityCheckResult:

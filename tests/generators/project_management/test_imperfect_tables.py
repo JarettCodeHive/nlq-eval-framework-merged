@@ -33,13 +33,11 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(scope="module")
-def validated_tables() -> (
-    tuple[
-        ProjectManagementImperfectionInjector,
-        dict,
-        dict,
-    ]
-):
+def validated_tables() -> tuple[
+    ProjectManagementImperfectionInjector,
+    dict,
+    dict,
+]:
     distributed = ProjectManagementDistributionApplier.for_profile(
         "dev"
     ).generate_distributed_tables()

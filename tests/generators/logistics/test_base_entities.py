@@ -24,9 +24,9 @@ def test_base_generator_is_deterministic_and_uses_configured_contracts() -> None
     assert list(first) == list(LOGISTICS_COLUMN_CONTRACTS)
     for table_name, expected_count in expected_rows.items():
         assert len(first[table_name]) == expected_count
-        assert first[table_name].columns.tolist() == LOGISTICS_COLUMN_CONTRACTS[
-            table_name
-        ]
+        assert (
+            first[table_name].columns.tolist() == LOGISTICS_COLUMN_CONTRACTS[table_name]
+        )
         assert_frame_equal(first[table_name], second[table_name])
 
 
@@ -41,9 +41,7 @@ def test_base_relationships_and_business_keys_are_clean() -> None:
     assert set(tables["shipments"]["carrier_id"]) <= carrier_ids
     assert set(tables["inventory"]["warehouse_id"]) <= warehouse_ids
     assert not tables["shipments"]["tracking_number"].duplicated().any()
-    assert not tables["inventory"].duplicated(
-        ["warehouse_id", "product_sku"]
-    ).any()
+    assert not tables["inventory"].duplicated(["warehouse_id", "product_sku"]).any()
 
 
 def test_base_shipments_preserve_status_dates_and_required_paths() -> None:
@@ -62,8 +60,7 @@ def test_base_shipments_preserve_status_dates_and_required_paths() -> None:
     assert (delivered["delivery_date"] >= delivered["ship_date"]).all()
     assert (merged.loc[merged["status_shipment"] == "Booked", "ship_date"] == "").all()
     assert (
-        merged.loc[merged["status_shipment"] == "Delivered", "delivery_date"]
-        != ""
+        merged.loc[merged["status_shipment"] == "Delivered", "delivery_date"] != ""
     ).all()
     delivered_order_ids = set(orders.loc[orders["status"] == "Delivered", "order_id"])
     delivered_evidence = set(
@@ -101,9 +98,7 @@ def test_base_values_follow_currency_inventory_and_domain_contracts() -> None:
     assert (inventory["quantity_on_hand"].astype(int) >= 0).all()
     populated_reorder = inventory.loc[inventory["reorder_point"] != "", "reorder_point"]
     assert (populated_reorder.astype(int) >= 0).all()
-    assert (
-        inventory["created_at"] <= inventory["last_updated_at"]
-    ).all()
+    assert (inventory["created_at"] <= inventory["last_updated_at"]).all()
     assert int(inventory.loc[0, "quantity_on_hand"]) < int(
         inventory.loc[0, "reorder_point"]
     )

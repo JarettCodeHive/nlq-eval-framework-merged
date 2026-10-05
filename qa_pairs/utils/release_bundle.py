@@ -13,7 +13,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _VERSION = ContextVar[str | None]("nlq_release_version", default=None)
 _VALID_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-_VALID_COMPONENTS = frozenset({"dataset", "qa_pairs", "judge", "scorecard", "platform", "logs"})
+_VALID_COMPONENTS = frozenset(
+    {"dataset", "qa_pairs", "judge", "scorecard", "platform", "logs"}
+)
 
 
 class LegacyReleaseLayoutWarning(UserWarning):
@@ -117,7 +119,12 @@ def legacy_bundle_root(
         or selected_release_version()
         or default_release_version(domain, repo_root=repo_root)
     )
-    return (repo_root or REPO_ROOT) / "release" / domain / validate_release_version(selected)
+    return (
+        (repo_root or REPO_ROOT)
+        / "release"
+        / domain
+        / validate_release_version(selected)
+    )
 
 
 def component_dir(
@@ -150,7 +157,8 @@ def legacy_component_dir(
 
 def _warn_legacy(legacy: Path, canonical: Path) -> None:
     warnings.warn(
-        f"reading legacy release layout at {legacy}; new artifacts are " f"written to {canonical}",
+        f"reading legacy release layout at {legacy}; new artifacts are "
+        f"written to {canonical}",
         LegacyReleaseLayoutWarning,
         stacklevel=3,
     )
@@ -188,10 +196,14 @@ def existing_component_path(
 ) -> Path:
     """Resolve a specific child path with legacy fallback."""
 
-    canonical = component_dir(domain, component, version, repo_root=repo_root).joinpath(*parts)
+    canonical = component_dir(domain, component, version, repo_root=repo_root).joinpath(
+        *parts
+    )
     if canonical.exists():
         return canonical
-    legacy = legacy_component_dir(domain, component, version, repo_root=repo_root).joinpath(*parts)
+    legacy = legacy_component_dir(
+        domain, component, version, repo_root=repo_root
+    ).joinpath(*parts)
     if legacy.exists():
         _warn_legacy(legacy, canonical)
         return legacy

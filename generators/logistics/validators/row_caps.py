@@ -122,8 +122,7 @@ class LogisticsRowCapValidator:
         if missing:
             raise FileNotFoundError(
                 "Logistics CSVs are missing. Generate or export the requested "
-                "profile first. Missing: "
-                + ", ".join(str(path) for path in missing)
+                "profile first. Missing: " + ", ".join(str(path) for path in missing)
             )
         return paths
 

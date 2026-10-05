@@ -1,0 +1,94 @@
+name: ci
+
+# Repo-wide lint + test gate. Runs on every push and PR targeting development
+# or main - the two branches that matter for release/merge decisions.
+on:
+  push:
+    branches: [development, main]
+  pull_request:
+    branches: [development, main]
+
+jobs:
+  lint:
+    name: Lint (ruff, black, sqlfluff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: ruff
+        run: ruff check .
+
+      - name: black --check
+        run: black --check .
+
+      - name: sqlfluff (authoritative CRM reference DDL)
+        working-directory: qa_pairs
+        run: sqlfluff lint schema/ddl.sql
+
+  qa-pairs:
+    name: Q&A pairs (build CRM + hard-gated pytest)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # qa_pairs/tests/ (contract, ground-truth re-execution, sqlfluff-on-
+      # reference_sql, scoring, rephrase) is CRM-only today - it reads the
+      # CRM full release, not any other domain's. Build just that one
+      # domain so this stays fast; see tests/ below for the other domains'
+      # Track-A coverage.
+      - name: Build CRM dataset + Q&A pairs (full profile)
+        run: |
+          python main.py build-dataset --domain crm --profile full
+          python main.py qa-build --domain crm --profile full
+
+      - name: pytest qa_pairs/tests/
+        run: python -m pytest qa_pairs/tests/ -q
+
+  full-suite:
+    name: Full test suite (generators, judge, scorecard - informational)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # --ignore is required, not optional: this one file raises an
+      # ImportError (missing scripts.capture_finance_implementation_baseline)
+      # that aborts collection for the entire run, not just this file.
+      #
+      # continue-on-error is deliberate: as of 2026-10-05 there are 17
+      # known pre-existing failures unrelated to any single PR -
+      # 8 compare against baseline JSON files that were never committed
+      # (tests/generators/crm/test_config_compatibility_baseline.py,
+      # tests/generators/test_sales_implementation_baseline.py), and
+      # ~9 assert "Q&A commands stay CRM-only" even though sales/finance/
+      # logistics/project_management are now intentionally wired in
+      # (tests/generators/test_dataset_cli.py). This job stays informational
+      # until those are fixed - check the summary rather than the red X.
+      - name: pytest tests/ (soft gate)
+        continue-on-error: true
+        run: python -m pytest tests/ -q --ignore=tests/generators/test_finance_implementation_baseline.py

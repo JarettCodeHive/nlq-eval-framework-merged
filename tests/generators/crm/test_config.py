@@ -302,9 +302,9 @@ def test_crm_config_rejects_generation_weights_that_do_not_sum_to_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     crm_config = deepcopy(load_crm_config())
-    crm_config["generation_rules"]["accounts"]["customer_tier_weights"]["Standard"] = (
-        0.5
-    )
+    crm_config["generation_rules"]["accounts"]["customer_tier_weights"][
+        "Standard"
+    ] = 0.5
     monkeypatch.setattr(config_module, "load_crm_config", lambda: crm_config)
 
     with pytest.raises(ValueError, match="weights must sum to 1"):

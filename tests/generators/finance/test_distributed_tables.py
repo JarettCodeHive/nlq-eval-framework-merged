@@ -76,9 +76,11 @@ def test_rejects_ledger_timestamp_outside_configured_lag(
     applier, _, distributed = validated_tables
     malformed = _copy_tables(distributed)
     transaction_id = int(malformed["ledger_entries"].at[0, "transaction_id"])
-    posted = malformed["transactions"].set_index("transaction_id").loc[
-        transaction_id, "posted_at"
-    ]
+    posted = (
+        malformed["transactions"]
+        .set_index("transaction_id")
+        .loc[transaction_id, "posted_at"]
+    )
     malformed["ledger_entries"].at[0, "created_at"] = (
         datetime.fromisoformat(posted) + timedelta(hours=49)
     ).strftime("%Y-%m-%dT%H:%M:%S")
