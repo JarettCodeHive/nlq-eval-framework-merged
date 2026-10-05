@@ -97,7 +97,7 @@ def test_pm_manifest_includes_complete_contract(
     assert manifest["manifest_schema_version"] == "1.0"
     assert manifest["domain"] == "project_management"
     assert manifest["output_path"] == (
-        "release/project_management/v1.0.0/dataset"
+        "release/v1.0.0/project_management/dataset"
     )
     assert manifest["table_order"] == [
         "projects",
@@ -121,7 +121,7 @@ def test_pm_manifest_includes_complete_contract(
         "csv_header_spec",
     }
     assert manifest["release_artifacts"]["schema_sql"]["path"] == (
-        "release/project_management/v1.0.0/dataset/schema.sql"
+        "release/v1.0.0/project_management/dataset/schema.sql"
     )
     assert len(manifest["release_artifacts"]["erd_dbml"]["sha256"]) == 64
     assert manifest["decimal_policy"] == config["decimal_policy"]

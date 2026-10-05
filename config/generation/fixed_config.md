@@ -39,7 +39,7 @@ Source: `config/generation/crm/release.json`, assembled through
 | `schema_source` | `schemas/crm/crm_ddl.sql` |
 | `manifest_generated_at` | `2026-09-04T00:00:00` |
 | `dev` output path | `tmp/generated/crm/dev` |
-| `full` output path | `release/crm/v1.0.0/dataset` |
+| `full` output path | `release/v1.0.0/crm/dataset` |
 
 `manifest_generated_at` is intentionally fixed per release version. A
 wall-clock manifest timestamp would make clean-room regeneration fail the

@@ -17,9 +17,9 @@ is resolved in `judge/resolve.py`; pass the matching flag to override any of it.
   python -m judge.cli --mode per_dimension                 # 4 judge prompts, no halo effect
   python -m judge.cli --input-csv pairs.csv                # an explicit pair set
 
-Writes release/<domain>/eval-runs/<UTC-timestamp>/ — results.json + the §11
-scorecard files. The root comes from `run_output_root` in config/judge/, so it
-sits alongside the dataset and Q&A release packages.
+Writes `release/<version>/<domain>/judge/<UTC-timestamp>/` — results.json and
+the supporting judge evidence. The scorecard is written to the sibling
+`scorecard/<UTC-timestamp>/` directory.
 """
 
 from __future__ import annotations

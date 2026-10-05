@@ -31,7 +31,7 @@ def test_manifest_includes_complete_logistics_contract(
     config = load_logistics_config()
 
     assert manifest["domain"] == "logistics"
-    assert manifest["output_path"] == "release/logistics/v1.0.0/dataset"
+    assert manifest["output_path"] == "release/v1.0.0/logistics/dataset"
     assert manifest["table_order"] == config["table_order"]
     assert manifest["tables"]["shipments"]["role"] == "relationship_fact"
     assert manifest["tables"]["orders"]["configured_rows"] == 100000

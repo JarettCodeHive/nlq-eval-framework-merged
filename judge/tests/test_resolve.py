@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from qa_pairs.utils.release_bundle import LegacyReleaseLayoutWarning
 from qa_pairs.utils.release_bundle import use_release_version
 
 from judge.cli import build_argparser
@@ -44,7 +45,7 @@ def _repo(tmp_path: Path, *, release_version: str = "v1.0.0") -> Path:
                 "qa_release": {
                     "profile_outputs": {
                         "dev": "tmp/generated/{domain}/dev/qa_pairs",
-                        "full": "release/{domain}/{release_version}/qa_pairs",
+                        "full": "release/{release_version}/{domain}/qa_pairs",
                     },
                 },
             }
@@ -60,7 +61,7 @@ def _repo(tmp_path: Path, *, release_version: str = "v1.0.0") -> Path:
                 "dataset_version": release_version,
                 "output_paths": {
                     "dev": "tmp/generated/crm/dev",
-                    "full": "release/crm/{release_version}/dataset",
+                    "full": "release/{release_version}/crm/dataset",
                 },
             }
         ),
@@ -70,7 +71,7 @@ def _repo(tmp_path: Path, *, release_version: str = "v1.0.0") -> Path:
 
 
 def _qa_package(repo: Path, version: str, *, joined: bool = False) -> Path:
-    directory = repo / "release" / "crm" / version / "qa_pairs"
+    directory = repo / "release" / version / "crm" / "qa_pairs"
     directory.mkdir(parents=True)
     (directory / "crm_qa_pairs.csv").write_text(
         CONTRACT_HEADER + CONTRACT_ROW, encoding="utf-8"
@@ -90,6 +91,17 @@ def test_full_profile_resolves_the_configured_qa_release(tmp_path: Path) -> None
     assert qa_release_dir("crm", "full", repo_root=repo) == expected
 
 
+def test_full_profile_reads_legacy_package_with_warning(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    legacy = repo / "release" / "crm" / "v1.0.0" / "qa_pairs"
+    legacy.mkdir(parents=True)
+
+    with pytest.warns(LegacyReleaseLayoutWarning):
+        resolved = qa_release_dir("crm", "full", repo_root=repo)
+
+    assert resolved == legacy
+
+
 def test_a_cli_selected_release_version_overrides_the_configured_default(
     tmp_path: Path,
 ) -> None:
@@ -106,7 +118,7 @@ def test_an_empty_selected_bundle_does_not_fall_back_to_another_version(
     _qa_package(repo, "v1.0.0")
     with use_release_version("v2.0.0"):
         assert qa_release_dir("crm", "full", repo_root=repo) == (
-            repo / "release" / "crm" / "v2.0.0" / "qa_pairs"
+            repo / "release" / "v2.0.0" / "crm" / "qa_pairs"
         )
 
 
@@ -169,14 +181,14 @@ def test_dev_pulse_data_points_at_the_imperfect_stage(tmp_path: Path) -> None:
         repo / "tmp" / "generated" / "crm" / "dev" / "imperfect"
     )
     assert dataset_csv_dir("crm", "full", repo_root=repo) == (
-        repo / "release" / "crm" / "v1.0.0" / "dataset"
+        repo / "release" / "v1.0.0" / "crm" / "dataset"
     )
 
 
 def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
     repo = _repo(tmp_path)
     package = _qa_package(repo, "v1.0.0", joined=True)
-    (repo / "release" / "crm" / "v1.0.0" / "dataset").mkdir(parents=True)
+    (repo / "release" / "v1.0.0" / "crm" / "dataset").mkdir(parents=True)
     monkeypatch.setenv("PLATFORM_VERSION", "pulse-2026.09")
 
     args = build_argparser().parse_args(
@@ -185,7 +197,7 @@ def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
     resolved = apply_resolved_defaults(args, repo_root=repo)
 
     assert args.input_csv == str(package / "crm_judge_input.csv")
-    assert args.pulse_data == str(repo / "release" / "crm" / "v1.0.0" / "dataset")
+    assert args.pulse_data == str(repo / "release" / "v1.0.0" / "crm" / "dataset")
     assert args.dataset_version == "v1.0.0"
     assert args.platform_version == "pulse-2026.09"
     assert set(resolved.derived) == {

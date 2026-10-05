@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import component_dir
 from qa_pairs.utils.release_bundle import validate_release_version
 
 from generators.core.config import load_domain_config
@@ -346,8 +347,12 @@ class GenerationSettings:
             profile=profile,
         )
         if str(profile) == str(base_config["release_profile"]):
-            configured_output = (
-                f"release/{domain_config['domain']}/{release_version}/dataset"
+            configured_output = str(
+                component_dir(
+                    str(domain_config["domain"]),
+                    "dataset",
+                    release_version,
+                ).relative_to(PROJECT_ROOT)
             )
 
         settings = cls(
@@ -429,11 +434,7 @@ class GenerationSettings:
         """Return whether output uses this domain's versioned release path."""
 
         return self.output_path == (
-            PROJECT_ROOT
-            / "release"
-            / self.domain
-            / self.dataset_version
-            / "dataset"
+            component_dir(self.domain, "dataset", self.dataset_version)
         )
 
     @property

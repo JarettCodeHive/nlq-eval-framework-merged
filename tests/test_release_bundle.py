@@ -8,7 +8,10 @@ from judge.config import load_judge_config
 from qa_pairs.utils.dataset_source import resolve_dataset_source
 from qa_pairs.utils.output_paths import resolve_qa_output_dir
 from qa_pairs.utils.release_bundle import (
+    LegacyReleaseLayoutWarning,
     REPO_ROOT,
+    component_dir,
+    existing_component_dir,
     use_release_version,
     validate_release_version,
 )
@@ -28,7 +31,7 @@ def test_one_cli_version_resolves_every_full_release_component() -> None:
         )
         scorecard_output = report_output_dir("crm", "run-123")
 
-    root = REPO_ROOT / "release" / "crm" / "client-2.4.0"
+    root = REPO_ROOT / "release" / "client-2.4.0" / "crm"
     assert dataset.release_version == "client-2.4.0"
     assert dataset.output_path == root / "dataset"
     assert qa_source.csv_dir == root / "dataset"
@@ -42,3 +45,18 @@ def test_one_cli_version_resolves_every_full_release_component() -> None:
 def test_release_version_must_be_one_safe_directory_name(version: str) -> None:
     with pytest.raises(ValueError, match="release version"):
         validate_release_version(version)
+
+
+def test_legacy_layout_is_read_only_fallback(tmp_path) -> None:
+    legacy = tmp_path / "release" / "crm" / "v1.0.0" / "dataset"
+    legacy.mkdir(parents=True)
+
+    with pytest.warns(LegacyReleaseLayoutWarning, match="legacy release layout"):
+        resolved = existing_component_dir(
+            "crm", "dataset", "v1.0.0", repo_root=tmp_path
+        )
+
+    assert resolved == legacy
+    assert component_dir(
+        "crm", "dataset", "v1.0.0", repo_root=tmp_path
+    ) == (tmp_path / "release" / "v1.0.0" / "crm" / "dataset")

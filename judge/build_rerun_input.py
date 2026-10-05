@@ -37,7 +37,7 @@ import json
 import re
 from pathlib import Path
 
-from qa_pairs.utils.release_bundle import component_dir
+from qa_pairs.utils.release_bundle import existing_component_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -135,12 +135,14 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    run_dir = component_dir(args.domain, "judge") / args.run
+    run_dir = existing_component_path(args.domain, "judge", args.run)
     if not (run_dir / "results.json").is_file():
         raise SystemExit(f"no results.json under {run_dir}")
 
-    qa_dir = component_dir(args.domain, "qa_pairs")
-    input_csv = args.input_csv or qa_dir / f"{args.domain}_judge_input.csv"
+    input_csv = args.input_csv or existing_component_path(
+        args.domain, "qa_pairs", f"{args.domain}_judge_input.csv"
+    )
+    qa_dir = input_csv.parent
     output = args.output or qa_dir / f"{args.domain}_rerun_{args.run}.csv"
     build(run_dir, input_csv, output, include_ambiguous=args.include_ambiguous)
 

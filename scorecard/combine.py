@@ -45,6 +45,9 @@ from scorecard.summary import (
     write_scorecard_summary_csv,
 )
 from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import component_dir
+from qa_pairs.utils.release_bundle import existing_component_path
+from qa_pairs.utils.release_bundle import legacy_component_dir
 from qa_pairs.utils.release_bundle import selected_release_version
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -133,9 +136,7 @@ class CombineOutcome:
     blockers: list[str] = field(default_factory=list)
 
 
-def eval_runs_root(domain: str) -> Path:
-    """Where `judge` writes its runs for one domain."""
-
+def _release_version(domain: str) -> str:
     version = selected_release_version()
     if not version:
         config_path = REPO_ROOT / "config" / "generation" / domain / "release.json"
@@ -147,24 +148,47 @@ def eval_runs_root(domain: str) -> Path:
             # Isolated tests and imported historical run stores may not carry
             # generation config. The repository default remains deterministic.
             version = "v1.0.0"
-    return REPO_ROOT / "release" / domain / version / "judge"
+    return version
+
+
+def eval_runs_root(domain: str) -> Path:
+    """Canonical location where `judge` writes runs for one domain."""
+
+    return component_dir(
+        domain, "judge", _release_version(domain), repo_root=REPO_ROOT
+    )
+
+
+def _eval_run_roots(domain: str) -> tuple[Path, Path]:
+    version = _release_version(domain)
+    return (
+        component_dir(domain, "judge", version, repo_root=REPO_ROOT),
+        legacy_component_dir(domain, "judge", version, repo_root=REPO_ROOT),
+    )
 
 
 def discover_run_ids(domain: str) -> list[str]:
     """Run ids for a domain, oldest first. Only directories with results."""
 
-    root = eval_runs_root(domain)
-    if not root.is_dir():
-        return []
-    return sorted(
+    run_ids = {
         path.name
+        for root in _eval_run_roots(domain)
+        if root.is_dir()
         for path in root.iterdir()
         if path.is_dir() and (path / "results.json").is_file()
-    )
+    }
+    return sorted(run_ids)
 
 
 def load_run(domain: str, run_id: str) -> RunInput:
-    path = eval_runs_root(domain) / run_id / "results.json"
+    path = existing_component_path(
+        domain,
+        "judge",
+        run_id,
+        "results.json",
+        version=_release_version(domain),
+        repo_root=REPO_ROOT,
+    )
     if not path.is_file():
         raise CombineError(f"no results.json for {domain}/{run_id} at {path}")
     try:
@@ -506,7 +530,7 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument(
         "--out",
         default="",
-        help="write here instead of release/scorecards/<run_id>/.",
+        help="write here instead of release/<version>/scorecard/<run_id>/.",
     )
     return parser
 

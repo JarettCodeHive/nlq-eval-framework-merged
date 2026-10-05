@@ -9,7 +9,7 @@
   },
   "output_paths": {
     "dev": "tmp/generated/crm/dev",
-    "full": "release/crm/{release_version}/dataset"
+    "full": "release/{release_version}/crm/dataset"
   },
   "release_rules": {
     "release_profile": "full",
@@ -30,7 +30,7 @@
   "generation_notes": {
     "row_target_policy": "Use explicit per-table row_targets. Dev is intentionally small and is not required to equal exactly 1% of full.",
     "release_profile": "full",
-    "release_directory": "release/crm/v1.0.0/dataset",
+    "release_directory": "release/v1.0.0/crm/dataset",
     "row_cap_source": "config/generation/base.json:max_rows_per_table",
     "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version to preserve byte-identical regeneration.",
     "domain_boundary": "CRM covers account and contact engagement, campaign attribution, and support-case SLA analysis.",

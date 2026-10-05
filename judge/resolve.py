@@ -25,6 +25,7 @@ from pathlib import Path
 from judge.build_input import build as build_judge_input
 from judge.config import REPO_ROOT, load_env, load_judge_config
 from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import existing_component_dir
 
 PROFILES: tuple[str, ...] = ("dev", "full")
 
@@ -80,7 +81,9 @@ def _templated_qa_dir(domain: str, profile: str, repo_root: Path | None) -> Path
     generation = dataset_release_config(domain, repo_root=repo_root)
     version = active_release_version(generation)
     if profile == "full":
-        return root / "release" / domain / version / "qa_pairs"
+        return existing_component_dir(
+            domain, "qa_pairs", version, repo_root=root
+        )
     return root / str(template).format(
         domain=domain,
         qa_version=version,
@@ -182,7 +185,9 @@ def dataset_csv_dir(
     raw = (config.get("output_paths") or {}).get(profile)
     if profile == "full" and config:
         version = active_release_version(config)
-        base = root / "release" / domain / version / "dataset"
+        base = existing_component_dir(
+            domain, "dataset", version, repo_root=root
+        )
     elif raw:
         base = root / str(raw).format(
             domain=domain,

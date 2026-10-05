@@ -39,7 +39,7 @@ def test_sales_duckdb_validator_uses_canonical_schema() -> None:
     validator = SalesDuckDBFKValidator.for_profile("full")
 
     assert validator.settings.table_order == EXPECTED_TABLE_ORDER
-    assert validator.settings.output_path == Path("release/sales/v1.0.0/dataset").resolve()
+    assert validator.settings.output_path == Path("release/v1.0.0/sales/dataset").resolve()
     assert validator.settings.schema_source.name == "sales_ddl.sql"
 
 

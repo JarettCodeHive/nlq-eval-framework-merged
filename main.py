@@ -46,6 +46,7 @@ from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_data
 from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
 from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
 from qa_pairs.utils.release_bundle import default_release_version
+from qa_pairs.utils.release_bundle import component_dir
 from qa_pairs.utils.release_bundle import use_release_version
 
 from judge.build_input import build as build_judge_input
@@ -55,9 +56,22 @@ from judge.cli import run_check_auth as run_check_auth_for_domain
 from judge.cli import run_from_args as run_judge_from_args
 from judge.resolve import qa_release_dir
 
-CommandHandler = Callable[[argparse.Namespace], None]
+CommandHandler = Callable[[argparse.Namespace], Any]
 
 REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _platform_manifest_path(
+    domain: str, profile: str, version: str | None = None
+) -> Path:
+    """Audit record shared by upload and post-run cleanup."""
+
+    return component_dir(
+        domain,
+        "platform",
+        version or default_release_version(domain),
+        repo_root=REPO_ROOT,
+    ) / f"{profile}.json"
 
 
 def run_validate_config(args: argparse.Namespace) -> None:
@@ -596,7 +610,7 @@ def run_judge_build_input(args: argparse.Namespace) -> None:
     build_judge_input(qa_release, args.domain, output)
 
 
-def run_dataset_upload(args: argparse.Namespace) -> None:
+def run_dataset_upload(args: argparse.Namespace) -> Any:
     """Upload a generated dataset to the Claris Studio platform.
 
     Same two arguments as `build-dataset`: the CSVs come from whatever
@@ -617,24 +631,51 @@ def run_dataset_upload(args: argparse.Namespace) -> None:
     print(f"platform: {settings.redacted}")
     progress = ProgressReporter()
 
-    with StudioClient(settings, dry_run=args.dry_run) as client:
-        outcome = upload_domain(
-            args.domain,
-            args.profile,
-            client=client,
-            replace=args.replace,
-            progress=progress,
-        )
-        if args.dry_run:
-            print(describe_plan(client))
-            print("\n(dry run — nothing was sent)")
-            return
+    def remember_outcome(outcome) -> None:
+        cleanup_planned = getattr(args, "cleanup_after_upload", False)
+        outcome.cleanup_status = "pending" if cleanup_planned else "retained"
+        for table in getattr(outcome, "created_tables", ()):
+            table.cleanup_status = "pending" if cleanup_planned else "retained"
+        args.upload_outcome = outcome
+
+    try:
+        with StudioClient(settings, dry_run=args.dry_run) as client:
+            outcome = upload_domain(
+                args.domain,
+                args.profile,
+                client=client,
+                replace=args.replace,
+                progress=progress,
+                on_outcome=remember_outcome,
+            )
+            # Keep compatibility with test doubles that return an outcome but
+            # do not invoke the early callback themselves.
+            remember_outcome(outcome)
+            if args.dry_run:
+                print(describe_plan(client))
+                print("\n(dry run — nothing was sent)")
+                return outcome
+    except BaseException:
+        partial = getattr(args, "upload_outcome", None)
+        if partial is not None and not args.dry_run:
+            remember_outcome(partial)
+            write_manifest(
+                partial,
+                _platform_manifest_path(
+                    args.domain,
+                    args.profile,
+                    getattr(args, "release_version", None),
+                ),
+            )
+        raise
 
     print()
     print(summarise(outcome, action="Uploaded"))
     manifest = write_manifest(
         outcome,
-        REPO_ROOT / "release" / args.domain / "platform" / f"{args.profile}.json",
+        _platform_manifest_path(
+            args.domain, args.profile, getattr(args, "release_version", None)
+        ),
     )
     print(f"entity ids recorded: {manifest}")
 
@@ -646,6 +687,65 @@ def run_dataset_upload(args: argparse.Namespace) -> None:
             f"upload finished but these tables are not verified: "
             f"{', '.join(unverified)}. Do not evaluate against them."
         )
+    return outcome
+
+
+def run_uploaded_data_cleanup(args: argparse.Namespace) -> Any:
+    """Delete only entity IDs created by this pipeline's upload invocation."""
+
+    from datetime import datetime, timezone
+
+    from studio.client import StudioClient
+    from studio.config import load_studio_settings
+    from studio.upload import (
+        cleanup_uploaded_entities,
+        summarise_cleanup,
+        write_manifest,
+    )
+
+    outcome = getattr(args, "upload_outcome", None)
+    if outcome is None:
+        print("no platform entities were created by this run")
+        return None
+
+    settings = load_studio_settings()
+    print(f"platform: {settings.redacted}")
+    progress = ProgressReporter()
+    try:
+        with StudioClient(settings) as client:
+            cleanup = cleanup_uploaded_entities(
+                outcome, client=client, progress=progress
+            )
+    except BaseException as exc:
+        outcome.cleanup_status = "failed"
+        outcome.cleanup_completed_at = datetime.now(timezone.utc).isoformat()
+        error = f"{type(exc).__name__}: {exc}"
+        if error not in outcome.cleanup_errors:
+            outcome.cleanup_errors.append(error)
+        write_manifest(
+            outcome,
+            _platform_manifest_path(
+                args.domain,
+                args.profile,
+                getattr(args, "release_version", None),
+            ),
+        )
+        raise
+
+    manifest = write_manifest(
+        outcome,
+        _platform_manifest_path(
+            args.domain, args.profile, getattr(args, "release_version", None)
+        ),
+    )
+    print(summarise_cleanup(cleanup))
+    print(f"cleanup recorded: {manifest}")
+    if cleanup.failures:
+        failed = ", ".join(failure.table for failure in cleanup.failures)
+        raise RuntimeError(
+            f"platform cleanup failed for {len(cleanup.failures)} table(s): {failed}"
+        )
+    return cleanup
 
 
 def run_dataset_delete(args: argparse.Namespace) -> None:
@@ -724,14 +824,14 @@ def run_judge(args: argparse.Namespace) -> None:
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
-    """Build locally, refresh the platform dataset, then run a small judge pass.
+    """Build, evaluate, then remove only the platform entities this run created.
 
     This is the convenient end-to-end entry point.  The individual commands
     remain available with their existing behavior; only this wrapper confirms
     the delete and supplies the judge-specific smoke-test flags.
     """
 
-    total = 5
+    total = 6
     reporter = PipelineReporter()
     reporter.start(domain=args.domain, profile=args.profile, total_stages=total)
     release_version = getattr(args, "release_version", None)
@@ -753,6 +853,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         replace=False,
         dry_run=False,
         release_version=release_version,
+        cleanup_after_upload=not getattr(args, "keep_platform_data", False),
     )
     judge_args = argparse.Namespace(
         domain=args.domain,
@@ -792,14 +893,60 @@ def run_pipeline(args: argparse.Namespace) -> None:
         ),
     )
 
-    try:
-        with use_release_version(release_version):
+    primary_error: BaseException | None = None
+    primary_traceback = None
+    cleanup_error: BaseException | None = None
+    upload_outcome = None
+
+    with use_release_version(release_version):
+        try:
             for stage, handler, stage_args in stages:
                 with reporter.stage(stage):
-                    handler(stage_args)
-    except BaseException:
+                    result = handler(stage_args)
+                if stage.number == 4:
+                    upload_outcome = result or getattr(
+                        upload_args, "upload_outcome", None
+                    )
+        except BaseException as exc:
+            primary_error = exc
+            primary_traceback = exc.__traceback__
+            upload_outcome = getattr(upload_args, "upload_outcome", upload_outcome)
+
+        if upload_outcome is not None:
+            cleanup_stage = PipelineStage(
+                6, total, "platform.cleanup", "Delete uploaded platform data"
+            )
+            try:
+                with reporter.stage(cleanup_stage):
+                    if getattr(args, "keep_platform_data", False):
+                        print(
+                            "cleanup skipped: --keep-platform-data retained "
+                            "this run's uploaded entities"
+                        )
+                    else:
+                        run_uploaded_data_cleanup(
+                            argparse.Namespace(
+                                domain=args.domain,
+                                profile=args.profile,
+                                release_version=release_version,
+                                upload_outcome=upload_outcome,
+                            )
+                        )
+            except BaseException as exc:
+                cleanup_error = exc
+
+    if primary_error is not None:
+        if cleanup_error is not None:
+            primary_error.add_note(
+                "Platform cleanup also failed: "
+                f"{type(cleanup_error).__name__}: {cleanup_error}"
+            )
         reporter.finish(domain=args.domain, profile=args.profile, succeeded=False)
-        raise
+        raise primary_error.with_traceback(primary_traceback)
+
+    if cleanup_error is not None:
+        reporter.finish(domain=args.domain, profile=args.profile, succeeded=False)
+        raise cleanup_error
 
     reporter.finish(domain=args.domain, profile=args.profile, succeeded=True)
 
@@ -922,7 +1069,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Unified release-bundle directory name. Full outputs are written "
-            "under release/<domain>/<version>/. Defaults to the domain config."
+            "under release/<version>/<domain>/. Defaults to the domain config."
         ),
     )
     parser.add_argument(
@@ -947,6 +1094,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="dataset-upload / dataset-delete: print the requests that would be "
         "sent and send none of them.",
+    )
+    parser.add_argument(
+        "--keep-platform-data",
+        action="store_true",
+        help=(
+            "run-pipeline: retain entities uploaded by this run for debugging. "
+            "By default they are deleted after judging, including on failure."
+        ),
     )
     validation_source = parser.add_mutually_exclusive_group()
     validation_source.add_argument(

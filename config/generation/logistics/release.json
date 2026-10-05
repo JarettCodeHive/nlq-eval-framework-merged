@@ -10,7 +10,7 @@
   },
   "output_paths": {
     "dev": "tmp/generated/logistics/dev",
-    "full": "release/logistics/{release_version}/dataset"
+    "full": "release/{release_version}/logistics/dataset"
   },
   "release_rules": {
     "release_profile": "full",
@@ -39,7 +39,7 @@
   "generation_notes": {
     "row_target_policy": "Explicit per-table targets are base counts before imperfection injection.",
     "release_profile": "full",
-    "release_directory": "release/logistics/v1.0.0/dataset",
+    "release_directory": "release/v1.0.0/logistics/dataset",
     "row_cap_source": "config/generation/base.json:max_rows_per_table",
     "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version for reproducible manifests.",
     "domain_boundary": "Logistics covers orders, shipments, carriers, warehouses, and warehouse inventory snapshots.",

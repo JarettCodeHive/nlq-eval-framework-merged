@@ -96,7 +96,7 @@ def test_sales_settings_load_for_dev_and_full_profiles() -> None:
     assert dev.output_path == Path("tmp/generated/sales/dev").resolve()
     assert not dev.is_release_profile
     assert not dev.targets_versioned_release
-    assert full.output_path == Path("release/sales/v1.0.0/dataset").resolve()
+    assert full.output_path == Path("release/v1.0.0/sales/dataset").resolve()
     assert full.is_release_profile
     assert full.targets_versioned_release
     assert dev.table_order == tuple(TABLE_ORDER)

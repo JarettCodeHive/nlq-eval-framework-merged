@@ -94,7 +94,7 @@ def test_finance_manifest_includes_complete_finance_contract(
 
     assert manifest["manifest_schema_version"] == "1.0"
     assert manifest["domain"] == "finance"
-    assert manifest["output_path"] == "release/finance/v1.0.0/dataset"
+    assert manifest["output_path"] == "release/v1.0.0/finance/dataset"
     assert manifest["table_order"] == [
         "accounts",
         "transactions",
@@ -117,7 +117,7 @@ def test_finance_manifest_includes_complete_finance_contract(
     }
     assert manifest["release_artifacts"]["schema_sql"]["file"] == "schema.sql"
     assert manifest["release_artifacts"]["schema_sql"]["path"] == (
-        "release/finance/v1.0.0/dataset/schema.sql"
+        "release/v1.0.0/finance/dataset/schema.sql"
     )
     assert len(manifest["release_artifacts"]["erd_dbml"]["sha256"]) == 64
     assert manifest["decimal_policy"] == config["decimal_policy"]

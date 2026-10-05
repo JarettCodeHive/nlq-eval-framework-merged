@@ -19,7 +19,7 @@ def test_dev_qa_output_is_disposable() -> None:
 def test_full_qa_output_uses_the_unified_release_version() -> None:
     output = resolve_qa_output_dir(QA_ROOT, "full", "crm")
 
-    assert output == REPO_ROOT / f"release/crm/{qa_version(QA_ROOT, 'crm')}/qa_pairs"
+    assert output == REPO_ROOT / f"release/{qa_version(QA_ROOT, 'crm')}/crm/qa_pairs"
 
 
 def test_unknown_qa_output_profile_is_rejected() -> None:

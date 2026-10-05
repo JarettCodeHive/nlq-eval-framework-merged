@@ -24,7 +24,7 @@ def test_sales_exporter_uses_versioned_full_output() -> None:
     exporter = SalesCSVExporter.for_profile("full")
 
     assert exporter.settings.is_release_profile
-    assert exporter.output_dir == Path("release/sales/v1.0.0/dataset").resolve()
+    assert exporter.output_dir == Path("release/v1.0.0/sales/dataset").resolve()
 
 
 def test_release_export_rejects_dev_profile() -> None:

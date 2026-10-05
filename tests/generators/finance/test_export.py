@@ -32,7 +32,7 @@ def test_finance_exporter_uses_versioned_full_output() -> None:
     exporter = FinanceCSVExporter.for_profile("full")
 
     assert exporter.settings.is_release_profile
-    assert exporter.output_dir == Path("release/finance/v1.0.0/dataset").resolve()
+    assert exporter.output_dir == Path("release/v1.0.0/finance/dataset").resolve()
 
 
 def test_release_export_rejects_dev_profile() -> None:

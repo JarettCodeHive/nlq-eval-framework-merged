@@ -49,8 +49,8 @@ def test_versioned_release_detection_uses_configured_domain() -> None:
         output_path=(
             PROJECT_ROOT
             / "release"
-            / "finance"
             / sales.release_version
+            / "finance"
             / "dataset"
         ),
     )

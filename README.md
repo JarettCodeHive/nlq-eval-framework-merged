@@ -93,16 +93,31 @@ python main.py run-pipeline --domain crm --profile dev
 python main.py run-pipeline --domain crm --profile full --version v1.0.0
 ```
 
+Platform entities uploaded by `run-pipeline` are temporary and are deleted by
+entity ID after the judge finishes. To retain the uploaded entities for
+debugging, opt out explicitly:
+
+```bash
+python main.py run-pipeline \
+  --domain crm \
+  --profile full \
+  --version v1.0.0 \
+  --keep-platform-data
+```
+
 `--version` is the single evaluation-release version shared by the dataset,
 Q&A pairs, judge evidence, and scorecard. A full run writes all artifacts under
 one bundle root:
 
 ```text
-release/crm/v1.0.0/
-  dataset/
-  qa_pairs/
-  judge/<run_id>/
-  scorecard/<run_id>/
+release/v1.0.0/
+  crm/
+    dataset/
+    qa_pairs/
+    judge/<run_id>/
+    scorecard/<run_id>/
+    platform/
+  scorecard/<combined_run_id>/
 ```
 
 If `--version` is omitted, the domain's `release_version` in
@@ -112,18 +127,22 @@ version. The Claris/Pulse platform version remains separate and is recorded in
 the judge and scorecard metadata so the same evaluation release can measure
 multiple application versions.
 
+Older `release/<domain>/<version>/` bundles remain readable for migration
+purposes and emit a compatibility warning. All new artifacts are written only
+to the version-first layout shown above.
+
 The end-to-end command uses one console format across dataset generation, Q&A,
 platform refresh, upload verification, and judging:
 
 ```text
-00:00:00.000 | INFO  | pipeline        | [1/5] START  Build and validate dataset
+00:00:00.000 | INFO  | pipeline        | [1/6] START  Build and validate dataset
 00:00:00.142 | INFO  | dataset         | Step 1/6: Validate CRM configuration and expected row caps
-00:00:02.918 | INFO  | pipeline        | [1/5] DONE   Build and validate dataset (00:00:02.918)
+00:00:02.918 | INFO  | pipeline        | [1/6] DONE   Build and validate dataset (00:00:02.918)
 ...
 00:00:41.204 | INFO  | pipeline        | SUCCESS domain=crm profile=dev elapsed=00:00:41.204
 ```
 
-Every non-empty line carries elapsed time, severity, and component. The five
+Every non-empty line carries elapsed time, severity, and component. The six
 top-level stages emit `START`, `DONE`, or `FAILED`, while detailed output from
 older subcommands is normalized under the active component. The format is plain
 text by design, so it remains readable in terminals, CI systems, redirected log
@@ -131,8 +150,12 @@ files, and demo recordings. A failure names the stage and elapsed time before
 the command exits non-zero.
 
 > **Warning:** `run-pipeline` confirms `dataset-delete` internally. It deletes
-> and re-uploads the selected domain/profile on the configured platform before
-> judging.
+> and re-uploads the selected domain/profile before judging. After judging, it
+> deletes only entity IDs created by that upload invocation; it never discovers
+> cleanup targets by table name. Cleanup also runs after upload or judge
+> failures. A cleanup failure makes the command fail and remains recorded in
+> the platform manifest. Use `dataset-delete --yes` for deliberate manual
+> cleanup of retained data.
 
 Before running it, configure `judge/.env` and verify both the judge-provider and
 Pulse credentials:
@@ -153,7 +176,7 @@ python main.py build-dataset --domain crm --profile full --version v1.0.0
 Replace `crm` with `sales`, `finance`, `project_management`, or `logistics`.
 The `dev` profile writes staged output under `tmp/generated/<domain>/dev/`.
 The `full` profile writes the dataset under
-`release/<domain>/<version>/dataset/`, runs
+`release/<version>/<domain>/dataset/`, runs
 the persisted-data and reproducibility checks, and writes `manifest.json`
 last to seal the release.
 
@@ -193,7 +216,7 @@ Replace `crm` with `sales` for the Sales Q&A workflow. The final pair package is
 written under the same evaluation-release version as its dataset:
 
 ```text
-release/<domain>/<version>/qa_pairs/
+release/<version>/<domain>/qa_pairs/
 ```
 
 The Q&A build refuses to select a different or "latest" dataset release. The

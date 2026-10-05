@@ -10,7 +10,7 @@
   },
   "output_paths": {
     "dev": "tmp/generated/project_management/dev",
-    "full": "release/project_management/{release_version}/dataset"
+    "full": "release/{release_version}/project_management/dataset"
   },
   "release_rules": {
     "release_profile": "full",
@@ -42,7 +42,7 @@
   "generation_notes": {
     "row_target_policy": "Explicit per-table targets are base counts before imperfection injection.",
     "release_profile": "full",
-    "release_directory": "release/project_management/v1.0.0/dataset",
+    "release_directory": "release/v1.0.0/project_management/dataset",
     "row_cap_source": "config/generation/base.json:max_rows_per_table",
     "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version for reproducible manifests.",
     "domain_boundary": "Project Management covers projects, staffing, tasks, milestones, and time-entry execution.",

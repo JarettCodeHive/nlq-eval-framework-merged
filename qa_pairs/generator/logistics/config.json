@@ -5,7 +5,7 @@
   "dataset": {
     "profile_sources": {
       "dev": "tmp/generated/logistics/dev/imperfect",
-      "full": "release/logistics/{release_version}/dataset"
+      "full": "release/{release_version}/logistics/dataset"
     },
     "base_config_path": "config/generation/base.json",
     "release_config_path": "config/generation/logistics/release.json",
@@ -15,7 +15,7 @@
   "qa_release": {
     "profile_outputs": {
       "dev": "tmp/generated/{domain}/dev/qa_pairs",
-      "full": "release/{domain}/{release_version}/qa_pairs"
+      "full": "release/{release_version}/{domain}/qa_pairs"
     }
   },
   "tier_quota": {"T1": 16, "T2": 24, "T3": 16, "T4": 16, "T5": 10},

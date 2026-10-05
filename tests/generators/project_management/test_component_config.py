@@ -101,7 +101,7 @@ def test_generation_settings_resolve_for_each_profile(profile: str) -> None:
         assert not settings.targets_versioned_release
     else:
         assert settings.output_path == (
-            PROJECT_ROOT / "release" / "project_management" / "v1.0.0" / "dataset"
+            PROJECT_ROOT / "release" / "v1.0.0" / "project_management" / "dataset"
         )
         assert settings.targets_versioned_release
 

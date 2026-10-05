@@ -5,7 +5,7 @@
   "dataset": {
     "profile_sources": {
       "dev": "tmp/generated/crm/dev/imperfect",
-      "full": "release/crm/{release_version}/dataset"
+      "full": "release/{release_version}/crm/dataset"
     },
     "base_config_path": "config/generation/base.json",
     "release_config_path": "config/generation/crm/release.json",
@@ -15,7 +15,7 @@
   "qa_release": {
     "profile_outputs": {
       "dev": "tmp/generated/{domain}/dev/qa_pairs",
-      "full": "release/{domain}/{release_version}/qa_pairs"
+      "full": "release/{release_version}/{domain}/qa_pairs"
     }
   },
   "tier_quota": {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24},

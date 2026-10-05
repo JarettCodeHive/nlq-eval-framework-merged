@@ -75,7 +75,7 @@ def runs(tmp_path: Path, monkeypatch):
         comparison_is_default: bool = True,
         row_domain: str | None = None,
     ) -> Path:
-        directory = tmp_path / "release" / domain / "v1.0.0" / "judge" / run_id
+        directory = tmp_path / "release" / "v1.0.0" / domain / "judge" / run_id
         directory.mkdir(parents=True, exist_ok=True)
         rows = [
             _row(f"{domain}-{i}", row_domain or domain, "T1", passed=True)
@@ -150,8 +150,8 @@ def test_only_directories_with_results_count(runs, tmp_path: Path) -> None:
     (
         tmp_path
         / "release"
-        / "crm"
         / "v1.0.0"
+        / "crm"
         / "judge"
         / "20260924T999999Z"
     ).mkdir(

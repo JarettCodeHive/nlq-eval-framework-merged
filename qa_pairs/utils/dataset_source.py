@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .release_bundle import active_release_version
+from .release_bundle import active_release_version, existing_component_dir
 
 
 @dataclass(frozen=True)
@@ -58,11 +58,18 @@ def resolve_dataset_source(qa_root: Path, profile: str, generator_dir: str) -> D
         profile=profile,
     )
     if profile == "full":
-        source_path = f"release/{config['domain']}/{dataset_version}/dataset"
+        csv_dir = existing_component_dir(
+            config["domain"],
+            "dataset",
+            dataset_version,
+            repo_root=repo_root,
+        )
+    else:
+        csv_dir = repo_root / source_path
     resolved = DatasetSource(
         profile=profile,
         dataset_version=dataset_version,
-        csv_dir=repo_root / source_path,
+        csv_dir=csv_dir,
         base_config_path=repo_root / dataset["base_config_path"],
         release_config_path=release_config_path,
         ddl_path=repo_root / dataset["schema_ddl_path"],

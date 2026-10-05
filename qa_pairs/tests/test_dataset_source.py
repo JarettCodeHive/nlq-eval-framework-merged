@@ -22,7 +22,10 @@ def test_full_source_uses_configured_dataset_version() -> None:
     release_config = json.loads(source.release_config_path.read_text(encoding="utf-8"))
     expected_version = release_config["release_version"]
 
-    assert source.source_label == f"release/crm/{expected_version}/dataset"
+    assert source.source_label in {
+        f"release/{expected_version}/crm/dataset",
+        f"release/crm/{expected_version}/dataset",
+    }
     assert source.ddl_path.name == "crm_ddl.sql"
     assert source.dbml_path.name == "crm_er.dbml"
 

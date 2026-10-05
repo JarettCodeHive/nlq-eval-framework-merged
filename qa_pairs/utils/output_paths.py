@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .release_bundle import active_release_version
+from .release_bundle import active_release_version, component_dir
 
 
 def load_qa_config(qa_root: Path, generator_dir: str) -> dict:
@@ -52,5 +52,7 @@ def resolve_qa_output_dir(qa_root: Path, profile: str, generator_dir: str) -> Pa
         profile=profile,
     )
     if profile == "full":
-        relative_path = f"release/{config['domain']}/{version}/qa_pairs"
+        return component_dir(
+            config["domain"], "qa_pairs", version, repo_root=qa_root.parent
+        )
     return qa_root.parent / relative_path
