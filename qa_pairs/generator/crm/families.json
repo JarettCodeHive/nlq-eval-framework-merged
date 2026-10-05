@@ -247,13 +247,13 @@
     ],
     "quota": 6,
     "join_path": "JP7",
-    "question": "What percentage of support cases for accounts in {industry} were resolved within their SLA deadline?",
+    "question": "Of support cases for accounts in {industry} that have been resolved, what percentage were resolved within their SLA deadline?",
     "tables": "support_cases, accounts",
     "fields": "support_cases.account_id, support_cases.resolved_at, support_cases.sla_due_at, accounts.account_id, accounts.industry",
-    "judge": "A single percentage (0-100, two decimals): of all support cases for accounts in the named industry, the share resolved on or before their SLA deadline. Unresolved cases count against the rate.",
+    "judge": "A single percentage (0-100, two decimals): of RESOLVED support cases for accounts in the named industry, the share resolved on or before their SLA deadline. Unresolved cases are excluded from both numerator and denominator.",
     "scoring_mode": "scalar_exact",
     "answer_shape": "scalar",
-    "rationale": "INNER JOIN support_cases to accounts on account_id, filter to the industry. A case is within SLA when resolved_at IS NOT NULL AND resolved_at <= sla_due_at. Rate = 100.0 * within-SLA count / total case count, rounded to 2 places."
+    "rationale": "INNER JOIN support_cases to accounts on account_id, filter to the industry and to cases where resolved_at IS NOT NULL. A case is within SLA when resolved_at <= sla_due_at. Rate = 100.0 * within-SLA count / resolved count, rounded to 2 places. Unresolved cases are excluded from the denominator (fixed 2026-10-05: a case that hasn't been resolved yet hasn't met-or-missed its SLA, so counting it against the rate was the wrong reading - verified against live-run data where Pulse's resolved-only denominator matched our source rows exactly)."
   },
   {
     "family": "T3-01",
@@ -505,10 +505,10 @@
     "question": "Which accounts in {industry} have at least 3 open support cases and no interaction in the last 60 days?",
     "tables": "accounts, support_cases, interactions, contacts",
     "fields": "accounts.account_id, accounts.account_name, accounts.industry, support_cases.account_id, support_cases.status, interactions.contact_id, interactions.interaction_at, contacts.contact_id, contacts.account_id",
-    "judge": "Accounts in the named industry with at least three unresolved support cases and zero interactions (via their contacts) in the 60 days before the reference date, with the two supporting numbers.",
+    "judge": "Accounts in the named industry with at least three unresolved support cases and zero interactions (via their contacts) in the 60 days before the reference date, with the open-case count. The zero-interaction condition is a filter, not a reported figure - do not expect a displayed interaction count.",
     "scoring_mode": "judge_plus_exact",
     "answer_shape": "table",
-    "rationale": "Count unresolved cases per account and interactions since 2026-06-02 (60 days before reference_today 2026-08-01) attributed through the contact's account. Filter to the industry, >= 3 open cases, 0 recent interactions, order by open-case count desc with account_name tie-break, top 5."
+    "rationale": "Count unresolved cases per account and interactions since 2026-06-02 (60 days before reference_today 2026-08-01) attributed through the contact's account. Filter to the industry, >= 3 open cases, 0 recent interactions, order by open-case count desc with account_name tie-break, top 5. The recent-interaction count is used only as a filter and is intentionally not a returned column (fixed 2026-10-05: every qualifying row has recent_interaction_count = 0 by construction, so echoing it back as a result field was a constant, zero-information column that only existing to restate the question's own filter)."
   },
   {
     "family": "T5-04",
