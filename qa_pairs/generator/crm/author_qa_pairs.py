@@ -27,9 +27,9 @@ import sys
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(BASE))
-from utils import build_stamp, verify  # noqa: E402
-from utils.duckdb_io import connect_typed  # noqa: E402
+sys.path.insert(0, str(BASE.parent))
+from qa_pairs.utils import build_stamp, verify  # noqa: E402
+from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 
 FIXED_TODAY = "2026-08-01"  # configured CRM dataset reference date
 # The two most recent COMPLETE calendar quarters relative to FIXED_TODAY.

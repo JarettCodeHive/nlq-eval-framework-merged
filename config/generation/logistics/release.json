@@ -1,6 +1,6 @@
 {
   "domain": "logistics",
-  "dataset_version": "dataset-v1.0.0",
+  "release_version": "v1.0.0",
   "schema_source": "schemas/logistics/logistics_ddl.sql",
   "semantic_contract": "schemas/logistics/logistics_semantics.md",
   "fixed_values": {
@@ -10,7 +10,7 @@
   },
   "output_paths": {
     "dev": "tmp/generated/logistics/dev",
-    "full": "release/logistics/dataset-v1.0.0"
+    "full": "release/{release_version}/logistics/dataset"
   },
   "release_rules": {
     "release_profile": "full",
@@ -18,7 +18,7 @@
       "dev"
     ],
     "immutable_after_manifest": true,
-    "correction_policy": "Create a new dataset version rather than editing an immutable release."
+    "correction_policy": "Create a new release version rather than editing an immutable release."
   },
   "table_order": [
     "carriers",
@@ -39,7 +39,7 @@
   "generation_notes": {
     "row_target_policy": "Explicit per-table targets are base counts before imperfection injection.",
     "release_profile": "full",
-    "release_directory": "release/logistics/dataset-v1.0.0",
+    "release_directory": "release/v1.0.0/logistics/dataset",
     "row_cap_source": "config/generation/base.json:max_rows_per_table",
     "manifest_timestamp_policy": "manifest_generated_at is fixed per dataset version for reproducible manifests.",
     "domain_boundary": "Logistics covers orders, shipments, carriers, warehouses, and warehouse inventory snapshots.",

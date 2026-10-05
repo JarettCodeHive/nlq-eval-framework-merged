@@ -1,10 +1,11 @@
 """Build the judge input CSV from a Q&A release package.
 
 `judge --input-csv` needs `question_id`, `domain` and `tier` alongside the
-contracted seven fields, but the Q&A release splits them: `crm_qa_pairs.csv`
-carries the §9.3 contract and nothing else, and `crm_qa_pairs_companion.csv`
-carries the identifiers. This joins the two on `natural_language_question` —
-the only column they share — and writes one file the judge can consume.
+contracted seven fields. Most rows get their evaluation metadata from the
+companion by joining on `natural_language_question`. CRM rephrase variants are
+present only in the main contract; they carry their own identifiers and inherit
+`family` / `scoring_mode` from the single companion base in the same
+`rephrase_group_id`.
 
 The join key is verified unique on both sides before anything is written: a
 duplicated question would otherwise bind a pair to the wrong question_id and
@@ -13,7 +14,7 @@ silently mis-tier it in the scorecard.
 Deterministic: same release in, byte-identical CSV out. Rows are emitted in
 companion order (sorted by question_id), so a run log climbs tiers in order.
 
-    python judge/build_input.py --qa-release release/crm/qa-pairs-v0.3.0
+    python judge/build_input.py --qa-release release/v1.0.0/crm/qa_pairs
 
 Supersedes the per-tier concatenation used before the Q&A pipeline emitted a
 single package.
@@ -62,6 +63,49 @@ def _require_unique(rows: list[dict[str, str]], path: Path) -> None:
         )
 
 
+def _variant_metadata(
+    pair: dict[str, str],
+    companion_by_group: dict[str, list[dict[str, str]]],
+    contract_path: Path,
+) -> dict[str, str]:
+    """Resolve metadata for a contract-only rephrase variant.
+
+    A variant has its own question id and tier, but scoring metadata belongs to
+    the group's base row in the companion. Requiring exactly one base prevents
+    a malformed group from silently borrowing metadata from an arbitrary row.
+    """
+
+    question = pair[JOIN_KEY]
+    group_id = (pair.get("rephrase_group_id") or "").strip()
+    if not group_id:
+        raise SystemExit(
+            f"{contract_path}: contract row has no companion match and no "
+            f"rephrase_group_id: {question!r}"
+        )
+
+    bases = companion_by_group.get(group_id, [])
+    if len(bases) != 1:
+        raise SystemExit(
+            f"{contract_path}: rephrase group {group_id!r} must have exactly "
+            f"one companion base; found {len(bases)}"
+        )
+
+    missing = [field for field in ("question_id", "tier") if not pair.get(field)]
+    if missing:
+        raise SystemExit(
+            f"{contract_path}: rephrase variant {question!r} is missing "
+            f"{', '.join(missing)}"
+        )
+
+    base = bases[0]
+    return {
+        "question_id": pair["question_id"],
+        "tier": pair["tier"],
+        "family": base["family"],
+        "scoring_mode": base["scoring_mode"],
+    }
+
+
 def build(qa_release: Path, domain: str, output: Path) -> int:
     contract_path = qa_release / f"{domain}_qa_pairs.csv"
     companion_path = qa_release / f"{domain}_qa_pairs_companion.csv"
@@ -72,6 +116,7 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
     _require_unique(companion, companion_path)
 
     by_question = {row[JOIN_KEY]: row for row in contract}
+    companion_by_question = {row[JOIN_KEY]: row for row in companion}
     missing = [
         row["question_id"] for row in companion if row[JOIN_KEY] not in by_question
     ]
@@ -80,10 +125,12 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
             f"{len(missing)} companion row(s) have no contract match, "
             f"first: {missing[0]}"
         )
-    if len(contract) != len(companion):
-        raise SystemExit(
-            f"row count mismatch: {len(contract)} contract vs {len(companion)} companion"
-        )
+
+    companion_by_group: dict[str, list[dict[str, str]]] = {}
+    for row in companion:
+        group_id = (row.get("rephrase_group_id") or "").strip()
+        if group_id:
+            companion_by_group.setdefault(group_id, []).append(row)
 
     fieldnames = [
         "question_id",
@@ -91,13 +138,28 @@ def build(qa_release: Path, domain: str, output: Path) -> int:
         "tier",
         "family",
         "scoring_mode",
+        "rephrase_group_id",
         *CONTRACT_FIELDS,
     ]
     rows = []
+    # Preserve the established base-row ordering from the companion, then add
+    # contract-only variants in their deterministic contract order.
     for comp in companion:
         pair = by_question[comp[JOIN_KEY]]
         row = {field: comp[field] for field in COMPANION_FIELDS}
         row["domain"] = domain
+        row["rephrase_group_id"] = (
+            pair.get("rephrase_group_id") or comp.get("rephrase_group_id") or ""
+        )
+        row.update({field: pair[field] for field in CONTRACT_FIELDS})
+        rows.append(row)
+
+    for pair in contract:
+        if pair[JOIN_KEY] in companion_by_question:
+            continue
+        row = _variant_metadata(pair, companion_by_group, contract_path)
+        row["domain"] = domain
+        row["rephrase_group_id"] = pair["rephrase_group_id"]
         row.update({field: pair[field] for field in CONTRACT_FIELDS})
         rows.append(row)
 
@@ -119,7 +181,7 @@ def main() -> None:
     parser.add_argument(
         "--qa-release",
         type=Path,
-        default=Path("release/crm/qa-pairs-v0.3.0"),
+        default=Path("release/v1.0.0/crm/qa_pairs"),
         help="Q&A release package directory",
     )
     parser.add_argument("--domain", default="crm")

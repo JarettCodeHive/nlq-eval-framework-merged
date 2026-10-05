@@ -25,7 +25,7 @@ treating it as the final delivery format.**
 
 This POC consumes the CRM generator outputs directly (six tables:
 `accounts`, `contacts`, `campaigns`, `contact_campaigns`, `interactions`,
-and `support_cases`). The configured dataset version is `dataset-v1.0.0`,
+and `support_cases`). The configured evaluation-release version is `v1.0.0`,
 and `reference_today = 2026-08-01`.
 
 **Docs:** `docs/ARCHITECTURE.md` (how it works — data flow, guarantees,
@@ -59,7 +59,7 @@ qa_pairs/
 │   └── labels.py                <-   generic label lookup (CRM map lives in generator/crm/labels.json)
 ├── generator/
 │   ├── crm/                     <- CRM specifics: data files + thin drivers
-│   │   ├── config.json             <-   domain, dataset/output paths, Q&A version, quotas, resolved OIs
+│   │   ├── config.json             <-   domain, release paths, quotas, resolved OIs
 │   │   ├── catalog.json            <-   param name -> SQL listing its allowed values
 │   │   ├── families.json           <-   32 question families (the source of truth)
 │   │   ├── labels.json             <-   CRM enum token -> business phrase (question text only)
@@ -86,7 +86,7 @@ qa_pairs/
 
 ```
 ../tmp/generated/crm/dev/imperfect/*.csv   (dev source)
-../release/crm/<dataset_version>/*.csv     (full source)
+../release/crm/<release_version>/dataset/*.csv     (full source)
         |
         v   generator/crm/generate_crm.py      resolve source from config; stage CSVs;
         |                                   CREATE the canonical DDL in a fresh
@@ -108,7 +108,7 @@ generator/crm/scale_pairs.py                    for each family:
         |    - non-zero exit if any tier misses quota
         v
 dev:  ../tmp/generated/crm/dev/qa_pairs/
-full: ../release/crm/qa-pairs-v<qa_version>/
+full: ../release/crm/<release_version>/qa_pairs/
        crm_qa_pairs.csv (+_companion) + verification_logs/*.json
        rephrase/*.csv + rephrase/verification_logs/*.json
         |
@@ -149,10 +149,10 @@ python main.py export-csvs --profile full
 ```
 
 `generator/crm/config.json` controls both profile source templates. The full source
-path interpolates the dataset version from `config/generation/crm/release.json`.
-It also controls the Q&A version and final profile output paths. Dev output is
+path interpolates the shared release version from
+`config/generation/crm/release.json`. Dev output is
 written to `tmp/generated/crm/dev/qa_pairs`; full output is written to the
-independently versioned `release/crm/qa-pairs-v<qa_version>` package.
+same `release/crm/<release_version>/qa_pairs` bundle as the dataset.
 
 `dev` = 1%-scale (fast iteration). **Only `full` is deliverable** (§7.3);
 `dev` and `full` answers differ because the datasets hold different data.
@@ -289,7 +289,7 @@ throughout so it can never collide with CRM's files in the same directories:
   + `dataset/manifest_sales_<profile>.json` rather than the CRM filenames.
 - Output: `sales_qa_pairs.csv` (+ `_companion`) to
   `tmp/generated/sales/dev/qa_pairs/` (dev) or
-  `release/sales/qa-pairs-v0.1.0/` (full) — 9-field contract (question_id +
+  `release/sales/<release_version>/qa_pairs/` (full) — 9-field contract (question_id +
   tier prepended, same deviation as CRM), no `rephrase_group_id` /
   `is_release_160` yet since no rephrase groups exist for Sales.
 - Wired into the root CLI: `python main.py qa-build --domain sales --profile

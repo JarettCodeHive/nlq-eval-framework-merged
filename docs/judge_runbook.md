@@ -268,10 +268,10 @@ exit `4` if any domain trips the regression flag.
 
 ## 5. Reading the output
 
-Each run writes two directories under `release/<domain>/`, sharing one
-`run_id`. The §11 deliverables go to `scorecards/<UTC-timestamp>/` and the
-provenance to `eval-runs/<UTC-timestamp>/` — see the repository README for the
-tree and the `config/` keys that control both roots.
+Each run writes two directories under `release/<version>/<domain>/`, sharing
+one `run_id`. The §11 deliverables go to `scorecard/<UTC-timestamp>/` and the
+provenance to `judge/<UTC-timestamp>/` — see the repository README for the tree
+and the `config/` keys that control both roots.
 
 | File | What |
 |---|---|

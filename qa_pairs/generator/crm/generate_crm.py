@@ -29,10 +29,10 @@ from pathlib import Path
 import duckdb
 
 BASE = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(BASE))
-from utils import build_stamp  # noqa: E402
-from utils.dataset_source import resolve_dataset_source  # noqa: E402
-from utils.verify import library_versions  # noqa: E402
+sys.path.insert(0, str(BASE.parent))
+from qa_pairs.utils import build_stamp  # noqa: E402
+from qa_pairs.utils.dataset_source import resolve_dataset_source  # noqa: E402
+from qa_pairs.utils.verify import library_versions  # noqa: E402
 
 DATASET = BASE / "dataset"
 

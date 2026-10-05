@@ -228,7 +228,7 @@ class JudgeConfig(BaseModel):
     # interpolated; the path is relative to the repository root. Run outputs are
     # per-run and append-only, unlike the sealed single-version dataset and Q&A
     # packages that sit beside them under release/.
-    run_output_root: str = "release/{domain}/eval-runs"
+    run_output_root: str = "release/{release_version}/{domain}/judge"
     # §11.1 version tag for the platform under evaluation. Empty by default and
     # overridden by PLATFORM_VERSION or --platform-version — unlike the model,
     # this describes whichever deployment a machine is pointed at, so the

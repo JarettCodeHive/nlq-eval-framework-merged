@@ -75,7 +75,7 @@ def runs(tmp_path: Path, monkeypatch):
         comparison_is_default: bool = True,
         row_domain: str | None = None,
     ) -> Path:
-        directory = tmp_path / "release" / domain / "eval-runs" / run_id
+        directory = tmp_path / "release" / "v1.0.0" / domain / "judge" / run_id
         directory.mkdir(parents=True, exist_ok=True)
         rows = [
             _row(f"{domain}-{i}", row_domain or domain, "T1", passed=True)
@@ -147,7 +147,14 @@ def test_a_domain_with_no_runs_names_the_command_that_makes_one(runs) -> None:
 def test_only_directories_with_results_count(runs, tmp_path: Path) -> None:
     runs("crm", "20260923T120000Z")
     # A run that died before writing results.json must not be picked as newest.
-    (tmp_path / "release" / "crm" / "eval-runs" / "20260924T999999Z").mkdir(
+    (
+        tmp_path
+        / "release"
+        / "v1.0.0"
+        / "crm"
+        / "judge"
+        / "20260924T999999Z"
+    ).mkdir(
         parents=True
     )
 

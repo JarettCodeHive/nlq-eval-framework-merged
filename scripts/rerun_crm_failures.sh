@@ -4,7 +4,7 @@
 #
 #   ./scripts/rerun_crm_failures.sh
 #
-# Run it AFTER release/crm/dataset-v1.0.0 is loaded into org 4104. Re-running
+# Run it AFTER release/v1.0.0/crm/dataset is loaded into org 4104. Re-running
 # before the upload measures nothing — the whole point is to see which failures
 # were the dataset and which were the platform.
 #
@@ -20,6 +20,7 @@ set -euo pipefail
 
 BASE_RUN="${1:-20260921T124500Z}"
 DOMAIN="${DOMAIN:-crm}"
+VERSION="${VERSION:-v1.0.0}"
 # Platform and judge have separate limits because they are separate resources —
 # see _collect_and_score. Raising only one just moves the bottleneck: at platform
 # concurrency 8 an answer lands every ~4s, and the judge needs roughly 4 slots to
@@ -28,7 +29,7 @@ PULSE_CONC="${PULSE_CONC:-4}"
 JUDGE_CONC="${JUDGE_CONC:-4}"
 cd "$(dirname "$0")/.."
 
-RERUN_CSV="release/${DOMAIN}/qa-pairs-v0.3.0/${DOMAIN}_rerun_${BASE_RUN}.csv"
+RERUN_CSV="release/${VERSION}/${DOMAIN}/qa_pairs/${DOMAIN}_rerun_${BASE_RUN}.csv"
 
 echo "==> preflight"
 python main.py check-auth --domain "$DOMAIN"
@@ -43,6 +44,7 @@ python main.py judge \
   --judge llm \
   --pulse live \
   --domain "$DOMAIN" \
+  --version "$VERSION" \
   --input-csv "$RERUN_CSV" \
   --pulse-concurrency "$PULSE_CONC" \
   --concurrency "$JUDGE_CONC" \
@@ -50,7 +52,7 @@ python main.py judge \
 
 echo
 echo "==> comparing against ${BASE_RUN}"
-NEW_RUN="$(ls -t "release/${DOMAIN}/eval-runs" | head -1)"
+NEW_RUN="$(ls -t "release/${VERSION}/${DOMAIN}/judge" | head -1)"
 python judge/compare_runs.py --base "$BASE_RUN" --new "$NEW_RUN" --domain "$DOMAIN"
 
 echo
@@ -59,5 +61,5 @@ python -m judge.merge_runs --base "$BASE_RUN" --new "$NEW_RUN" --domain "$DOMAIN
 
 echo
 echo "artefacts:"
-echo "  release/${DOMAIN}/scorecards/${NEW_RUN}/"
-echo "  release/${DOMAIN}/eval-runs/${NEW_RUN}/"
+echo "  release/${VERSION}/${DOMAIN}/scorecard/${NEW_RUN}/"
+echo "  release/${VERSION}/${DOMAIN}/judge/${NEW_RUN}/"

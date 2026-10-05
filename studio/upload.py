@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from judge.resolve import ResolutionError, dataset_csv_dir, dataset_release_config
 from studio import schema
@@ -37,7 +39,10 @@ class TableOutcome:
     batches: int = 0
     entity_id: int | None = None
     existed: bool = False
+    created_by_run: bool = False
     skipped: str = ""
+    cleanup_status: str = "not_applicable"
+    cleanup_error: str = ""
     job_ids: list[int] = field(default_factory=list)
     # What the platform says it holds, checked against what we sent.
     rows_on_platform: int | None = None
@@ -55,10 +60,41 @@ class UploadOutcome:
     profile: str
     csv_dir: Path
     tables: list[TableOutcome] = field(default_factory=list)
+    cleanup_status: str = "retained"
+    cleanup_completed_at: str | None = None
+    cleanup_errors: list[str] = field(default_factory=list)
 
     @property
     def total_rows(self) -> int:
         return sum(t.rows for t in self.tables)
+
+    @property
+    def created_tables(self) -> list[TableOutcome]:
+        """Entities proven to have been created by this upload invocation."""
+
+        return [
+            table
+            for table in self.tables
+            if table.created_by_run and table.entity_id is not None
+        ]
+
+
+@dataclass(frozen=True)
+class CleanupFailure:
+    """One run-owned entity that could not be removed."""
+
+    table: str
+    entity_id: int
+    error: str
+
+
+@dataclass
+class CleanupOutcome:
+    """Result of deleting only the entities created by one upload run."""
+
+    attempted: list[tuple[str, int]] = field(default_factory=list)
+    deleted: list[tuple[str, int]] = field(default_factory=list)
+    failures: list[CleanupFailure] = field(default_factory=list)
 
 
 def table_order(domain: str, csv_dir: Path) -> list[str]:
@@ -95,11 +131,17 @@ def upload_domain(
     client: StudioClient,
     replace: bool = False,
     progress=None,
+    on_outcome: Callable[[UploadOutcome], None] | None = None,
 ) -> UploadOutcome:
     """Create each table, bulk-load its rows, attach its schema context."""
 
     csv_dir = _resolve_csv_dir(domain, profile)
     outcome = UploadOutcome(domain=domain, profile=profile, csv_dir=csv_dir)
+    if on_outcome is not None:
+        # Expose the mutable record before the first remote mutation. If a load
+        # fails halfway through, the caller can still clean every entity whose
+        # creation was confirmed.
+        on_outcome(outcome)
     say = progress.report if progress else (lambda _message: None)
 
     for table in table_order(domain, csv_dir):
@@ -131,6 +173,11 @@ def upload_domain(
             schema.entity_definition(table, columns, numeric)
         )
         result.entity_id = entity_id
+        result.created_by_run = True
+        result.cleanup_status = (
+            "pending" if outcome.cleanup_status == "pending" else "retained"
+        )
+        outcome.tables.append(result)
 
         encoded = [schema.encode_row(row, columns, numeric) for row in rows]
         for index, batch in enumerate(
@@ -192,9 +239,53 @@ def upload_domain(
         if client.find_schema_context(entity_id) is None:
             client.create_schema_context(entity_id, f"{table}.csv")
 
-        outcome.tables.append(result)
-
     return outcome
+
+
+def cleanup_uploaded_entities(
+    outcome: UploadOutcome,
+    *,
+    client: StudioClient,
+    progress=None,
+) -> CleanupOutcome:
+    """Delete only entities confirmed as created by this upload invocation.
+
+    Entity ids come directly from the upload record. No table-name lookup is
+    permitted here: a same-named entity may have been replaced by somebody
+    else after the upload and must not be guessed at during cleanup.
+    """
+
+    cleanup = CleanupOutcome()
+    say = progress.report if progress else (lambda _message: None)
+    outcome.cleanup_status = "in_progress"
+    outcome.cleanup_errors = []
+
+    for table in reversed(outcome.created_tables):
+        assert table.entity_id is not None
+        entity_id = table.entity_id
+        cleanup.attempted.append((table.table, entity_id))
+        say(f"{table.table}: deleting run-owned entity {entity_id}")
+        try:
+            client.delete_entity(entity_id)
+        except Exception as exc:  # noqa: BLE001 - record every platform failure
+            error = f"{type(exc).__name__}: {exc}"
+            table.cleanup_status = "failed"
+            table.cleanup_error = error
+            cleanup.failures.append(
+                CleanupFailure(table=table.table, entity_id=entity_id, error=error)
+            )
+            outcome.cleanup_errors.append(
+                f"{table.table} (entity {entity_id}): {error}"
+            )
+            say(f"{table.table}: cleanup FAILED for entity {entity_id} — {error}")
+        else:
+            table.cleanup_status = "deleted"
+            table.cleanup_error = ""
+            cleanup.deleted.append((table.table, entity_id))
+
+    outcome.cleanup_status = "failed" if cleanup.failures else "completed"
+    outcome.cleanup_completed_at = datetime.now(timezone.utc).isoformat()
+    return cleanup
 
 
 def delete_domain(
@@ -277,26 +368,52 @@ def summarise(outcome: UploadOutcome, *, action: str) -> str:
     return "\n".join(lines)
 
 
+def summarise_cleanup(cleanup: CleanupOutcome) -> str:
+    """Render a concise cleanup result without implying name-based deletion."""
+
+    lines = [
+        f"Deleted {len(cleanup.deleted)}/{len(cleanup.attempted)} "
+        "run-owned platform entities"
+    ]
+    for table, entity_id in cleanup.deleted:
+        lines.append(f"  {table:24} entity={entity_id} deleted")
+    for failure in cleanup.failures:
+        lines.append(
+            f"  {failure.table:24} entity={failure.entity_id} FAILED — "
+            f"{failure.error}"
+        )
+    return "\n".join(lines)
+
+
 def write_manifest(outcome: UploadOutcome, path: Path) -> Path:
-    """Record the entity ids, so a later delete does not have to guess them."""
+    """Atomically record entity ownership and cleanup status for this run."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(
         json.dumps(
             {
                 "domain": outcome.domain,
                 "profile": outcome.profile,
                 "csv_dir": str(outcome.csv_dir),
+                "cleanup": {
+                    "status": outcome.cleanup_status,
+                    "completed_at": outcome.cleanup_completed_at,
+                    "errors": outcome.cleanup_errors,
+                },
                 "tables": [
                     {
                         "table": t.table,
                         "entity_id": t.entity_id,
+                        "created_by_run": t.created_by_run,
                         "rows": t.rows,
                         "batches": t.batches,
                         "job_ids": t.job_ids,
                         "rows_on_platform": t.rows_on_platform,
                         "loads_confirmed": t.loads_confirmed,
                         "skipped": t.skipped,
+                        "cleanup_status": t.cleanup_status,
+                        "cleanup_error": t.cleanup_error,
                     }
                     for t in outcome.tables
                 ],
@@ -305,4 +422,5 @@ def write_manifest(outcome: UploadOutcome, path: Path) -> Path:
         ),
         encoding="utf-8",
     )
+    temporary.replace(path)
     return path

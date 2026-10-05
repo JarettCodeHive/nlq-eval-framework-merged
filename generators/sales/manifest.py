@@ -73,6 +73,7 @@ class SalesManifestGenerator:
         return {
             "manifest_schema_version": "1.0",
             "domain": self.settings.domain,
+            "release_version": self.settings.release_version,
             "dataset_version": self.settings.dataset_version,
             "profile": self.settings.profile,
             "generated_at": self.settings.manifest_generated_at,

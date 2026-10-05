@@ -85,7 +85,7 @@ def test_generation_settings_resolve_for_each_profile(profile: str) -> None:
     settings = GenerationSettings.from_config_files("project_management", profile)
 
     assert settings.domain == "project_management"
-    assert settings.dataset_version == "dataset-v1.0.0"
+    assert settings.release_version == "v1.0.0"
     assert settings.reference_today.isoformat() == "2026-08-01"
     assert list(settings.table_order) == TABLE_ORDER
     assert settings.row_counts == ROW_TARGETS[profile]
@@ -101,7 +101,7 @@ def test_generation_settings_resolve_for_each_profile(profile: str) -> None:
         assert not settings.targets_versioned_release
     else:
         assert settings.output_path == (
-            PROJECT_ROOT / "release" / "project_management" / "dataset-v1.0.0"
+            PROJECT_ROOT / "release" / "v1.0.0" / "project_management" / "dataset"
         )
         assert settings.targets_versioned_release
 

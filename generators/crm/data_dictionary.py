@@ -166,7 +166,7 @@ class CRMDataDictionaryGenerator:
         lines = [
             "# CRM Data Dictionary",
             "",
-            f"Dataset version: `{self.settings.dataset_version}`",
+            f"Release version: `{self.settings.release_version}`",
             "",
             f"Schema source: `{self.crm_config['schema_source']}`",
             "",

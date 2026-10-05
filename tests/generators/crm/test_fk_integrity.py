@@ -57,7 +57,7 @@ def test_crm_duckdb_validator_uses_engagement_schema() -> None:
     validator = CRMDuckDBFKValidator.for_profile("full")
 
     assert validator.settings.table_order == EXPECTED_TABLE_ORDER
-    assert validator.settings.output_path.name == "dataset-v1.0.0"
+    assert validator.settings.output_path == Path("release/v1.0.0/crm/dataset").resolve()
     assert validator.settings.schema_source.name == "crm_ddl.sql"
 
 

@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from judge.build_input import build as build_judge_input
 from judge.config import REPO_ROOT, load_env, load_judge_config
+from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import existing_component_dir
 
 PROFILES: tuple[str, ...] = ("dev", "full")
 
@@ -32,7 +33,7 @@ PROFILES: tuple[str, ...] = ("dev", "full")
 # config (`qa_pairs/utils/output_paths.py`, `qa_pairs/utils/dataset_source.py`).
 # The judge reads the SAME two files rather than restating the paths, so all
 # three stages move together when a release layout changes.
-_QA_CONFIG_PATH = Path("qa_pairs") / "generator" / "crm" / "config.json"
+_QA_CONFIG_ROOT = Path("qa_pairs") / "generator"
 _GENERATION_CONFIG = Path("config") / "generation"
 
 
@@ -70,22 +71,23 @@ def _root(repo_root: Path | None) -> Path:
     return repo_root or REPO_ROOT
 
 
-def _version_key(path: Path) -> tuple[int, ...]:
-    """Sort `qa-pairs-v0.10.0` after `qa-pairs-v0.9.0`, which a string sort does not."""
-
-    return tuple(int(n) for n in re.findall(r"\d+", path.name)) or (0,)
-
-
 def _templated_qa_dir(domain: str, profile: str, repo_root: Path | None) -> Path | None:
     root = _root(repo_root)
-    config = _load_json(root / _QA_CONFIG_PATH)
+    config = _load_json(root / _QA_CONFIG_ROOT / domain / "config.json")
     release = config.get("qa_release") or {}
     template = (release.get("profile_outputs") or {}).get(profile)
     if not template:
         return None
+    generation = dataset_release_config(domain, repo_root=repo_root)
+    version = active_release_version(generation)
+    if profile == "full":
+        return existing_component_dir(
+            domain, "qa_pairs", version, repo_root=root
+        )
     return root / str(template).format(
         domain=domain,
-        qa_version=release.get("version", ""),
+        qa_version=version,
+        release_version=version,
         profile=profile,
     )
 
@@ -93,42 +95,21 @@ def _templated_qa_dir(domain: str, profile: str, repo_root: Path | None) -> Path
 def qa_release_dir(
     domain: str, profile: str, *, repo_root: Path | None = None
 ) -> Path:
-    """The Q&A package a run of this domain/profile scores.
+    """Return the selected bundle's Q&A directory without guessing a version.
 
-    Config first, exactly as `resolve_qa_output_dir` and `resolve_dataset_source`
-    do for their own stages: the path template and the version both come from
-    `qa_pairs/generator/crm/config.json`, so a release layout moves without a
-    code change here. Judge wiring is CRM-only today, so that fixed path is
-    the one domain this function actually resolves correctly; the filesystem
-    fallback below is what keeps a `full`-profile lookup for another domain
-    from silently returning the wrong (CRM) version.
-
-    The filesystem is consulted only as a fallback, and only for `full`. That
-    config declares ONE domain's Q&A version, so a domain it does not cover has
-    no templated answer — for those, take the newest `qa-pairs-v*` directory
-    that actually holds pairs. Newest-by-version, and "holds pairs" rather than
-    "exists", so a half-created v0.4.0 cannot mask a complete v0.3.0.
+    Falling back to whichever release happens to be newest can mix a dataset
+    from one release with questions from another.  A missing selected package
+    is therefore returned as missing and the caller reports how to build it.
     """
 
     root = _root(repo_root)
     templated = _templated_qa_dir(domain, profile, repo_root)
-    if templated is not None and (profile != "full" or _has_pairs(templated, domain)):
-        return templated
-    if profile == "full":
-        candidates = sorted(
-            (root / "release" / domain).glob("qa-pairs-v*"),
-            key=_version_key,
-            reverse=True,
-        )
-        for candidate in candidates:
-            if _has_pairs(candidate, domain):
-                return candidate
     if templated is not None:
         return templated
     raise ResolutionError(
         f"cannot locate the Q&A package for domain={domain!r} profile={profile!r}: "
-        f"no {root / 'release' / domain}/qa-pairs-v*/ holds pairs and "
-        f"{root / _QA_CONFIG_PATH} declares no output path for that profile."
+        f"{root / _QA_CONFIG_ROOT / domain / 'config.json'} declares no output "
+        "path for that profile."
     )
 
 
@@ -202,21 +183,20 @@ def dataset_csv_dir(
     root = _root(repo_root)
     config = dataset_release_config(domain, repo_root=repo_root)
     raw = (config.get("output_paths") or {}).get(profile)
-    if raw:
+    if profile == "full" and config:
+        version = active_release_version(config)
+        base = existing_component_dir(
+            domain, "dataset", version, repo_root=root
+        )
+    elif raw:
         base = root / str(raw).format(
             domain=domain,
-            dataset_version=config.get("dataset_version", ""),
+            dataset_version=active_release_version(config),
+            release_version=active_release_version(config),
             profile=profile,
         )
     else:
-        versions = sorted(
-            (root / "release" / domain).glob("dataset-v*"),
-            key=_version_key,
-            reverse=True,
-        )
-        if not versions:
-            return None
-        base = versions[0]
+        return None
     # A dev build keeps one directory per pipeline stage. The pairs were authored
     # against the imperfect stage, so that is the only stage worth replaying.
     imperfect = base / "imperfect"
@@ -228,24 +208,16 @@ def dataset_version_label(
 ) -> str:
     """The §11.1 version tag for the data this run scored.
 
-    Two versions move independently — question templates change without a new
-    dataset, and vice versa — so neither alone identifies what was scored. The
-    label carries both: `dataset-v1.0.0+qa-pairs-v0.3.0`. It is a label only; no
-    path is ever derived back out of it.
+    The dataset and Q&A pairs share one immutable evaluation-release version,
+    so the scorecard label is that single version. Dev appends its profile to
+    distinguish disposable output from a full release.
     """
 
-    parts: list[str] = []
-    dataset_version = str(
-        dataset_release_config(domain, repo_root=repo_root).get("dataset_version", "")
-    ).strip()
-    if dataset_version:
-        parts.append(dataset_version)
-    if profile == "full":
-        qa_dir = qa_release_dir(domain, profile, repo_root=repo_root)
-        parts.append(qa_dir.name)
-    else:
-        parts.append(profile)
-    return "+".join(parts)
+    config = dataset_release_config(domain, repo_root=repo_root)
+    if not config:
+        return profile
+    version = active_release_version(config)
+    return version if profile == "full" else f"{version}+{profile}"
 
 
 def platform_version(domain: str) -> str:

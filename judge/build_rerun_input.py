@@ -37,6 +37,8 @@ import json
 import re
 from pathlib import Path
 
+from qa_pairs.utils.release_bundle import existing_component_path
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # A failure is treated as question-side ambiguity when the ground truth uses an
@@ -133,12 +135,14 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    run_dir = REPO_ROOT / "release" / args.domain / "eval-runs" / args.run
+    run_dir = existing_component_path(args.domain, "judge", args.run)
     if not (run_dir / "results.json").is_file():
         raise SystemExit(f"no results.json under {run_dir}")
 
-    qa_dir = REPO_ROOT / "release" / args.domain / "qa-pairs-v0.3.0"
-    input_csv = args.input_csv or qa_dir / f"{args.domain}_judge_input.csv"
+    input_csv = args.input_csv or existing_component_path(
+        args.domain, "qa_pairs", f"{args.domain}_judge_input.csv"
+    )
+    qa_dir = input_csv.parent
     output = args.output or qa_dir / f"{args.domain}_rerun_{args.run}.csv"
     build(run_dir, input_csv, output, include_ambiguous=args.include_ambiguous)
 
