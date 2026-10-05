@@ -52,6 +52,7 @@ from qa_pairs.utils.release_bundle import default_release_version
 from qa_pairs.utils.release_bundle import component_dir
 from qa_pairs.utils.release_bundle import use_release_version
 
+from judge.build_input import build as build_judge_input
 from judge.cli import build_argparser as build_judge_argparser
 from judge.cli import run_calibrate_from_domain
 from judge.cli import run_check_auth as run_check_auth_for_domain
