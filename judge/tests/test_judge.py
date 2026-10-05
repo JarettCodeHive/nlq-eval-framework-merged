@@ -863,3 +863,60 @@ def test_a_domain_can_opt_back_into_the_scoring_gate(tmp_path):
     # would drop min_anchors and agreement_pct the moment one field is set.
     assert load_judge_config("crm", root).calibration.min_anchors == 10
     assert load_judge_config("crm", root).calibration.agreement_pct == 90.0
+
+
+# --- precision: the platform printing a number shorter ------------------------
+
+
+def test_a_value_printed_at_lower_precision_passes():
+    """Observed against the live platform in both domains, and scored WRONG:
+
+        CRM-T4-04-17    expected 1339.1438      printed "1339.14"
+        SALES-T2-06-22  expected 2894260664.44  printed "$2,894,260,664"
+
+    Both are the expected value rendered shorter. HC-3 fails numeric VARIANCE,
+    and dropping cents from 2.8 billion is not variance — it is rendering, the
+    same reading that makes 28,731 equal 28731. Failing these made the platform
+    look worse than it is.
+    """
+
+    assert exact_match("1339.1438", "the highest is at 1339.14") is ExactMatchResult.PASS
+    assert (
+        exact_match("2894260664.44", "at approximately $2,894,260,664")
+        is ExactMatchResult.PASS
+    )
+
+
+@pytest.mark.parametrize(
+    ("expected", "answer", "why"),
+    [
+        ("23.21", "roughly 23%", "zero places on a percentage loses too much"),
+        ("23.21", "about 23.2%", "one place still loses too much"),
+        ("4182650.00", "the total is 4,182,000", "the module docstring's own example"),
+        ("1013", "about 1,000 accounts", "rounded to the nearest thousand"),
+        ("28725", "28,700 interactions", "rounded to the nearest hundred"),
+    ],
+)
+def test_precision_leniency_does_not_become_a_tolerance(expected, answer, why):
+    """The module promises there is no tolerance parameter, and this must not
+    smuggle one in. A printed value has to be a FAITHFUL rounding of the
+    expected one AND give up negligible precision relative to its magnitude.
+
+    Faithfulness alone is not enough: 23 *is* 23.21 rounded to zero places, so
+    only the magnitude bound rejects "roughly 23%".
+    """
+
+    assert exact_match(expected, answer) is ExactMatchResult.FAIL, why
+
+
+def test_lower_precision_still_requires_the_right_label():
+    """Relaxing precision must not relax entity ownership (the Appendix A shape)."""
+
+    assert (
+        exact_match("Hardware | 2894260664.44", "Software at approximately $2,894,260,664")
+        is ExactMatchResult.FAIL
+    )
+    assert (
+        exact_match("Hardware | 2894260664.44", "Hardware at approximately $2,894,260,664")
+        is ExactMatchResult.PASS
+    )
