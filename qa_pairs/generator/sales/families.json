@@ -186,13 +186,13 @@
     "params": ["category"],
     "quota": 4,
     "join_path": "sales_jp_004",
-    "question": "What percentage of {category} products' quotation lines were accepted?",
+    "question": "Of {category} products' quotation lines that have been decided (accepted, rejected, or expired), what percentage were accepted?",
     "tables": "quotations, products",
     "fields": "quotations.product_id, quotations.quote_status, products.product_id, products.category",
-    "judge": "A single percentage (0-100, two decimals): of all quotation lines for products in the named category, the share with quote_status Accepted.",
+    "judge": "A single percentage (0-100, two decimals): of DECIDED quotation lines (Accepted, Rejected, or Expired - excluding Draft/Sent lines still pending) for products in the named category, the share that were Accepted.",
     "scoring_mode": "scalar_exact",
     "answer_shape": "scalar",
-    "rationale": "INNER JOIN quotations to products on product_id, filter to the category. Rate = 100.0 * count(quote_status='Accepted') / total count, rounded to 2 places."
+    "rationale": "INNER JOIN quotations to products on product_id, filter to the category and to quotation lines with a decided status (Accepted, Rejected, Expired). Rate = 100.0 * count(quote_status='Accepted') / decided count, rounded to 2 places. Draft and Sent lines are still pending a decision and are excluded from both numerator and denominator (fixed 2026-10-05, same denominator-eligibility class as CRM's SLA-compliance fix: a line that hasn't been decided yet hasn't been accepted-or-not, so counting it against the rate was the wrong reading)."
   },
   {
     "family": "T3-01",

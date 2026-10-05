@@ -291,7 +291,7 @@
     "params": ["department"],
     "quota": 5,
     "join_path": "pm_jp_008",
-    "question": "For resources in the {department} department, how do logged time entries break down by billable status?",
+    "question": "For resources in the {department} department, how does the count of logged time entries break down by billable status?",
     "tables": "time_entries, resources",
     "fields": "time_entries.resource_id, time_entries.billable, resources.resource_id, resources.department",
     "judge": "Two categories - billable and non_billable - each with the count of time_entries logged by resources in the named department, alphabetical by category.",
