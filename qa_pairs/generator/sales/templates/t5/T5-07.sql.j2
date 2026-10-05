@@ -1,0 +1,6 @@
+SELECT d.rep_name AS entity, ROUND(SUM(d.deal_amount), 2) AS total_won_amount
+FROM deals d
+WHERE d.stage = 'Won'
+GROUP BY d.rep_name
+ORDER BY total_won_amount DESC, entity ASC
+LIMIT 3;
