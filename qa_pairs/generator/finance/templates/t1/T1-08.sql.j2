@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS account_count
+FROM accounts
+WHERE account_subtype = {{ account_subtype | sqlstr }};

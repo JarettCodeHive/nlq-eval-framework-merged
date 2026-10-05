@@ -1,0 +1,6 @@
+SELECT COUNT(*) AS rate_count
+FROM fx_rates f
+INNER JOIN transactions t
+    ON f.from_currency = t.source_currency
+    AND f.to_currency = t.target_currency
+    AND f.rate_date = t.transaction_date;

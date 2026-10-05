@@ -1,0 +1,17 @@
+WITH activity AS (
+    SELECT le.account_id, t.transaction_date
+    FROM ledger_entries le
+    INNER JOIN transactions t ON le.transaction_id = t.transaction_id
+)
+SELECT a.account_name AS entity, ROUND(b.budget_amount, 2) AS metric
+FROM budgets b
+INNER JOIN accounts a ON b.account_id = a.account_id
+WHERE b.scenario = {{ scenario | sqlstr }}
+  AND NOT EXISTS (
+      SELECT 1 FROM activity ac
+      WHERE ac.account_id = b.account_id
+        AND ac.transaction_date >= b.period_start
+        AND ac.transaction_date < b.period_end
+  )
+ORDER BY metric DESC, entity ASC
+LIMIT 5;

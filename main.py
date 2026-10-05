@@ -29,6 +29,9 @@ from qa_pairs.generator.crm.validate_crm import validate as validate_crm_qa_data
 from qa_pairs.generator.finance.generate_finance import (
     build as stage_finance_qa_dataset,
 )
+from qa_pairs.generator.finance.rephrase import (
+    generate_rephrases as generate_finance_rephrases,
+)
 from qa_pairs.generator.finance.scale_pairs_finance import (
     generate_pairs as generate_finance_pairs,
 )
@@ -591,6 +594,7 @@ QA_GENERATE: dict[str, CommandHandler] = {
 QA_REPHRASE: dict[str, CommandHandler] = {
     "crm": generate_rephrases,
     "sales": generate_sales_rephrases,
+    "finance": generate_finance_rephrases,
 }
 
 

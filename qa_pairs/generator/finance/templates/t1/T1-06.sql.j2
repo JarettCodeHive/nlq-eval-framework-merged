@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS account_count
+FROM accounts
+WHERE normal_balance = {{ normal_balance | sqlstr }};
