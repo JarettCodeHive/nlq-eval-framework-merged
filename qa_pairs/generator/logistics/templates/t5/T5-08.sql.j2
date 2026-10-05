@@ -1,0 +1,6 @@
+SELECT carrier_type AS entity, ROUND(AVG(base_rate), 2) AS metric
+FROM carriers
+WHERE base_rate IS NOT NULL AND carrier_type IS NOT NULL
+GROUP BY carrier_type
+ORDER BY metric ASC, entity ASC
+LIMIT 1;

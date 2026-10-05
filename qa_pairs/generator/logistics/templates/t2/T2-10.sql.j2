@@ -1,0 +1,4 @@
+SELECT ROUND(SUM(s.shipping_cost), 2) AS total_shipping_cost
+FROM shipments s
+INNER JOIN orders o ON s.order_id = o.order_id
+WHERE o.order_priority = {{ order_priority | sqlstr }} AND s.shipping_cost IS NOT NULL;

@@ -1,0 +1,7 @@
+SELECT w.region AS entity, COUNT(*) AS metric
+FROM inventory i
+INNER JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+WHERE i.reorder_point IS NOT NULL AND i.quantity_on_hand < i.reorder_point AND w.region IS NOT NULL
+GROUP BY w.region
+ORDER BY metric DESC, entity ASC
+LIMIT 3;

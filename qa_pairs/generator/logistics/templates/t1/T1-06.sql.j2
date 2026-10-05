@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS order_count
+FROM orders
+WHERE status = {{ order_status | sqlstr }} AND order_priority = {{ order_priority | sqlstr }};

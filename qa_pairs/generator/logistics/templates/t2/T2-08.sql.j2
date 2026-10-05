@@ -1,0 +1,5 @@
+SELECT ROUND(AVG(DATE_DIFF('day', s.ship_date, s.delivery_date)), 2) AS avg_transit_days
+FROM shipments s
+INNER JOIN carriers c ON s.carrier_id = c.carrier_id
+WHERE c.service_level = {{ service_level | sqlstr }}
+  AND s.ship_date IS NOT NULL AND s.delivery_date IS NOT NULL;
