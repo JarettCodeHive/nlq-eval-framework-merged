@@ -1,0 +1,6 @@
+SELECT product_category AS entity, SUM(quantity_on_hand) AS metric
+FROM inventory
+WHERE product_category IS NOT NULL
+GROUP BY product_category
+ORDER BY metric DESC, entity ASC
+LIMIT 1;

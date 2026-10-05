@@ -1,0 +1,7 @@
+SELECT c.carrier_type AS entity, ROUND(AVG(DATE_DIFF('day', s.ship_date, s.delivery_date)), 2) AS metric
+FROM shipments s
+INNER JOIN carriers c ON s.carrier_id = c.carrier_id
+WHERE s.ship_date IS NOT NULL AND s.delivery_date IS NOT NULL AND c.carrier_type IS NOT NULL
+GROUP BY c.carrier_type
+ORDER BY metric DESC, entity ASC
+LIMIT 3;

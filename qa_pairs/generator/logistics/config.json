@@ -18,7 +18,7 @@
       "full": "release/{release_version}/{domain}/qa_pairs"
     }
   },
-  "tier_quota": {"T1": 16, "T2": 24, "T3": 16, "T4": 16, "T5": 10},
+  "tier_quota": {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24},
   "tables": ["carriers", "warehouses", "orders", "shipments", "inventory"],
   "scoring": {
     "numeric_tolerance": "0",

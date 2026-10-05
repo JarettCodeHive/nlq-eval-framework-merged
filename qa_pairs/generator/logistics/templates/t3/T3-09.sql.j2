@@ -1,0 +1,5 @@
+SELECT COUNT(*) AS order_count
+FROM orders o
+WHERE o.status = {{ order_status | sqlstr }}
+  AND o.warehouse_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM warehouses w WHERE w.warehouse_id = o.warehouse_id);

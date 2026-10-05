@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS shipment_count
+FROM shipments s
+INNER JOIN carriers c ON s.carrier_id = c.carrier_id
+WHERE c.carrier_type = {{ carrier_type | sqlstr }} AND s.delivery_date IS NULL;
