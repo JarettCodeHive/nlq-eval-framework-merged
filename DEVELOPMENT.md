@@ -190,29 +190,16 @@ CSV contains identifiers but no answers. The judge joins them on the unique
 `natural_language_question` value when the judge input file is absent. Build it
 deliberately after changing the pairs when you want to inspect the result:
 
-```bash
-python main.py judge-build-input --domain crm --profile full
-```
+The judge reads the Q&A contract CSV directly — `<domain>_qa_pairs.csv` —
+because it carries `question_id` and `tier`. There is no derived judge-input
+file and no join step to remember.
 
-The explicit dispatcher command is currently CRM-only; normal `judge` runs
-perform the join on demand.
+`--pulse sql` executes each pair's `reference_sql` against the selected CSV
+dataset; it verifies that pairs and dataset agree (§14.2) and does not evaluate
+the live platform, so its runs are PREVIEW-only.
 
-### Offline and live runs
-
-Use the heuristic test double with local DuckDB execution to validate the
-pipeline without calling Pulse or a semantic judge:
-
-```bash
-python main.py judge --domain crm --profile full \
-  --judge heuristic \
-  --pulse sql \
-  --limit 3
-```
-
-The heuristic judge is deterministic development/CI scaffolding and is never
-release-eligible. `--pulse sql` executes each pair's `reference_sql` against
-the selected CSV dataset; it verifies the pairs and does not evaluate the live
-platform.
+Note it still calls the judge: Anthropic via Floodgate is the only backend, and
+the heuristic test double was removed, so there is no zero-cost offline path.
 
 For a live LLM preview against Pulse:
 

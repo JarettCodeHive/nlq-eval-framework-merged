@@ -22,13 +22,13 @@ Cognito ones. So refreshing is:
 
 Step 2's response shape is CONFIRM-ENDPOINT: the request was captured from the
 browser, the response was not. Rather than hardcode a field name, the platform
-token is located by matching the `aud` of the token already in `judge/.env` —
+token is located by matching the `aud` of the token already in `.env` —
 which is by definition the audience Pulse accepts. Run `--probe` to confirm the
 whole chain against the real service before relying on it in a run.
 
     python judge/pulse_auth.py --probe
 
-Configure in judge/.env:
+Configure in .env:
 
     PULSE_REFRESH_TOKEN=<Cognito refresh token>
     PULSE_COGNITO_CLIENT_ID=1orc9knial20pdfguri4mn40pm
@@ -36,7 +36,7 @@ Configure in judge/.env:
     PULSE_AUTH_EXCHANGE_PATH=/auth/token     # default
 
 A Cognito refresh token mints access tokens for weeks. It is a far more
-sensitive credential than the hour-long ID token — keep it in judge/.env only.
+sensitive credential than the hour-long ID token — keep it in .env only.
 """
 
 from __future__ import annotations
@@ -409,7 +409,7 @@ def seed_mag_cookies(
     token. So they can be seeded directly instead of replaying a login:
 
         mag.cid  the platform client id, which is also the audience Pulse
-                 accepts — so it is read off the token already in judge/.env
+                 accepts — so it is read off the token already in .env
         mag.uri  where the authorization code gets redeemed
         mag.non  a fresh nonce, 16 random bytes base64-encoded, matching the
                  shape observed in two separate logins
@@ -555,7 +555,7 @@ def build_cognito_provider(settings: Any) -> Any | None:
     failed: the chat client verified fine while refresh hit
     CERTIFICATE_VERIFY_FAILED on the same host.
 
-    The audience to look for comes from the token already in `judge/.env`, so the
+    The audience to look for comes from the token already in `.env`, so the
     provider adapts to whichever environment it points at rather than hardcoding
     a client id.
     """
@@ -578,7 +578,7 @@ def build_cognito_provider(settings: Any) -> Any | None:
     if not aud:
         raise PulseRefreshError(
             "Cannot read `aud` from PULSE_AUTH_TOKEN, so the refreshed platform "
-            "token could not be identified. Paste a current token into judge/.env."
+            "token could not be identified. Paste a current token into .env."
         )
 
     from judge.pulse_client import resolve_tls_verify
@@ -789,7 +789,7 @@ def _probe() -> int:
         f"  exp   : {when} ({left:.0f} min from now)" if when else "  exp   : unknown"
     )
     print("\nRefresh works. A run can now outlive its token.")
-    print("Paste this into judge/.env as PULSE_AUTH_TOKEN to use it immediately:")
+    print("Paste this into .env as PULSE_AUTH_TOKEN to use it immediately:")
     print(f"\n{token}\n")
     return 0
 

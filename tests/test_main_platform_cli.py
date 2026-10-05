@@ -289,3 +289,76 @@ def test_dry_run_delete_needs_no_confirmation(fake_platform, capsys) -> None:
     main_module.run_dataset_delete(_args("dataset-delete", "--dry-run"))
 
     assert "nothing was sent" in capsys.readouterr().out
+
+
+def test_no_top_level_flag_shadows_a_passthrough_subcommand_flag() -> None:
+    """`judge` and `score` parse their own argv, so a top-level flag of the same
+    name is consumed by main.py's parser before it ever reaches them.
+
+    This is not hypothetical: adding `--run` for `anchors-export` silently broke
+    `score --run DOMAIN=RUN_ID`, which combined the most recent runs instead of
+    the pinned ones and gave no error at all.
+    """
+
+    from judge.cli import build_argparser as judge_parser
+    from main import build_parser
+    from scorecard.combine import build_argparser as score_parser
+
+    def flags(parser):
+        return {s for a in parser._actions for s in a.option_strings}
+
+    # --domain/--profile are shared on purpose: main.py forwards them.
+    allowed = {"-h", "--help", "--domain", "--profile"}
+    top = flags(build_parser())
+    for name, parser in (("judge", judge_parser()), ("score", score_parser())):
+        clash = (top & flags(parser)) - allowed
+        assert not clash, f"top-level flag(s) {sorted(clash)} shadow `{name}`'s own"
+
+
+def test_every_command_body_resolves_its_globals() -> None:
+    """A registered handler can be importable and still broken.
+
+    `judge-build-input` shipped calling `build_judge_input` with no import for
+    it: the module imported, the command appeared in `--help`, and the handler
+    was a perfectly valid callable — it raised NameError the moment it ran.
+    Checking that a command is registered does not check that it works, so this
+    reads each handler's referenced globals and confirms the module can supply
+    them, which costs nothing and catches a dead command without invoking it.
+    """
+
+    import builtins
+
+    available = set(vars(main_module)) | set(vars(builtins))
+    missing: dict[str, list[str]] = {}
+
+    for command, handler in COMMANDS.items():
+        code = getattr(handler, "__code__", None)
+        if code is None:  # a partial or callable object, nothing to inspect
+            continue
+        unresolved = sorted(
+            name
+            for name in code.co_names
+            # co_names also holds attribute names (`args.domain` -> "domain"),
+            # which are not globals; a global reference is loaded by LOAD_GLOBAL.
+            if name in _loaded_globals(code) and name not in available
+        )
+        if unresolved:
+            missing[command] = unresolved
+
+    assert not missing, f"commands referencing undefined globals: {missing}"
+
+
+def _loaded_globals(code) -> set[str]:
+    """The names a code object actually loads as globals, including nested defs."""
+
+    import dis
+
+    names = {
+        instruction.argval
+        for instruction in dis.get_instructions(code)
+        if instruction.opname in {"LOAD_GLOBAL", "STORE_GLOBAL", "DELETE_GLOBAL"}
+    }
+    for constant in code.co_consts:
+        if hasattr(constant, "co_names"):
+            names |= _loaded_globals(constant)
+    return names

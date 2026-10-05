@@ -1062,6 +1062,46 @@ def run_calibrate(args: argparse.Namespace) -> None:
         raise SystemExit(exit_code)
 
 
+def run_anchors_export(args: argparse.Namespace) -> None:
+    """Propose candidate anchors from a scored run as a CSV the graders fill in.
+
+    §10.2 needs human-graded anchors and nothing in the pipeline produced any —
+    which is why calibration, and therefore every release scorecard, has been
+    blocked. Sheet carries the evidence and none of the judge's own scores: a
+    grader shown the judge's 4 hands back a 4, and the measurement is agreement
+    between two independent opinions.
+    """
+
+    from judge.anchors_io import export_candidates
+
+    export_candidates(
+        args.domain,
+        run_id=args.from_run or None,
+        profile=args.profile,
+        count=args.count or None,
+        output=Path(args.sheet) if args.sheet else None,
+    )
+
+
+def run_anchors_import(args: argparse.Namespace) -> None:
+    """Ingest a filled grading sheet into judge/anchors/<domain>.json.
+
+    Grades must be RECONCILED between both graders before this runs — the
+    calibration module has no notion of per-grader votes. The set is checked for
+    §10.2 strength before it is written, so a set a constant-scoring judge would
+    pass is refused here rather than after a provider budget has been spent.
+    """
+
+    from judge.anchors_io import import_grades
+
+    import_grades(
+        args.domain,
+        Path(args.sheet),
+        output=Path(args.anchors_out) if args.anchors_out else None,
+        force=args.force,
+    )
+
+
 def run_rubric(args: argparse.Namespace) -> None:
     """Render the LLM-as-Judge rubric PDF deliverable (§14.1)."""
 
@@ -1102,6 +1142,8 @@ COMMANDS: dict[str, CommandHandler] = {
     "run-pipeline": run_pipeline,
     "score": run_score,
     "calibrate": run_calibrate,
+    "anchors-export": run_anchors_export,
+    "anchors-import": run_anchors_import,
     "rubric": run_rubric,
     "validate-relations": run_validate_relations,
     "validate-reproducibility": run_validate_reproducibility,
@@ -1131,6 +1173,41 @@ def build_parser() -> argparse.ArgumentParser:
         default="dev",
         choices=("dev", "full"),
         help="Generation profile to use. Defaults to dev.",
+    )
+    # NOT --run: `score --run DOMAIN=RUN_ID` is a passthrough flag, and a
+    # top-level flag of the same name is consumed by this parser first, which
+    # silently dropped the pin and combined the most recent runs instead.
+    parser.add_argument(
+        "--from-run",
+        default="",
+        help="anchors-export: run id to propose anchors from. Defaults to the "
+        "most recent scored run for the domain.",
+    )
+    parser.add_argument(
+        "--sheet",
+        default="",
+        help="anchors-export: where to write the grading sheet (defaults to the "
+        "run directory). anchors-import: the filled sheet to ingest — required.",
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=0,
+        help="anchors-export: how many candidates to propose. Defaults to two "
+        "above the domain's min_anchors, so a rejected anchor leaves headroom.",
+    )
+    # NOT --out, for the same reason: `score --out DIR` is a passthrough flag.
+    parser.add_argument(
+        "--anchors-out",
+        default="",
+        help="anchors-import: write the anchor set here instead of the "
+        "calibration.anchors_path configured for the domain.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="anchors-import: write an anchor set that fails the §10.2 strength "
+        "test anyway, as a work in progress. Calibration will still refuse it.",
     )
     parser.add_argument(
         "--version",
@@ -1191,6 +1268,10 @@ def build_parser() -> argparse.ArgumentParser:
 # a typo, and silently ignoring it would hide a mis-run release step.
 PASSTHROUGH_COMMANDS: frozenset[str] = frozenset({"judge", "score", "rubric"})
 
+# Commands that drive `PipelineReporter` themselves. Wrapping these again would
+# nest one reporter inside another and double every prefix.
+_SELF_REPORTING_COMMANDS: frozenset[str] = frozenset({"run-pipeline"})
+
 _HELP_FLAGS: frozenset[str] = frozenset({"-h", "--help"})
 
 
@@ -1239,10 +1320,39 @@ def main() -> None:
             print(f"[log] writing command output to {log_path}")
             try:
                 with use_release_version(args.release_version):
-                    COMMANDS[args.command](args)
+                    _dispatch(args)
             except Exception as exc:
                 print(f"ERROR: {exc}", file=sys.stderr)
                 raise SystemExit(1) from exc
+
+
+def _dispatch(args: argparse.Namespace) -> None:
+    """Run one command through the same reporter `run-pipeline` uses.
+
+    A single command used to be a raw tee of stdout and stderr, so the SAME
+    command produced two different log formats depending on how it was invoked:
+    plain text standalone, timestamped and levelled inside `run-pipeline`.
+    Anything reading these — a reviewer, a grep, a CI step — had to handle both,
+    and a standalone run had no levels at all, so a real error was just a line
+    of text.
+
+    `run-pipeline` manages its own reporter across six stages, so it is excluded
+    here rather than wrapped twice.
+    """
+
+    handler = COMMANDS[args.command]
+    if args.command in _SELF_REPORTING_COMMANDS:
+        handler(args)
+        return
+
+    reporter = PipelineReporter()
+    reporter.start(
+        domain=getattr(args, "domain", None) or "shared",
+        profile=getattr(args, "profile", None) or "-",
+        total_stages=1,
+    )
+    with reporter.stage(PipelineStage(1, 1, args.command, args.command)):
+        handler(args)
 
 
 if __name__ == "__main__":

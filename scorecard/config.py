@@ -1,9 +1,14 @@
-"""Scorecard configuration — report output paths, per domain.
+"""Scorecard output paths.
 
-Mirrors `judge/config.py`: `config/scorecard/default.json` holds the defaults and
-`config/scorecard/<domain>.json` carries only overrides, so a path can move
-without a code change. §13.1 lists `config/scorecard/` for exactly this, and its
-README names "report paths" as expected contents.
+Resolved through `qa_pairs.utils.release_bundle`, the pipeline's canonical
+locator for a release bundle — which also carries the fallback that still reads
+the retired domain-first layout.
+
+There used to be a `ScorecardConfig` here, fed by `config/scorecard/*.json`. Both
+resolvers below took it as an argument and ignored it, and the path templates it
+held were never interpolated, so editing that file changed nothing. A knob
+connected to nothing is worse than no knob, so it is gone; see
+config/scorecard/README.md.
 
 The §11 deliverables live apart from the judge's run artifacts on purpose. A
 scorecard is what goes to stakeholders and what §13.1 wants versioned in
@@ -14,50 +19,16 @@ without dragging ~11MB of platform payloads per run along with them.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from pydantic import BaseModel
 from qa_pairs.utils.release_bundle import component_dir
 from qa_pairs.utils.release_bundle import release_root
 
 MODULE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = MODULE_ROOT.parent
-CONFIGS_DIR = REPO_ROOT / "config" / "scorecard"
-DEFAULT_DOMAIN_CONFIG = "default"
 
 
-class ScorecardConfig(BaseModel):
-    """Resolved scorecard settings for one domain."""
-
-    # Where the §11 deliverables land. `{domain}` is interpolated; the path is
-    # relative to the repository root.
-    report_output_root: str = "release/{release_version}/{domain}/scorecard"
-    # A combined scorecard spans domains, so it cannot live under one domain's
-    # directory. This is the §14.1 artefact: one baseline across all domains.
-    combined_report_root: str = "release/{release_version}/scorecard"
-
-
-def _load_json(path: Path) -> dict:
-    if not path.is_file():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def load_scorecard_config(
-    domain: str, config_dir: Path | None = None
-) -> ScorecardConfig:
-    """Merge `default.json` with the `<domain>.json` override."""
-
-    root = config_dir or CONFIGS_DIR
-    base = _load_json(root / f"{DEFAULT_DOMAIN_CONFIG}.json")
-    override = _load_json(root / f"{domain}.json")
-    return ScorecardConfig(**{**base, **override})
-
-
-def report_output_dir(
-    domain: str, run_id: str, cfg: ScorecardConfig | None = None
-) -> Path:
+def report_output_dir(domain: str, run_id: str) -> Path:
     """Resolve where one run's §11 deliverables are written.
 
     Anchored at the repository root so a run launched from a subdirectory still
@@ -68,7 +39,7 @@ def report_output_dir(
     return component_dir(domain, "scorecard") / run_id
 
 
-def combined_report_dir(run_id: str, cfg: ScorecardConfig | None = None) -> Path:
+def combined_report_dir(run_id: str) -> Path:
     """Where a multi-domain scorecard is written.
 
     Deliberately not under `release/<version>/<domain>/` — a scorecard covering

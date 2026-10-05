@@ -7,7 +7,8 @@ models: every request goes to `floodgate.g.apple.com`, never to
 explicit lowest-common-denominator translation that drops prompt caching for
 Anthropic models and rejects `response_format`.
 
-Three Anthropic facts shape the class, and all three differ from `OpenAIJudge`:
+Three Anthropic facts shape the class, and all three differ from the
+OpenAI-shaped request this module replaced:
 
 * **No `seed`.** Determinism (§10.1) rests on `temperature=0` alone. The seed in
   `JudgeConfig` is not silently dropped — it warns, because a verdict that
@@ -171,7 +172,7 @@ class FloodgateJudge(BaseLLMJudge):
         # ones (Sonnet 5, Opus 4.7+) reject `temperature` outright on Bedrock:
         # "ValidationException: `temperature` is deprecated for this model".
         # Discovered once, serially, then degraded permanently — same shape as
-        # OpenAIJudge's parameter negotiation.
+        # the OpenAI-style parameter negotiation this replaced.
         self._send_temperature = True
         self._require_temp0 = config.require_temperature_zero
         self._probed = False
@@ -283,7 +284,7 @@ class FloodgateJudge(BaseLLMJudge):
         # Discover the temperature incompatibility once, serially, before the
         # concurrent workers start. Otherwise every worker independently trips
         # the same 400 and races on the flag — some succeed after retry, some
-        # fail, depending on ordering. Same reasoning as OpenAIJudge.
+        # fail, depending on ordering.
         if not self._probed:
             async with self._probe_lock:
                 if not self._probed:

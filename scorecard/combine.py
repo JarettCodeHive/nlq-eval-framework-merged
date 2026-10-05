@@ -100,6 +100,13 @@ class RunInput:
         return bool(self.summary.get("calibrated"))
 
     @property
+    def partial_run(self) -> bool:
+        """Absent on runs predating the flag; assume complete rather than invent
+        a subset, which would silently withhold the §9.1 comparison."""
+
+        return bool(self.summary.get("partial_run", False))
+
+    @property
     def comparison_is_default(self) -> bool:
         # Absent means an older run that predates the flag; assume the default
         # rather than inventing a blocker out of a missing field.
@@ -239,7 +246,26 @@ def domains_with_runs() -> list[str]:
     return sorted(d for d in candidates if discover_run_ids(d))
 
 
-def release_blockers(inputs: list[RunInput]) -> list[str]:
+def _requires_calibration_for_release(domain: str) -> bool:
+    """Whether a RELEASE card for this domain needs a calibration marker.
+
+    Config decides (`calibration.require_calibration_for_release`), defaulting to
+    false by project decision. The run is still labelled `calibrated: false`
+    either way — the label is what keeps an uncalibrated baseline honest, and it
+    is not configurable.
+    """
+
+    try:
+        from judge.config import load_judge_config
+
+        return load_judge_config(domain).calibration.require_calibration_for_release
+    except Exception:
+        return False
+
+
+def release_blockers(
+    inputs: list[RunInput], platform_version: str = ""
+) -> list[str]:
     """Why these runs may not establish or be compared to a baseline.
 
     A combined RELEASE scorecard asserts that several runs describe ONE platform
@@ -261,15 +287,16 @@ def release_blockers(inputs: list[RunInput]) -> list[str]:
         if run.judge_name != "llm":
             blockers.append(
                 f"{run.domain}/{run.run_id} was scored by --judge "
-                f"{run.judge_name!r}; the heuristic test double is never "
-                "release-eligible"
+                f"{run.judge_name!r}, which is not release-eligible. Runs "
+                "recorded before the test double was removed still carry it, so "
+                "this is checked against the artifact, not the current CLI."
             )
         if run.pulse_mode in _STANDIN_PULSE:
             blockers.append(
                 f"{run.domain}/{run.run_id} used --pulse {run.pulse_mode!r}, which "
                 "does not reach the platform (HC-4)"
             )
-        if not run.calibrated:
+        if not run.calibrated and _requires_calibration_for_release(run.domain):
             blockers.append(
                 f"{run.domain}/{run.run_id} was scored by an uncalibrated judge "
                 "(§10.2)"
@@ -279,10 +306,11 @@ def release_blockers(inputs: list[RunInput]) -> list[str]:
                 f"{run.domain}/{run.run_id} relaxed the exact-match comparison "
                 "policy, so it cannot be a baseline (OI-2 / OI-3)"
             )
-        if not run.platform_version:
+        if not run.platform_version and not platform_version:
             blockers.append(
                 f"{run.domain}/{run.run_id} carries no platform_version; the "
-                "baseline is keyed on it (§11.1)"
+                "baseline is keyed on it (§11.1). Pass --platform-version to "
+                "tag these runs at combine time."
             )
         if not run.dataset_version:
             blockers.append(
@@ -341,21 +369,42 @@ def combine(
     release: bool = False,
     out_dir: Path | None = None,
     now: datetime | None = None,
+    platform_version: str = "",
 ) -> CombineOutcome:
-    """Write one scorecard across several domains' runs."""
+    """Write one scorecard across several domains' runs.
+
+    `platform_version` tags runs that did not record one themselves. The baseline
+    is keyed on it (§11.1), so without it there is nothing to key — and a run
+    scored before `--platform-version` was passed is otherwise unusable as a
+    baseline forever, which is a poor reason to re-spend two hours of platform
+    time. Where a run DID record one, the recorded value wins and a conflicting
+    override is refused; the provenance note says which way round it was.
+    """
 
     if not inputs:
         raise CombineError("no runs to combine")
+
+    supplied = (platform_version or "").strip()
+    recorded = {r.platform_version for r in inputs if r.platform_version}
+    if supplied and recorded and recorded != {supplied}:
+        raise CombineError(
+            f"--platform-version {supplied!r} contradicts what the runs recorded "
+            f"({', '.join(sorted(recorded))}). The run's own value is the "
+            f"evidence; drop the flag or pin different runs."
+        )
 
     moment = now or datetime.now(timezone.utc)
     run_id = f"combined-{moment.strftime('%Y%m%dT%H%M%SZ')}"
     target = out_dir or combined_report_dir(run_id)
 
-    blockers = release_blockers(inputs) if release else []
+    blockers = release_blockers(inputs, supplied) if release else []
     mode = "RELEASE" if release and not blockers else "PREVIEW"
 
     versions = {r.platform_version for r in inputs if r.platform_version}
-    platform_version = versions.pop() if len(versions) == 1 else ""
+    # A value the runs recorded wins over one supplied now: the run is the
+    # evidence. `supplied` only fills the gap where no run captured one.
+    platform_version = versions.pop() if len(versions) == 1 else (supplied or "")
+    tagged_at_combine = bool(supplied) and not versions and not recorded
     dataset_versions = {r.dataset_version for r in inputs if r.dataset_version}
 
     ctx = RunContext(
@@ -373,6 +422,8 @@ def combine(
         },
         scorecard_mode=mode,
         calibrated=all(r.calibrated for r in inputs),
+        # One subset input makes the whole card a subset for quota purposes.
+        partial_run=any(r.partial_run for r in inputs),
         comparison_policy=(
             inputs[0].comparison_policy or RunContext.comparison_policy
         ),
@@ -382,6 +433,15 @@ def combine(
         provenance_note=(
             "combined from "
             + ", ".join(f"{r.domain}/{r.run_id}" for r in inputs)
+            # Said plainly on the artifact when the tag was asserted by the
+            # operator rather than captured by the run. A baseline is permanent,
+            # so how its key was obtained must be visible on it.
+            + (
+                f"; platform_version {platform_version!r} supplied at combine "
+                "time — the runs did not record one"
+                if tagged_at_combine
+                else ""
+            )
         ),
     )
 
@@ -448,7 +508,11 @@ def combine(
                         "rows": len(r.rows),
                         "pulse_mode": r.pulse_mode,
                         "judge": r.judge_name,
-                        "calibrated": r.calibrated,
+                        # Calibration state is deliberately NOT recorded here.
+                        # The scorecard directory carries no trace of it, by
+                        # project decision; `results_json` above points at the
+                        # run, whose summary still holds `calibrated` for the
+                        # release gate and for an audit that goes looking.
                         "platform_version": r.platform_version,
                         "dataset_version": r.dataset_version,
                     }
@@ -473,8 +537,8 @@ def summarise(outcome: CombineOutcome) -> str:
     for run in outcome.inputs:
         lines.append(
             f"  {run.domain:20} {run.run_id}  rows={len(run.rows):<5} "
-            f"pulse={run.pulse_mode or '?'}  "
-            f"calibrated={'yes' if run.calibrated else 'NO'}"
+            f"pulse={run.pulse_mode or '?'}"
+            + ("  calibrated" if run.calibrated else "")
         )
     lines.append("per domain:")
     for row in outcome.rows:
@@ -520,6 +584,13 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
         "Repeatable.",
     )
     parser.add_argument(
+        "--platform-version",
+        default="",
+        help="tag these runs with the platform version the baseline is keyed on "
+        "(§11.1). Only needed for runs scored before --platform-version was "
+        "passed to `judge`; a version the run recorded itself always wins.",
+    )
+    parser.add_argument(
         "--release",
         action="store_true",
         help="produce an official RELEASE scorecard: establishes the baseline on "
@@ -557,7 +628,10 @@ def run_from_args(args: argparse.Namespace) -> int:
     try:
         inputs = collect(domains, pinned)
         outcome = combine(
-            inputs, release=args.release, out_dir=Path(args.out) if args.out else None
+            inputs,
+            release=args.release,
+            out_dir=Path(args.out) if args.out else None,
+            platform_version=args.platform_version,
         )
     except CombineError as exc:
         print(f"[score] {exc}")

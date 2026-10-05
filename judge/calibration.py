@@ -50,16 +50,51 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from judge.contracts import DIMENSIONS, JudgeVerdict
 
+if TYPE_CHECKING:  # import cycle at runtime; the annotation is a string
+    from judge.config import CalibrationConfig
+
 MODULE_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = MODULE_ROOT.parent
+
+# Fallbacks only. The live values come from the `calibration` block of
+# config/judge/<domain>.json (see `thresholds_for`), so the §10.2 protocol is
+# reviewable without reading Python and a domain can carry its own paths. These
+# constants remain the spec's numbers, and remain what a caller with no config
+# gets — every one of them is a value the Execution Scope fixes, not a knob.
 ANCHORS_DIR = MODULE_ROOT / "anchors"
 CALIBRATION_DIR = MODULE_ROOT / ".calibration"
 
 ACCEPTANCE_MIN_ANCHORS = 10  # §10.2 "≥10 anchors per domain"
 ACCEPTANCE_AGREEMENT_PCT = 90.0  # §10.2 "within ±1 on ≥90% of anchors"
 DIRECTIONAL_FLIP_ALLOWED = False  # §10.2 "never disagrees on direction"
+
+
+def thresholds_for(domain: str) -> "CalibrationConfig":
+    """This domain's §10.2 settings, from `config/judge/<domain>.json`.
+
+    Falls back to the module defaults when the config cannot be read at all, so a
+    caller passing explicit directories (the tests, mostly) never depends on the
+    checked-in files.
+    """
+
+    from judge.config import CalibrationConfig, load_judge_config
+
+    try:
+        return load_judge_config(domain).calibration
+    except Exception:
+        return CalibrationConfig()
+
+
+def anchors_path_for(domain: str, anchors_dir: Path | None = None) -> Path:
+    """Where this domain's human-graded anchors live."""
+
+    if anchors_dir is not None:
+        return anchors_dir / f"{domain}.json"
+    return REPO_ROOT / thresholds_for(domain).anchors_path.format(domain=domain)
 
 # §10.2 "spanning the score range — not 10 easy passes", operationalised. Both
 # conditions must hold per dimension:
@@ -161,9 +196,9 @@ def _is_directional_flip(human: int, judge: int) -> bool:
 
 
 def load_anchors(domain: str, anchors_dir: Path | None = None) -> list[dict]:
-    path = (anchors_dir or ANCHORS_DIR) / f"{domain}.json"
+    path = anchors_path_for(domain, anchors_dir)
     if not path.is_file():
-        available = sorted(p.stem for p in (anchors_dir or ANCHORS_DIR).glob("*.json"))
+        available = sorted(p.stem for p in path.parent.glob("*.json"))
         raise FileNotFoundError(
             f"No calibration anchors for domain={domain!r} at {path}.\n"
             "Populate this file from the human calibration session (§10.2). "
@@ -310,7 +345,9 @@ class CalibrationState:
 
 
 def _marker_path(domain: str, calibration_dir: Path | None = None) -> Path:
-    return (calibration_dir or CALIBRATION_DIR) / f"{domain}.passed.json"
+    if calibration_dir is not None:
+        return calibration_dir / f"{domain}.passed.json"
+    return REPO_ROOT / thresholds_for(domain).marker_path.format(domain=domain)
 
 
 def check_calibrated(
@@ -382,8 +419,10 @@ def record_passed(
     payload = {
         "domain": domain,
         "passed_at_utc": datetime.now(timezone.utc).isoformat(),
-        "acceptance_threshold_pct": ACCEPTANCE_AGREEMENT_PCT,
-        "min_anchors": ACCEPTANCE_MIN_ANCHORS,
+        # The thresholds this pass was earned under. A marker that does not carry
+        # them cannot be re-checked after someone edits the config.
+        "acceptance_threshold_pct": thresholds_for(domain).agreement_pct,
+        "min_anchors": thresholds_for(domain).min_anchors,
         # A pass belongs to one judge, not to the domain in the abstract.
         "judge_fingerprint": fingerprint.as_dict(),
         "result": result.as_dict(),

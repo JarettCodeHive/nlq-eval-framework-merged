@@ -15,8 +15,7 @@ flowchart LR
   A2 --> B
 
   B[judge.cli.run_from_args] --> C{--judge?}
-  C -- heuristic --> D[HeuristicJudge<br/>test double — CI/dev]
-  C -- llm  --> E[OpenAIJudge<br/>Azure / OpenAI]
+  C -- llm  --> E[FloodgateJudge<br/>Anthropic via Floodgate]
   E --> G[Calibration gate<br/>§10.2]
   G -- uncalibrated & no override --> X[Refuse to run]
 
@@ -55,7 +54,7 @@ flowchart TD
   D --> F[JudgeCache lookup<br/>sha256 over prompt + model]
   E --> F
   F -- hit  --> H[JudgeVerdict cached=true]
-  F -- miss --> G[LLM call  Azure / OpenAI]
+  F -- miss --> G[LLM call  Floodgate]
   G --> I[Parse JSON<br/>schema-validate<br/>1–5 range check]
   I --> J[JudgeVerdict cached=false]
   J --> K[Cache write]
@@ -152,7 +151,7 @@ flowchart LR
 | Diagram box | Source file |
 |---|---|
 | `run_from_args` | [`judge/cli.py`](../judge/cli.py) |
-| `HeuristicJudge` / `OpenAIJudge` | [`judge/heuristic_judge.py`](../judge/heuristic_judge.py), [`judge/openai_judge.py`](../judge/openai_judge.py) |
+| `FloodgateJudge` | [`judge/floodgate_judge.py`](../judge/floodgate_judge.py), [`judge/llm_judge.py`](../judge/llm_judge.py) |
 | `SQLPulse` / `PulseClient` | [`judge/sql_pulse.py`](../judge/sql_pulse.py), [`judge/pulse_client.py`](../judge/pulse_client.py) |
 | Calibration gate | [`judge/calibration.py`](../judge/calibration.py) |
 | Prompt renderer | [`judge/prompts.py`](../judge/prompts.py), templates under [`judge/templates/judge/`](../judge/templates/judge/) |

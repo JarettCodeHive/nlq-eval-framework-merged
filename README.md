@@ -157,7 +157,7 @@ the command exits non-zero.
 > the platform manifest. Use `dataset-delete --yes` for deliberate manual
 > cleanup of retained data.
 
-Before running it, configure `judge/.env` and verify both the judge-provider and
+Before running it, configure `.env` at the repository root and verify both the judge-provider and
 Pulse credentials:
 
 ```bash
@@ -229,38 +229,71 @@ rephrase-group variants; review-only seed fixtures remain a separate command.
 
 ### Judge and Scorecard Workflow
 
-Before a live judge run, copy `judge/.env.example` to `judge/.env`, add the
-judge-provider and Pulse credentials, and verify both connections:
+Before a live judge run, copy `.env.example` to `.env` **at the repository root**
+— one file configures the judge, the Pulse client and the Studio uploader — then
+add the credentials and verify both connections:
 
 ```bash
 python main.py check-auth --domain crm
 ```
 
-After `qa-build`, the judge input can be built explicitly. This step is useful
-for inspection but optional because `judge` builds the input on demand:
+#### Getting the Pulse credentials
+
+There is no API-key page; every value is captured from a browser session. Sign in
+to Claris Studio QA in Chrome, open a chat, open DevTools → Network. **Two
+requests carry everything.**
+
+**1. `GET https://api-qa.platform.claris.com/org/<ORG_ID>/chat?query=<base64>`**
+— the chat-history request the UI fires whenever a chat is open.
+
+- `PULSE_AUTH_TOKEN` — the `Authorization: Bearer …` request header (~1 hour life)
+- `PULSE_ORG_ID` — the integer path segment, `/org/<ORG_ID>/chat` (QA: `4104`)
+
+**2. `POST https://api-qa.platform.claris.com/auth/token`** — read the **request
+body**, not a header, and not the response.
+
+- `PULSE_REFRESH_TOKEN` — the long-lived Cognito refresh token. With it the client
+  re-mints hour-long tokens by itself, which is what makes a 2-hour run possible.
+- `PULSE_COGNITO_CLIENT_ID` — the `clientID` field in the same body.
+
+Verify the chain before a long run: `python judge/pulse_auth.py --probe`
+
+> **Corporate network — three hosts must be reachable**, each a separate
+> allowlist entry: `cognito-idp.us-west-2.amazonaws.com` (Cognito refresh),
+> `studio-qa.platform.claris.com` (token exchange), and
+> `api-qa.platform.claris.com` (the chat endpoint). A blocked `studio-qa` is the
+> one that bites — it is only reached after Cognito succeeds, so the failure reads
+> as a platform fault rather than a missing entry. `floodgate.g.apple.com` is
+> needed for the judge, separately.
+
+Run an offline check that replays each pair's `reference_sql` in DuckDB, or a
+three-question live preview:
 
 ```bash
-python main.py judge-build-input --domain crm --profile dev
-```
-
-Run an offline development check with the heuristic test double and local SQL,
-or run a three-question live LLM preview:
-
-```bash
-python main.py judge --domain crm --profile dev --judge heuristic --pulse sql
-python main.py judge --domain crm --profile dev --judge llm --pulse live \
+python main.py judge --domain crm --profile dev --pulse sql
+python main.py judge --domain crm --profile dev --pulse live \
   --limit 3 --allow-uncalibrated
 ```
 
-The heuristic judge is for development only. An uncalibrated LLM run is also a
-preview and must not be used for an official scorecard. Once independently
-reviewed anchors are available, calibrate the configured judge before a release
-run:
+Anthropic via Floodgate is the only judge backend, so `--pulse sql` still spends
+provider quota — it verifies that pairs and dataset agree (§14.2) and never
+scores the platform, which is why its runs are PREVIEW-only.
+
+An uncalibrated run is a preview and is labelled `calibrated: false` on every
+artifact. Calibration needs ≥10 human-graded anchors per domain (§10.2); export
+candidates from a scored run, grade them, import them back:
 
 ```bash
+python main.py anchors-export --domain crm --profile full
+# fill the human_* columns, reconcile between BOTH graders, then:
+python main.py anchors-import --domain crm --sheet <the filled sheet>
 python main.py calibrate --domain crm
 python main.py rubric
 ```
+
+The grading sheet deliberately carries no judge scores — a grader shown the
+judge's 4 hands back a 4, and the measurement is agreement between two
+independent opinions. Import refuses a set a constant-scoring judge would pass.
 
 To combine completed per-domain judge runs into a preview scorecard, use:
 
