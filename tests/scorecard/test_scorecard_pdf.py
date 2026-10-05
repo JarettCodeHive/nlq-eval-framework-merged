@@ -147,7 +147,7 @@ def test_below_the_gate_raises_a_warning() -> None:
 
     alerts = _warnings(_ctx(), rows, comparisons)
 
-    assert any("ACCURACY GATE" in a and "§14.2" in a for a in alerts)
+    assert any("ACCURACY GATE" in a and "Section 14.2" in a for a in alerts)
 
 
 def test_at_the_gate_raises_no_accuracy_warning() -> None:
@@ -170,7 +170,7 @@ def test_clarifications_are_flagged_as_a_denominator_exclusion() -> None:
 
     exclusion = next(a for a in alerts if "declined" in a)
     assert "EXCLUDED" in exclusion
-    assert "§14.2 condition 4" in exclusion
+    assert "Section 14.2 condition 4" in exclusion
     assert "3 question(s)" in exclusion
 
 
@@ -322,8 +322,12 @@ def test_the_pdf_contains_no_missing_glyph_boxes(tmp_path: Path) -> None:
 
     for box in ("■", "□", "�"):
         assert box not in text, f"missing-glyph box {box!r} rendered"
-    # And the characters we DO rely on survive the round trip.
-    assert "§" in text
+    # The document no longer depends on a special character at all: the section
+    # sign was correct, embedded, and STILL read as a box in a viewer, so the
+    # references are spelled out. A stakeholder report is the wrong place to be
+    # defending a glyph.
+    assert "§" not in text, "the section sign is back; spell it out instead"
+    assert "Section 14.2" in text
 
 
 def _page_geometry(path: Path) -> tuple[tuple[float, float] | None, list[float]]:

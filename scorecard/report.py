@@ -1,7 +1,7 @@
-"""Human-readable scorecard renders — Markdown (PR inline) and PDF (§11.3).
+"""Human-readable scorecard renders — Markdown (PR inline) and PDF (Section 11.3).
 
 Same aggregation as ``scorecard.summary``; exact-match and judge scores are
-shown side by side and never blended (§11.3).
+shown side by side and never blended (Section 11.3).
 """
 
 from __future__ import annotations
@@ -22,11 +22,11 @@ def _register_report_fonts() -> tuple[str, str, str]:
 
     The built-in Helvetica is one of the PDF standard-14 faces, which are NOT
     embedded: the viewer substitutes a local font, and a substitute missing a
-    glyph draws a box. That is why `§` — a perfectly ordinary WinAnsi character —
+    glyph draws a box. That is why `Section ` — a perfectly ordinary WinAnsi character —
     came out broken on another machine while extracting fine here.
 
     Bitstream Vera ships inside reportlab itself, so embedding it needs no system
-    font and behaves identically on a developer Mac and in CI. It covers §, ≥, ±,
+    font and behaves identically on a developer Mac and in CI. It covers Section , ≥, ±,
     the em dash and the middle dot. It does NOT cover U+25CF or U+26A0, so those
     are not used anywhere in this module — see `_CHIP`.
 
@@ -87,7 +87,7 @@ _FONT, _FONT_BOLD, _FONT_ITALIC = _register_report_fonts()
 # present and reads the same at 8pt beside a number.
 _CHIP = "&#8226;"
 
-# §14.2 condition 1: the package does not ship below this. The PDF colours
+# Section 14.2 condition 1: the package does not ship below this. The PDF colours
 # against it so a reader sees pass/fail rather than a number needing context.
 ACCURACY_GATE_PCT: float = 95.0
 
@@ -107,7 +107,7 @@ _INK_MUTED = "#52514e"
 
 
 def _status_fill(pct: object) -> str:
-    """Status role for an accuracy figure, banded against the §14.2 gate."""
+    """Status role for an accuracy figure, banded against the Section 14.2 gate."""
 
     if not isinstance(pct, (int, float)):
         return _INK_MUTED
@@ -118,6 +118,27 @@ def _status_fill(pct: object) -> str:
     if pct >= 50:
         return _STATUS_SERIOUS
     return _STATUS_CRITICAL
+
+
+_VERDICT_INK: dict[str, str] = {
+    # Good
+    "MEETS GATE": "#1b7f3b",
+    "NO REGRESSION": "#1b7f3b",
+    "PASS": "#1b7f3b",
+    "YES": "#1b7f3b",
+    # Bad
+    "BELOW GATE": "#b42318",
+    "REGRESSION": "#b42318",
+    "FAIL": "#b42318",
+    "NO": "#b42318",
+    "DISAGREEMENT": "#9a6700",
+}
+
+
+def _verdict_hex(verdict: str) -> str:
+    """Text-safe ink for a verdict word. A plain count falls back to ink."""
+
+    return _VERDICT_INK.get(str(verdict).strip(), _INK)
 
 
 def _pct_ink_hex(pct: object) -> str:
@@ -154,9 +175,9 @@ def _domain_label(domain: object) -> str:
 
 
 # The single wide table was 18 columns at 7.5pt — technically complete and
-# practically unreadable. The PDF splits it the way §11.3 says the two scores
+# practically unreadable. The PDF splits it the way Section 11.3 says the two scores
 # are used: deterministic accuracy and judge quality, side by side, never
-# blended. The CSV keeps every §11.1 column in one row for machines.
+# blended. The CSV keeps every Section 11.1 column in one row for machines.
 _EXACT_COLUMNS: list[str] = [
     "domain",
     "tier",
@@ -251,17 +272,17 @@ def _header_lines(ctx: RunContext, comparisons: dict) -> list[str]:
     if ctx.scorecard_mode != "RELEASE":
         lines.append(
             "_PREVIEW run — not an official evaluation. Does not establish or "
-            "update a baseline and must not certify a release (§10.2, §11.3)._"
+            "update a baseline and must not certify a release (Section 10.2, Section 11.3)._"
         )
     if not ctx.judge_temperature_enforced:
         lines.append(
             "**judge determinism: temperature 0 was NOT enforced** — the model "
-            "refused it; this run rests on the fixed seed (§10.1)"
+            "refused it; this run rests on the fixed seed (Section 10.1)"
         )
     if not ctx.judge_seed_enforced:
         lines.append(
             "**judge determinism: the configured seed never reached the provider** "
-            "— see `judge_seed_enforced` (§10.1 'where supported')"
+            "— see `judge_seed_enforced` (Section 10.1 'where supported')"
         )
     lines.append(f"exact-match comparison: `{ctx.comparison_policy}`")
     if not ctx.comparison_is_default:
@@ -272,7 +293,7 @@ def _header_lines(ctx: RunContext, comparisons: dict) -> list[str]:
     if ctx.provenance_note:
         lines.append(f"assembled: {ctx.provenance_note}")
     for finding in ctx.rephrase_findings:
-        lines.append(f"**⚠ rephrase-group finding (§9.5): {finding}**")
+        lines.append(f"**⚠ rephrase-group finding (Section 9.5): {finding}**")
     if flagged:
         lines.append(
             f"**⚠ REGRESSION FLAG: {', '.join(flagged)}** (domain drop ≥ 5 pp vs baseline)"
@@ -302,19 +323,19 @@ def write_scorecard_md(
         )
     lines += [
         "",
-        "_Exact-match (§HC-3, zero numeric tolerance) and judge scores (1–5) are "
-        "reported side by side and never combined into a composite (§11.3). "
+        "_Exact-match (HC-3, zero numeric tolerance) and judge scores (1–5) are "
+        "reported side by side and never combined into a composite (Section 11.3). "
         "Baseline comparison and the regression flag are domain-level; tier rows "
         "are diagnostic. `exact_match_not_applicable` counts pairs with no "
         "deterministic core — they are outside the percentage, so a rise there is "
-        "not a rise in accuracy (§14.2 condition 4). `exact_match_clarification` "
+        "not a rise in accuracy (Section 14.2 condition 4). `exact_match_clarification` "
         "counts questions the platform declined to answer, asking a clarifying "
-        "question instead (§2e); they are outside the percentage for the same "
+        "question instead (Section 2e); they are outside the percentage for the same "
         f"reason, and are scored at a fixed {CLARIFICATION_SCORE} with no "
         "dimensions — which is why `judge_overall` is a mean over "
         "`judge_clarifications` more rows than the dimension columns are. "
         "`null_handling_fail` is the "
-        "§9.2 T3 diagnostic and is never part of either score._",
+        "Section 9.2 T3 diagnostic and is never part of either score._",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -391,7 +412,7 @@ def _notices(
             (
                 "critical",
                 f"REGRESSION: {', '.join(flagged)} dropped 5 pp or more against "
-                "baseline (§11.3).",
+                "baseline (Section 11.3).",
             )
         )
 
@@ -405,7 +426,7 @@ def _notices(
                     "critical",
                     f"ACCURACY GATE: {row['domain']} is at {pct:.2f}% against the "
                     f"{ACCURACY_GATE_PCT:.0f}% required before the package ships "
-                    "(§14.2 condition 1).",
+                    "(Section 14.2 condition 1).",
                 )
             )
         clarified = row.get("exact_match_clarification") or 0
@@ -417,7 +438,7 @@ def _notices(
                     "platform, scored at a fixed "
                     f"{CLARIFICATION_SCORE} and EXCLUDED from the exact-match "
                     "denominator — so the percentage covers fewer questions than "
-                    "were asked (§14.2 condition 4).",
+                    "were asked (Section 14.2 condition 4).",
                 )
             )
 
@@ -431,14 +452,14 @@ def _notices(
         )
 
     for finding in ctx.rephrase_findings:
-        caution.append(("caution", f"Rephrase-group finding (§9.5): {finding}"))
+        caution.append(("caution", f"Rephrase-group finding (Section 9.5): {finding}"))
 
     if ctx.scorecard_mode != "RELEASE":
         info.append(
             (
                 "info",
                 "PREVIEW run — not an official evaluation. It neither establishes "
-                "nor updates a baseline and cannot certify a release (§10.2, §11.3).",
+                "nor updates a baseline and cannot certify a release (Section 10.2, Section 11.3).",
             )
         )
     if ctx.provenance_note:
@@ -448,7 +469,7 @@ def _notices(
 
 
 def _pct_colour(value: object):
-    """Red / amber / green against the §14.2 gate."""
+    """Red / amber / green against the Section 14.2 gate."""
 
     from reportlab.lib import colors
 
@@ -705,7 +726,7 @@ def _dimension_chart(rows: list[dict], domain: str, *, width: float, height: flo
 
     drawing = Drawing(width, height)
     # Recessive grid at each rubric anchor. 1, 3 and 5 are the scored anchors in
-    # §10; 2 and 4 are interpolated, so they are ticked but not labelled.
+    # Section 10; 2 and 4 are interpolated, so they are ticked but not labelled.
     for score in (1, 2, 3, 4, 5):
         x = left + plot_w * (score - 1) / 4
         drawing.add(Line(x, bottom, x, bottom + plot_h,
@@ -734,7 +755,7 @@ def _dimension_chart(rows: list[dict], domain: str, *, width: float, height: flo
 
 
 def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
-    """Per-tier accuracy as horizontal bars against the §14.2 gate.
+    """Per-tier accuracy as horizontal bars against the Section 14.2 gate.
 
     FORM. The data's job is magnitude against a threshold, for five ordinal
     categories — so: bars, one axis, a rule at the gate. Horizontal because the
@@ -823,7 +844,7 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
     )
     drawing.add(
         String(gate_x, bottom + plot_h + 6,
-               f"{ACCURACY_GATE_PCT:.0f}% gate (§14.2)",
+               f"{ACCURACY_GATE_PCT:.0f}% gate (Section 14.2)",
                fontName=_FONT_BOLD, fontSize=6.5,
                fillColor=colors.HexColor(_INK), textAnchor="middle")
     )
@@ -835,13 +856,13 @@ def platform_findings(
 ) -> list[tuple[str, str, str]]:
     """What this run observed about the PLATFORM, as (finding, verdict, basis).
 
-    This replaced a table of §14.2's nine ship conditions. Seven of those nine
+    This replaced a table of Section 14.2's nine ship conditions. Seven of those nine
     describe our own deliverables — an independent reviewer re-executing the
     reference SQL, cross-domain question uniqueness, a clean-room byte-identical
     regeneration, whether a failing pair was reworked rather than removed. None of
     them say anything about how Pulse answered, and printing them on a card the
     Platform Owner reads as a verdict on their platform confuses the evaluation
-    framework with the thing being evaluated. They belong in the §14.1 QA audit
+    framework with the thing being evaluated. They belong in the Section 14.1 QA audit
     report, which is a separate deliverable.
 
     What is left here is only what the run can assert about the system under
@@ -897,7 +918,7 @@ def platform_findings(
     if clarified:
         out.append(
             (
-                "Questions the platform declined to answer (§2e)",
+                "Questions the platform declined to answer (Section 2e)",
                 f"{clarified}",
                 "answered with a clarifying question instead; scored at a fixed "
                 f"{CLARIFICATION_SCORE} and held outside the percentage",
@@ -907,7 +928,7 @@ def platform_findings(
     nulls = sum(int(r.get("null_handling_fail") or 0) for r in domain_rows)
     out.append(
         (
-            "NULL / outer-join handling (§9.2, T3)",
+            "NULL / outer-join handling (Section 9.2, T3)",
             "PASS" if not nulls else "FAIL",
             "outer-join questions preserved the rows an outer join preserves"
             if not nulls
@@ -919,7 +940,7 @@ def platform_findings(
     if ctx.rephrase_findings:
         out.append(
             (
-                "Rephrase-group agreement (§9.5)",
+                "Rephrase-group agreement (Section 9.5)",
                 "DISAGREEMENT",
                 "; ".join(str(f) for f in ctx.rephrase_findings)[:160],
             )
@@ -940,7 +961,7 @@ def failure_reasons(
     that said nothing. Quoted literals are therefore collapsed.
 
     The full per-question detail, with its platform SQL, stays in
-    question_results.csv (§14.2 condition 5); this is only the shape of it.
+    question_results.csv (Section 14.2 condition 5); this is only the shape of it.
     """
 
     import re
@@ -971,7 +992,7 @@ def write_scorecard_pdf(
     *,
     baseline: dict | None = None,
 ) -> Path:
-    """The §11.3 PDF summary — for a human deciding something, not a data dump.
+    """The Section 11.3 PDF summary — for a human deciding something, not a data dump.
 
     Structure follows what a reader needs in order: the headline number against
     the gate, anything alarming, where the run came from, then the detail split
@@ -1298,21 +1319,35 @@ def write_scorecard_pdf(
     )
     story.append(prov)
 
-    # --- ship / do-not-ship, against §14.2 --------------------------------
+    # --- ship / do-not-ship, against Section 14.2 --------------------------------
     checks = platform_findings(ctx, rows, comparisons)
-    verdict_ink = {
-        "PASS": colors.HexColor("#1b7f3b"),
-        "FAIL": colors.HexColor("#b42318"),
-        "AT RISK": colors.HexColor("#9a6700"),
-        "REVIEW": colors.HexColor("#9a6700"),
-        "NOT YET": colors.HexColor("#42506b"),
-        "MANUAL": colors.HexColor(_INK_MUTED),
-        "NOT COVERED": colors.HexColor(_INK_MUTED),
-    }
+    # Every cell is a Paragraph: a raw string in a reportlab Table does not
+    # wrap, it overflows the column. The basis text runs to ~100 characters.
+    finding_cell = ParagraphStyle(
+        "finding", parent=body, fontSize=8, leading=10, alignment=TA_LEFT
+    )
+    verdict_cell = ParagraphStyle(
+        "verdict", parent=body, fontName=_FONT_BOLD, fontSize=8, leading=10
+    )
     gate_table = Table(
-        [["what this run observed about the platform", "verdict", "basis"]]
-        + [[c, v, note] for c, v, note in checks],
-        colWidths=[3.3 * inch, 0.95 * inch, 5.85 * inch],
+        [
+            [
+                Paragraph("<b>what this run observed about the platform</b>", finding_cell),
+                Paragraph("<b>verdict</b>", finding_cell),
+                Paragraph("<b>basis</b>", finding_cell),
+            ]
+        ]
+        + [
+            [
+                Paragraph(c, finding_cell),
+                Paragraph(
+                    f'<font color="{_verdict_hex(v)}">{v}</font>', verdict_cell
+                ),
+                Paragraph(note, finding_cell),
+            ]
+            for c, v, note in checks
+        ],
+        colWidths=[3.1 * inch, 1.45 * inch, 5.55 * inch],
         hAlign="LEFT",
         repeatRows=1,
     )
@@ -1328,11 +1363,6 @@ def write_scorecard_pdf(
         ("TOPPADDING", (0, 0), (-1, -1), 2.5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
     ]
-    for index, (_c, verdict, _n) in enumerate(checks, start=1):
-        gate_style.append(
-            ("TEXTCOLOR", (1, index), (1, index),
-             verdict_ink.get(verdict, colors.HexColor(_INK)))
-        )
     gate_table.setStyle(TableStyle(gate_style))
     story.append(
         KeepTogether(
@@ -1358,7 +1388,7 @@ def write_scorecard_pdf(
                         "<i>The accuracy percentage counts only questions with a "
                         "deterministic core that the platform actually answered. "
                         "Declined questions and errors sit outside it, so this is "
-                        "where they are visible (§14.2 condition 4).</i>",
+                        "where they are visible (Section 14.2 condition 4).</i>",
                         body,
                     ),
                 ]
@@ -1384,12 +1414,12 @@ def write_scorecard_pdf(
     if any(r["tier"] == "ALL" for r in rows):
         story.append(
             Paragraph(
-                "<i>The §10 rubric, 1–5, averaged over the domain. The gap between "
+                "<i>The Section 10 rubric, 1–5, averaged over the domain. The gap between "
                 "SQL plausibility and factual correctness is the useful read: a high "
                 "SQL score beside a low factual score means the platform is writing "
                 "credible queries and still returning the wrong number, which is a "
                 "different problem from writing a query that cannot answer the "
-                "question. Never blended with exact-match (§11.3).</i>",
+                "question. Never blended with exact-match (Section 11.3).</i>",
                 body,
             )
         )
@@ -1446,7 +1476,7 @@ def write_scorecard_pdf(
                 "<i>Grouped by kind — quoted and numeric literals are collapsed, so "
                 "one finding seen many times reads as one row. Every "
                 "failure's full detail and its platform-generated SQL are in "
-                "question_results.csv (§14.2 condition 5).</i>",
+                "question_results.csv (Section 14.2 condition 5).</i>",
                 body,
             )
         )
@@ -1455,7 +1485,7 @@ def write_scorecard_pdf(
     story.append(
         KeepTogether(
             [
-                Paragraph("Deterministic accuracy (§HC-3, zero numeric tolerance)", section),
+                Paragraph("Deterministic accuracy (HC-3, zero numeric tolerance)", section),
                 _table(rows, _EXACT_COLUMNS, highlight_pct=True),
             ]
         )
@@ -1463,7 +1493,7 @@ def write_scorecard_pdf(
     story.append(
         KeepTogether(
             [
-                Paragraph("Judge quality (1–5 per dimension, §10)", section),
+                Paragraph("Judge quality (1–5 per dimension, Section 10)", section),
                 _table(rows, _JUDGE_TABLE_COLUMNS, highlight_pct=False),
             ]
         )
@@ -1477,13 +1507,13 @@ def write_scorecard_pdf(
             Spacer(1, 0.12 * inch),
             Paragraph(
                 "<i>Exact-match and judge scores are reported side by side and never "
-            "combined into a composite (§11.3) — they measure different things. "
+            "combined into a composite (Section 11.3) — they measure different things. "
             "Baseline comparison and the regression flag are domain-level; tier "
             "rows are diagnostic. <b>n/a</b> counts pairs with no deterministic "
             "core and <b>clarified</b> counts questions the platform declined to "
             "answer; both sit outside the percentage, so a rise in either is not a "
-            "rise in accuracy (§14.2 condition 4). <b>null-handling</b> is the "
-                "§9.2 T3 diagnostic and is never part of either score.</i>",
+            "rise in accuracy (Section 14.2 condition 4). <b>null-handling</b> is the "
+                "Section 9.2 T3 diagnostic and is never part of either score.</i>",
                 body,
             ),
         ]
@@ -1494,7 +1524,7 @@ def write_scorecard_pdf(
 
         A scorecard gets printed and passed around; a loose page with no run id on
         it cannot be traced back to the run that produced it, which is the whole
-        point of §11.1 carrying both version tags.
+        point of Section 11.1 carrying both version tags.
         """
 
         canvas.saveState()
