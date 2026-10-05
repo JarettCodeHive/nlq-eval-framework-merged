@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS order_count
+FROM orders o
+LEFT JOIN warehouses w ON o.warehouse_id = w.warehouse_id
+WHERE o.status = {{ order_status | sqlstr }} AND w.warehouse_id IS NULL;

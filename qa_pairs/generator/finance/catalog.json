@@ -1,0 +1,12 @@
+{
+  "_doc": "param name -> SQL that lists its allowed values (from the real data, never invented), or a literal list for non-column params.",
+  "account_type": "SELECT DISTINCT account_type FROM accounts ORDER BY 1",
+  "account_subtype": "SELECT DISTINCT account_subtype FROM accounts WHERE account_subtype IS NOT NULL ORDER BY 1",
+  "account_currency": "SELECT DISTINCT currency_code FROM accounts ORDER BY 1",
+  "normal_balance": "SELECT DISTINCT normal_balance FROM accounts ORDER BY 1",
+  "source_system": "SELECT DISTINCT source_system FROM transactions ORDER BY 1",
+  "source_currency": "SELECT DISTINCT source_currency FROM transactions ORDER BY 1",
+  "posting_type": "SELECT DISTINCT posting_type FROM ledger_entries ORDER BY 1",
+  "scenario": "SELECT DISTINCT scenario FROM budgets ORDER BY 1",
+  "rate_source": "SELECT DISTINCT rate_source FROM fx_rates ORDER BY 1"
+}

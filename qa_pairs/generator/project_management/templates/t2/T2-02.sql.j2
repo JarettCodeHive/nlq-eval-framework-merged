@@ -1,0 +1,4 @@
+SELECT ROUND(SUM(t.estimate_hours), 2) AS total_estimate_hours
+FROM tasks t
+INNER JOIN projects p ON t.project_id = p.project_id
+WHERE p.priority = {{ project_priority | sqlstr }};

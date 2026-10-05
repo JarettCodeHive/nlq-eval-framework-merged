@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS project_count
+FROM projects p
+LEFT JOIN tasks t ON p.project_id = t.project_id
+WHERE p.status = {{ project_status | sqlstr }} AND t.task_id IS NULL;

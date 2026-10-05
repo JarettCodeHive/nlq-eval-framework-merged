@@ -1,0 +1,4 @@
+SELECT ROUND(SUM(te.hours), 2) AS total_hours
+FROM time_entries te
+INNER JOIN tasks t ON te.task_id = t.task_id
+WHERE t.status = {{ task_status | sqlstr }};

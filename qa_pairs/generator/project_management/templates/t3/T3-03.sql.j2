@@ -1,0 +1,6 @@
+SELECT COUNT(*) AS overdue_task_count
+FROM tasks t
+INNER JOIN projects p ON t.project_id = p.project_id
+WHERE p.status = {{ project_status | sqlstr }}
+  AND t.due_date < DATE '2026-08-01'
+  AND t.completed_date IS NULL;

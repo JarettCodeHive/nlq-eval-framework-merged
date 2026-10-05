@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS transaction_count
+FROM transactions
+WHERE source_system = {{ source_system | sqlstr }};

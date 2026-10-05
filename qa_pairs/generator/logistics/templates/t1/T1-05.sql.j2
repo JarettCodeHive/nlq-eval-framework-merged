@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS shipment_count
+FROM shipments
+WHERE status = {{ shipment_status | sqlstr }};

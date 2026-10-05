@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS shipment_count
+FROM shipments s
+INNER JOIN carriers c ON s.carrier_id = c.carrier_id
+WHERE c.service_level = {{ service_level | sqlstr }};

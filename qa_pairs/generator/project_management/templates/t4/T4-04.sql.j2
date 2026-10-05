@@ -1,0 +1,6 @@
+SELECT CASE WHEN te.billable THEN 'billable' ELSE 'non_billable' END AS entity, COUNT(*) AS metric
+FROM time_entries te
+INNER JOIN resources r ON te.resource_id = r.resource_id
+WHERE r.department = {{ department | sqlstr }}
+GROUP BY entity
+ORDER BY entity;

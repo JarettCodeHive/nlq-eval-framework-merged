@@ -21,6 +21,25 @@ from qa_pairs.generator.crm.generate_crm import build as stage_crm_qa_dataset
 from qa_pairs.generator.crm.rephrase import generate_rephrases
 from qa_pairs.generator.crm.scale_pairs import generate_pairs as generate_crm_pairs
 from qa_pairs.generator.crm.validate_crm import validate as validate_crm_qa_dataset
+from qa_pairs.generator.finance.generate_finance import build as stage_finance_qa_dataset
+from qa_pairs.generator.finance.scale_pairs_finance import (
+    generate_pairs as generate_finance_pairs,
+)
+from qa_pairs.generator.finance.validate_finance import validate as validate_finance_qa_dataset
+from qa_pairs.generator.logistics.generate_logistics import build as stage_logistics_qa_dataset
+from qa_pairs.generator.logistics.scale_pairs_logistics import (
+    generate_pairs as generate_logistics_pairs,
+)
+from qa_pairs.generator.logistics.validate_logistics import validate as validate_logistics_qa_dataset
+from qa_pairs.generator.project_management.generate_project_management import (
+    build as stage_project_management_qa_dataset,
+)
+from qa_pairs.generator.project_management.scale_pairs_project_management import (
+    generate_pairs as generate_project_management_pairs,
+)
+from qa_pairs.generator.project_management.validate_project_management import (
+    validate as validate_project_management_qa_dataset,
+)
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
 from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
 from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
@@ -428,14 +447,23 @@ def run_validate_reproducibility(args: argparse.Namespace) -> None:
 QA_STAGE: dict[str, CommandHandler] = {
     "crm": stage_crm_qa_dataset,
     "sales": stage_sales_qa_dataset,
+    "finance": stage_finance_qa_dataset,
+    "logistics": stage_logistics_qa_dataset,
+    "project_management": stage_project_management_qa_dataset,
 }
 QA_VALIDATE: dict[str, CommandHandler] = {
     "crm": validate_crm_qa_dataset,
     "sales": validate_sales_qa_dataset,
+    "finance": validate_finance_qa_dataset,
+    "logistics": validate_logistics_qa_dataset,
+    "project_management": validate_project_management_qa_dataset,
 }
 QA_GENERATE: dict[str, CommandHandler] = {
     "crm": generate_crm_pairs,
     "sales": generate_sales_pairs,
+    "finance": generate_finance_pairs,
+    "logistics": generate_logistics_pairs,
+    "project_management": generate_project_management_pairs,
 }
 
 
@@ -673,22 +701,40 @@ def run_judge(args: argparse.Namespace) -> None:
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
-    """Build the dataset and Q&A pairs, then run a small judge pass.
+    """Build locally, refresh the platform dataset, then run a small judge pass.
 
     This is the convenient end-to-end entry point.  The individual commands
-    remain available with their existing behavior; only this wrapper supplies
-    the judge-specific smoke-test flags.
+    remain available with their existing behavior; only this wrapper confirms
+    the delete and supplies the judge-specific smoke-test flags.
     """
 
     pipeline_args = argparse.Namespace(domain=args.domain, profile=args.profile)
 
-    print("Pipeline step 1/3: build dataset")
+    print("Pipeline step 1/5: build dataset")
     run_build_dataset(pipeline_args)
 
-    print("Pipeline step 2/3: build Q&A pairs")
+    print("Pipeline step 2/5: build Q&A pairs")
     run_qa_build(pipeline_args)
 
-    print("Pipeline step 3/3: judge")
+    print("Pipeline step 3/5: delete platform dataset")
+    delete_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        yes=True,
+        dry_run=False,
+    )
+    run_dataset_delete(delete_args)
+
+    print("Pipeline step 4/5: upload platform dataset")
+    upload_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        replace=False,
+        dry_run=False,
+    )
+    run_dataset_upload(upload_args)
+
+    print("Pipeline step 5/5: judge")
     judge_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,

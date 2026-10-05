@@ -1,0 +1,7 @@
+SELECT t.task_type AS entity, COUNT(*) AS metric
+FROM tasks t
+INNER JOIN projects p ON t.project_id = p.project_id
+WHERE p.status = {{ project_status | sqlstr }} AND t.task_type IS NOT NULL
+GROUP BY t.task_type
+ORDER BY metric DESC, entity ASC
+LIMIT 3;

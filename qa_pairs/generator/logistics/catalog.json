@@ -1,0 +1,11 @@
+{
+  "_doc": "param name -> SQL that lists its allowed values (from the real data, never invented), or a literal list for non-column params.",
+  "service_level": "SELECT DISTINCT service_level FROM carriers ORDER BY 1",
+  "carrier_type": "SELECT DISTINCT carrier_type FROM carriers WHERE carrier_type IS NOT NULL ORDER BY 1",
+  "region": "SELECT DISTINCT region FROM warehouses WHERE region IS NOT NULL ORDER BY 1",
+  "order_status": "SELECT DISTINCT status FROM orders ORDER BY 1",
+  "order_priority": "SELECT DISTINCT order_priority FROM orders ORDER BY 1",
+  "shipment_status": "SELECT DISTINCT status FROM shipments ORDER BY 1",
+  "product_category": "SELECT DISTINCT product_category FROM inventory WHERE product_category IS NOT NULL ORDER BY 1",
+  "unshippable_status": ["Cancelled", "Pending"]
+}

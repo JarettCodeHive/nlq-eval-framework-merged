@@ -1,0 +1,14 @@
+{
+  "_doc": "param name -> SQL that lists its allowed values (from the real data, never invented), or a literal list for non-column params.",
+  "project_status": "SELECT DISTINCT status FROM projects ORDER BY 1",
+  "project_priority": "SELECT DISTINCT priority FROM projects ORDER BY 1",
+  "resource_role": "SELECT DISTINCT role FROM resources ORDER BY 1",
+  "department": "SELECT DISTINCT department FROM resources WHERE department IS NOT NULL ORDER BY 1",
+  "location": "SELECT DISTINCT location FROM resources WHERE location IS NOT NULL ORDER BY 1",
+  "task_status": "SELECT DISTINCT status FROM tasks ORDER BY 1",
+  "task_type": "SELECT DISTINCT task_type FROM tasks WHERE task_type IS NOT NULL ORDER BY 1",
+  "assignment_role": "SELECT DISTINCT assignment_role FROM task_resources WHERE assignment_role IS NOT NULL ORDER BY 1",
+  "milestone_type": "SELECT DISTINCT milestone_type FROM milestones WHERE milestone_type IS NOT NULL ORDER BY 1",
+  "milestone_status": "SELECT DISTINCT status FROM milestones ORDER BY 1",
+  "work_type": "SELECT DISTINCT work_type FROM time_entries ORDER BY 1"
+}

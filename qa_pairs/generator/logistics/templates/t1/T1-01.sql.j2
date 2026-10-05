@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS carrier_count
+FROM carriers
+WHERE service_level = {{ service_level | sqlstr }};
