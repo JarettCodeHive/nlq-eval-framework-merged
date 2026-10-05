@@ -324,3 +324,71 @@ def test_the_pdf_contains_no_missing_glyph_boxes(tmp_path: Path) -> None:
         assert box not in text, f"missing-glyph box {box!r} rendered"
     # And the characters we DO rely on survive the round trip.
     assert "§" in text
+
+
+def _page_geometry(path: Path) -> tuple[tuple[float, float] | None, list[float]]:
+    """Title baseline/size and horizontal rule positions, in PAGE coordinates.
+
+    The transform tracking is the point: flowables draw inside nested q/cm
+    blocks, so comparing raw y values across them is meaningless — an earlier
+    version of this probe "measured" a 0.43pt gap between two elements that were
+    in different frames entirely.
+    """
+
+    import re
+
+    pypdf = pytest.importorskip("pypdf")
+    page = pypdf.PdfReader(str(path)).pages[0]
+    contents = page.get("/Contents")
+    stream = contents if not isinstance(contents, list) else contents[0]
+    data = stream.get_object().get_data().decode("latin-1", "ignore")
+
+    tokens = re.findall(
+        r"(q|Q|[-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ cm|"
+        r"BT 1 0 0 1 [-\d.]+ [-\d.]+ Tm /\S+ [\d.]+ Tf|"
+        r"n [-\d.]+ [-\d.]+ m [-\d.]+ [-\d.]+ l S)",
+        data,
+    )
+    stack = [0.0]
+    title = None
+    rules: list[float] = []
+    for token in tokens:
+        if token == "q":
+            stack.append(stack[-1])
+        elif token == "Q":
+            stack.pop()
+        elif token.endswith("cm"):
+            stack[-1] += float(token.split()[5])
+        elif token.startswith("BT"):
+            m = re.match(r"BT 1 0 0 1 [-\d.]+ ([-\d.]+) Tm /\S+ ([\d.]+) Tf", token)
+            y, size = float(m.group(1)) + stack[-1], float(m.group(2))
+            if size >= 16 and title is None:
+                title = (y, size)
+        else:
+            m = re.match(r"n [-\d.]+ ([-\d.]+) m [-\d.]+ ([-\d.]+) l S", token)
+            y1, y2 = float(m.group(1)) + stack[-1], float(m.group(2)) + stack[-1]
+            if abs(y1 - y2) < 0.01:
+                rules.append(y1)
+    return title, rules
+
+
+def test_the_masthead_rule_clears_the_title_descenders(tmp_path: Path) -> None:
+    """The rule used to cut through the title. Setting fontSize inline with
+    <font size=17> left the style's 12pt leading in place, so the line box was
+    shorter than the glyphs and a cell-edge LINEBELOW landed on them — and
+    BOTTOMPADDING could not fix it, because the leading absorbed the padding.
+    The rule is a separate flowable now, so the distance is set, not inferred.
+    """
+
+    out = tmp_path / "card"
+    report.write_scorecard_pdf(out, _results(passes=20, fails=12), _ctx())
+
+    title, rules = _page_geometry(out / "scorecard.pdf")
+    assert title is not None, "no title-sized text found on page 1"
+    baseline, size = title
+    below = [y for y in rules if y < baseline]
+    assert below, "no rule beneath the title"
+
+    # Vera's descender is ~21% of the em.
+    clearance = (baseline - size * 0.21) - max(below)
+    assert clearance > 1.5, f"rule is {clearance:.2f}pt from the descenders"

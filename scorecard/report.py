@@ -984,6 +984,7 @@ def write_scorecard_pdf(
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
     from reportlab.platypus import (
+        HRFlowable,
         KeepTogether,
         Paragraph,
         SimpleDocTemplate,
@@ -1049,15 +1050,28 @@ def write_scorecard_pdf(
         [
             [
                 Paragraph(
-                    "<font size=17><b>Regression scorecard</b></font>",
-                    ParagraphStyle("t", parent=body, textColor=colors.HexColor(_INK)),
+                    "Regression scorecard",
+                    # fontSize on the STYLE, with leading to match. Setting the
+                    # size inline with <font size=17> left the style's 12pt
+                    # leading in place, so the line box was shorter than the
+                    # glyphs and LINEBELOW cut through the descenders.
+                    ParagraphStyle(
+                        "masthead_title",
+                        parent=body,
+                        fontName=_FONT_BOLD,
+                        fontSize=17,
+                        leading=21,
+                        textColor=colors.HexColor(_INK),
+                    ),
                 ),
                 Paragraph(
-                    f"<b>{ctx.scorecard_mode}</b>",
+                    ctx.scorecard_mode,
                     ParagraphStyle(
-                        "m",
+                        "masthead_mode",
                         parent=body,
+                        fontName=_FONT_BOLD,
                         fontSize=10,
+                        leading=14,
                         alignment=2,
                         textColor=colors.white,
                         backColor=mode_ink,
@@ -1072,11 +1086,17 @@ def write_scorecard_pdf(
         TableStyle(
             [
                 ("FONTNAME", (0, 0), (-1, -1), _FONT),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.75, colors.HexColor("#22304a")),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                # NO LINEBELOW. A rule on the cell edge sits wherever the
+                # paragraph's line box ends, and a 17pt face inside a 21pt
+                # leading leaves its descenders ~0.4pt off that edge — touching,
+                # whatever BOTTOMPADDING says, because the leading absorbs it.
+                # The rule is a separate flowable below, so its distance from the
+                # text is set explicitly instead of inferred.
             ]
         )
     )
@@ -1093,7 +1113,15 @@ def write_scorecard_pdf(
     )
     story: list = [
         masthead,
-        Spacer(1, 0.04 * inch),
+        Spacer(1, 0.045 * inch),
+        HRFlowable(
+            width="100%",
+            thickness=0.75,
+            color=colors.HexColor("#22304a"),
+            spaceBefore=0,
+            spaceAfter=0,
+        ),
+        Spacer(1, 0.045 * inch),
         Paragraph(
             f"<font size=7.5 color='{_INK_MUTED}'>{meta}</font>",
             ParagraphStyle("meta", parent=body, fontSize=7.5),
