@@ -46,7 +46,14 @@ from qa_pairs.utils.verify import library_versions  # noqa: E402
 DATASET = BASE / "dataset"
 
 # parent-before-child so FK constraints hold on COPY
-LOAD_ORDER = ["projects", "resources", "tasks", "task_resources", "milestones", "time_entries"]
+LOAD_ORDER = [
+    "projects",
+    "resources",
+    "tasks",
+    "task_resources",
+    "milestones",
+    "time_entries",
+]
 
 COPY_OPTS = (
     "(FORMAT CSV, HEADER, DELIMITER ',', NULL '', "

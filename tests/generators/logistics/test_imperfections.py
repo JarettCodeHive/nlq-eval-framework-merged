@@ -73,9 +73,7 @@ def test_missing_and_orphan_warehouses_are_exact_and_disjoint(
         len(distributed["orders"]),
         float(injector.targets["orphaned_order_warehouses"]["rate_pct"]),
     )
-    namespace = int(
-        injector.targets["orphaned_order_warehouses"]["namespace_base"]
-    )
+    namespace = int(injector.targets["orphaned_order_warehouses"]["namespace_base"])
     assert all(
         int(row.warehouse_id) == namespace + int(row.order_id)
         for row in orphan_rows.itertuples(index=False)
@@ -138,12 +136,12 @@ def test_imperfect_validator_rejects_byte_identical_duplicate(
     injector, distributed, imperfect = stages
     changed = {name: table.copy(deep=True) for name, table in imperfect.items()}
     duplicate_position = len(distributed["shipments"])
-    tracking_number = changed["shipments"].at[
-        duplicate_position, "tracking_number"
-    ]
-    source = distributed["shipments"].loc[
-        distributed["shipments"]["tracking_number"] == tracking_number
-    ].iloc[0]
+    tracking_number = changed["shipments"].at[duplicate_position, "tracking_number"]
+    source = (
+        distributed["shipments"]
+        .loc[distributed["shipments"]["tracking_number"] == tracking_number]
+        .iloc[0]
+    )
     changed["shipments"].at[duplicate_position, "shipping_cost"] = source[
         "shipping_cost"
     ]

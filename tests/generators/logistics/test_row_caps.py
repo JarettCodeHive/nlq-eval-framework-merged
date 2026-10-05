@@ -41,15 +41,14 @@ def test_expected_counts_include_duplicate_shipments(
     profile: str,
     expected: dict[str, int],
 ) -> None:
-    assert LogisticsRowCapValidator.for_profile(
-        profile
-    ).expected_final_row_counts() == expected
+    assert (
+        LogisticsRowCapValidator.for_profile(profile).expected_final_row_counts()
+        == expected
+    )
 
 
 def test_expected_full_counts_pass_the_hard_cap() -> None:
-    results = LogisticsRowCapValidator.for_profile(
-        "full"
-    ).validate_expected_counts()
+    results = LogisticsRowCapValidator.for_profile("full").validate_expected_counts()
 
     assert len(results) == 5
     assert all(result.passed for result in results)
@@ -66,9 +65,9 @@ def test_row_cap_failure_identifies_table_and_source() -> None:
     }
 
     assert not checks["shipments.row_cap.actual"].passed
-    assert "250001 rows exceeds cap 250000" in checks[
-        "shipments.row_cap.actual"
-    ].message
+    assert (
+        "250001 rows exceeds cap 250000" in checks["shipments.row_cap.actual"].message
+    )
 
 
 def test_generated_dev_tables_pass_row_caps() -> None:

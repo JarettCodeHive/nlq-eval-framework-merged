@@ -57,9 +57,7 @@ class FinanceRowCapValidator:
     def generate_and_validate(self) -> list[IntegrityCheckResult]:
         """Generate imperfect Finance tables and validate actual row counts."""
 
-        tables = FinanceImperfectionInjector(
-            self.generator
-        ).generate_imperfect_tables()
+        tables = FinanceImperfectionInjector(self.generator).generate_imperfect_tables()
         return self.validate_tables(tables)
 
     def validate_tables(self, tables: dict[str, Any]) -> list[IntegrityCheckResult]:

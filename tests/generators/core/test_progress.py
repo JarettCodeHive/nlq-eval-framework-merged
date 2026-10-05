@@ -102,7 +102,7 @@ def test_a_level_is_not_inferred_from_serialised_data():
         '    "state": "uncalibrated",',
         "  {",
         "  },",
-        "exact_match     : FAIL",        # a key padded to a column, i.e. a dump
+        "exact_match     : FAIL",  # a key padded to a column, i.e. a dump
         "judge_scores    : factual_=5",
     ):
         assert _looks_like_data(data), data

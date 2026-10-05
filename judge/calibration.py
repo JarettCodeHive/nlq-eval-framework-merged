@@ -96,6 +96,7 @@ def anchors_path_for(domain: str, anchors_dir: Path | None = None) -> Path:
         return anchors_dir / f"{domain}.json"
     return REPO_ROOT / thresholds_for(domain).anchors_path.format(domain=domain)
 
+
 # §10.2 "spanning the score range — not 10 easy passes", operationalised. Both
 # conditions must hold per dimension:
 #   1. at least this many distinct human scores appear, and

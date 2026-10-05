@@ -194,9 +194,10 @@ def test_no_scored_run_says_how_to_make_one(tmp_path):
     """A CONFIGURED domain with nothing scored yet — the error must name the
     command that produces a run, not complain about the release config."""
 
-    _run(tmp_path, _rows(1))                      # creates the release config
+    _run(tmp_path, _rows(1))  # creates the release config
     import shutil
-    shutil.rmtree(tmp_path / "release")           # ...then remove every run
+
+    shutil.rmtree(tmp_path / "release")  # ...then remove every run
 
     with pytest.raises(AnchorExportError, match="python main.py judge --domain crm"):
         export_candidates("crm", repo_root=tmp_path)

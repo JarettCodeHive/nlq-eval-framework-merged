@@ -83,8 +83,7 @@ class ProjectManagementDuckDBFKValidator:
     def __init__(self, generator: DeterministicGenerator) -> None:
         if generator.settings.domain != "project_management":
             raise ValueError(
-                "ProjectManagementDuckDBFKValidator only supports "
-                "project_management"
+                "ProjectManagementDuckDBFKValidator only supports " "project_management"
             )
         validate_project_management_config()
         self.generator = generator

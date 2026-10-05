@@ -29,9 +29,7 @@ def test_run_pipeline_is_registered_and_accepts_only_shared_inputs() -> None:
     assert args.release_version == "client-2.4.0"
     assert args.keep_platform_data is False
 
-    retained = build_parser().parse_args(
-        ["run-pipeline", "--keep-platform-data"]
-    )
+    retained = build_parser().parse_args(["run-pipeline", "--keep-platform-data"])
     assert retained.keep_platform_data is True
 
 

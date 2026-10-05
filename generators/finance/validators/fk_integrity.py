@@ -162,9 +162,7 @@ class FinanceDuckDBFKValidator:
     def generate_and_validate(self) -> list[IntegrityCheckResult]:
         """Generate final Finance tables and validate temporary CSV exports."""
 
-        tables = FinanceImperfectionInjector(
-            self.generator
-        ).generate_imperfect_tables()
+        tables = FinanceImperfectionInjector(self.generator).generate_imperfect_tables()
         FinanceRelationalValidator(self.generator).validate_or_raise(tables)
         with TemporaryDirectory(prefix="finance-fk-validation-") as temp_dir:
             directory = Path(temp_dir)

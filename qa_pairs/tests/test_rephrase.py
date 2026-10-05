@@ -9,7 +9,9 @@ import pytest
 from utils.output_paths import resolve_qa_output_dir
 
 QA_ROOT = Path(__file__).resolve().parent.parent
-MAP = resolve_qa_output_dir(QA_ROOT, "full", "crm") / "rephrase" / "crm_rephrase_map.csv"
+MAP = (
+    resolve_qa_output_dir(QA_ROOT, "full", "crm") / "rephrase" / "crm_rephrase_map.csv"
+)
 PAIRS = MAP.with_name("crm_rephrase_pairs.csv")
 
 pytestmark = pytest.mark.skipif(
@@ -58,7 +60,9 @@ def test_rephrase_pairs_are_seven_field_contract():
 
 
 def test_variants_in_a_group_share_reference_sql():
-    sql_by_question = {r["natural_language_question"]: r["reference_sql"] for r in _rows(PAIRS)}
+    sql_by_question = {
+        r["natural_language_question"]: r["reference_sql"] for r in _rows(PAIRS)
+    }
     by_group = {}
     for m in _rows(MAP):
         if m["is_base"] == "no":

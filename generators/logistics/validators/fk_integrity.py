@@ -151,9 +151,7 @@ class LogisticsDuckDBFKValidator:
     ) -> list[IntegrityCheckResult]:
         """Validate exact NULL/orphan counts and the declared ID formula."""
 
-        target = self.config["imperfection_targets"][
-            "orphaned_order_warehouses"
-        ]
+        target = self.config["imperfection_targets"]["orphaned_order_warehouses"]
         namespace = int(target["namespace_base"])
         expected_nulls = count_from_pct(
             self.generator.row_count("orders"),

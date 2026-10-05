@@ -26,9 +26,7 @@ def test_one_cli_version_resolves_every_full_release_component() -> None:
         dataset = GenerationSettings.from_config_files("crm", "full")
         qa_source = resolve_dataset_source(QA_ROOT, "full", "crm")
         qa_output = resolve_qa_output_dir(QA_ROOT, "full", "crm")
-        judge_output = run_output_dir(
-            "crm", "run-123", load_judge_config("crm")
-        )
+        judge_output = run_output_dir("crm", "run-123", load_judge_config("crm"))
         scorecard_output = report_output_dir("crm", "run-123")
 
     root = REPO_ROOT / "release" / "client-2.4.0" / "crm"
@@ -57,6 +55,6 @@ def test_legacy_layout_is_read_only_fallback(tmp_path) -> None:
         )
 
     assert resolved == legacy
-    assert component_dir(
-        "crm", "dataset", "v1.0.0", repo_root=tmp_path
-    ) == (tmp_path / "release" / "v1.0.0" / "crm" / "dataset")
+    assert component_dir("crm", "dataset", "v1.0.0", repo_root=tmp_path) == (
+        tmp_path / "release" / "v1.0.0" / "crm" / "dataset"
+    )

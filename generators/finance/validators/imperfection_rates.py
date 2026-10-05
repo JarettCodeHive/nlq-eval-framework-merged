@@ -180,9 +180,7 @@ class FinanceImperfectionRateValidator:
         tables: dict[str, Any],
     ) -> list[IntegrityCheckResult]:
         budgets = tables["budgets"]
-        target = self.finance_config["imperfection_targets"][
-            "near_duplicate_budgets"
-        ]
+        target = self.finance_config["imperfection_targets"]["near_duplicate_budgets"]
         business_keys = target["business_key_fields"]
         variation_fields = set(target["variation_fields"])
         groups = budgets.groupby(business_keys, dropna=False, sort=False)

@@ -68,8 +68,7 @@ def classify_reference_values(
     overlap = valid & declared
     if overlap:
         raise ValueError(
-            "declared orphan values overlap valid parent values: "
-            f"{sorted(overlap)}"
+            "declared orphan values overlap valid parent values: " f"{sorted(overlap)}"
         )
 
     empty = 0

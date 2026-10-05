@@ -337,8 +337,7 @@ class FinanceDataDictionaryGenerator:
                     f"{relationship['parent_field']}`"
                 )
                 right = (
-                    f"`{relationship['child_table']}."
-                    f"{relationship['child_field']}`"
+                    f"`{relationship['child_table']}." f"{relationship['child_field']}`"
                 )
                 conditions = "Physically enforced FK."
             else:
@@ -419,9 +418,9 @@ class FinanceDataDictionaryGenerator:
     def _derived_metrics_section(self) -> list[str]:
         rolling_order = ", ".join(
             f"`{field}`"
-            for field in self.finance_config["business_mappings"][
-                "rolling_balance"
-            ]["order_by"]
+            for field in self.finance_config["business_mappings"]["rolling_balance"][
+                "order_by"
+            ]
         )
         return [
             "## Derived Metrics and Query Guidance",
@@ -523,9 +522,11 @@ def _type_text(field: dict[str, Any]) -> str:
 
 def _generation_text(field: dict[str, Any]) -> str:
     parts = [
-        f"Source `{field['synthetic_source']}`"
-        if "synthetic_source" in field
-        else "Deterministic entity identifier"
+        (
+            f"Source `{field['synthetic_source']}`"
+            if "synthetic_source" in field
+            else "Deterministic entity identifier"
+        )
     ]
     if "distribution" in field:
         parts.append(f"distribution `{field['distribution']}`")

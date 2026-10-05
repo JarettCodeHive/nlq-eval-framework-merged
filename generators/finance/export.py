@@ -98,9 +98,9 @@ class FinanceCSVExporter:
             progress=self.progress,
         ).apply_to_tables(distributed)
         self._report("Running final Finance relational and accounting validation")
-        validation_results = FinanceRelationalValidator(
-            self.generator
-        ).validate_tables(imperfect)
+        validation_results = FinanceRelationalValidator(self.generator).validate_tables(
+            imperfect
+        )
         assert_all_passed(validation_results)
         return {
             "base": base,

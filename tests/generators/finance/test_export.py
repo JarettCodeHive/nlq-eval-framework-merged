@@ -100,7 +100,10 @@ def test_preview_csv_contract_is_platform_neutral(tmp_path: Path) -> None:
         transactions = list(csv.DictReader(csv_file))
     assert {row["reversed"] for row in transactions} <= {"true", "false"}
     assert all(re.fullmatch(r"\d+\.\d{4}", row["total_amount"]) for row in transactions)
-    assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["transaction_date"]) for row in transactions)
+    assert all(
+        re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["transaction_date"])
+        for row in transactions
+    )
     assert all(
         re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", row["posted_at"])
         for row in transactions
@@ -112,8 +115,7 @@ def test_preview_csv_contract_is_platform_neutral(tmp_path: Path) -> None:
         fx_rates = list(csv.DictReader(csv_file))
     assert sum(row["rate"] == "" for row in fx_rates) == 10
     assert all(
-        not row["rate"] or re.fullmatch(r"\d+\.\d{6}", row["rate"])
-        for row in fx_rates
+        not row["rate"] or re.fullmatch(r"\d+\.\d{6}", row["rate"]) for row in fx_rates
     )
 
 

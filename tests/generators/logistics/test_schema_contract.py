@@ -139,8 +139,7 @@ def test_csv_headers_match_ddl_order_types_and_nullability() -> None:
 
 def test_dbml_matches_ddl_table_and_field_order() -> None:
     assert _dbml_table_fields(DBML_PATH) == {
-        table_name: list(fields)
-        for table_name, fields in EXPECTED_TABLE_SPECS.items()
+        table_name: list(fields) for table_name, fields in EXPECTED_TABLE_SPECS.items()
     }
 
 

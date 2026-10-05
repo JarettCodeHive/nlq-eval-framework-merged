@@ -33,13 +33,11 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(scope="module")
-def validated_tables() -> (
-    tuple[
-        ProjectManagementDistributionApplier,
-        dict,
-        dict,
-    ]
-):
+def validated_tables() -> tuple[
+    ProjectManagementDistributionApplier,
+    dict,
+    dict,
+]:
     applier = ProjectManagementDistributionApplier.for_profile("dev")
     base = ProjectManagementBaseEntityGenerator(applier.generator).generate_tables()
     distributed = applier.apply_to_tables(base)

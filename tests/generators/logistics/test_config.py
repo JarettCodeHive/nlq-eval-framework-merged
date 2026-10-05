@@ -73,9 +73,9 @@ def test_validation_rejects_broken_dotted_reference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = deepcopy(load_logistics_config())
-    config["tables"]["carriers"]["fields"][1]["synthetic_source"] = (
-        "business_mappings.synthetic_names.missing"
-    )
+    config["tables"]["carriers"]["fields"][1][
+        "synthetic_source"
+    ] = "business_mappings.synthetic_names.missing"
 
     with pytest.raises(ValueError, match="references missing config value"):
         _validate_with(monkeypatch, config)
@@ -85,9 +85,7 @@ def test_validation_rejects_orphan_policy_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = deepcopy(load_logistics_config())
-    config["imperfection_targets"]["orphaned_order_warehouses"][
-        "namespace_base"
-    ] = 100
+    config["imperfection_targets"]["orphaned_order_warehouses"]["namespace_base"] = 100
 
     with pytest.raises(ValueError, match="NULL/orphan selection policy"):
         _validate_with(monkeypatch, config)

@@ -29,13 +29,11 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(scope="module")
-def distributed_and_imperfect() -> (
-    tuple[
-        dict,
-        dict,
-        ProjectManagementImperfectionInjector,
-    ]
-):
+def distributed_and_imperfect() -> tuple[
+    dict,
+    dict,
+    ProjectManagementImperfectionInjector,
+]:
     distributed = ProjectManagementDistributionApplier.for_profile(
         "dev"
     ).generate_distributed_tables()

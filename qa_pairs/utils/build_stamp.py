@@ -60,7 +60,10 @@ def fingerprint(core: dict) -> str:
         "schema_ddl_sha256": core["schema_ddl_sha256"],
         "schema_dbml_sha256": core["schema_dbml_sha256"],
         "files": sorted(
-            ({"name": f["name"], "sha256": f["sha256"], "rows": f["rows"]} for f in core["files"]),
+            (
+                {"name": f["name"], "sha256": f["sha256"], "rows": f["rows"]}
+                for f in core["files"]
+            ),
             key=lambda f: f["name"],
         ),
         "table_digests": dict(sorted(core["table_digests"].items())),
@@ -82,7 +85,9 @@ def manifest_core(manifest: dict) -> dict:
     }
 
 
-def stamp(con, fp: str, digests: dict[str, str], dataset_version: str, generated_at: str) -> None:
+def stamp(
+    con, fp: str, digests: dict[str, str], dataset_version: str, generated_at: str
+) -> None:
     con.execute(f"DROP TABLE IF EXISTS {STAMP_TABLE}")
     con.execute(
         f"CREATE TABLE {STAMP_TABLE} "
@@ -102,7 +107,9 @@ def _stamp_row(con):
     ).fetchone()
     if not exists:
         return None
-    return con.execute(f"SELECT fingerprint, table_digests FROM {STAMP_TABLE}").fetchone()
+    return con.execute(
+        f"SELECT fingerprint, table_digests FROM {STAMP_TABLE}"
+    ).fetchone()
 
 
 def require_fresh_db(

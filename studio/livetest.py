@@ -149,7 +149,9 @@ def round_trip(
         # the table, and only this can see a batch that never ran at all.
         counted = client.count_rows(entity_id)
         print(f"\nfind_entity_id({table!r}) -> {client.find_entity_id(table)}")
-        print(f"row count on platform : {counted if counted is not None else 'unknown'}")
+        print(
+            f"row count on platform : {counted if counted is not None else 'unknown'}"
+        )
         print(f"row count in the CSV  : {len(rows):,}")
 
         if counted == len(rows):
@@ -180,8 +182,10 @@ def round_trip(
                 print(f"  CLEANUP FAILED: {exc} — delete entity {entity_id} by hand")
         elif entity_id is not None:
             print(f"\n--keep: entity {entity_id} ({table}) is live in the org.")
-            print("  Delete it with: python -m studio.livetest --delete-only "
-                  f"--table {table}")
+            print(
+                "  Delete it with: python -m studio.livetest --delete-only "
+                f"--table {table}"
+            )
 
 
 def delete_only(client: StudioClient, table: str) -> int:

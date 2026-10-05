@@ -80,9 +80,7 @@ def test_dataset_commands_accept_registered_domains(
 def test_unknown_dataset_domain_has_clear_error() -> None:
     with pytest.raises(
         NotImplementedError,
-        match=(
-            "supported domains: crm, finance, logistics, project_management, sales"
-        ),
+        match=("supported domains: crm, finance, logistics, project_management, sales"),
     ):
         dataset_domain("human_resources")
 

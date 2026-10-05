@@ -236,9 +236,7 @@ def _join_count_sql(join_path: dict[str, Any]) -> str:
         raise ValueError(f"No SQL registered for complex path {join_path['id']}")
     left_table, right_table = join_path["tables"]
     keyword = (
-        "LEFT JOIN"
-        if join_path["join_type"] == "left_analytical"
-        else "INNER JOIN"
+        "LEFT JOIN" if join_path["join_type"] == "left_analytical" else "INNER JOIN"
     )
     return f"""
         SELECT COUNT(*)

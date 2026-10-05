@@ -123,9 +123,7 @@ def test_pm_snapshot_comparison_detects_complete_manifest_mismatch() -> None:
     results = validator.compare_snapshots(first, second)
 
     result = next(
-        item
-        for item in results
-        if item.check_name == "manifest.reproducible_payload"
+        item for item in results if item.check_name == "manifest.reproducible_payload"
     )
     assert not result.passed
 

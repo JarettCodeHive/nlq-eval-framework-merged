@@ -172,9 +172,7 @@ class LogisticsImperfectionRateValidator:
                 lambda value: not _is_blank(value) and value not in warehouse_ids
             )
         ]
-        namespace = int(
-            self.targets["orphaned_order_warehouses"]["namespace_base"]
-        )
+        namespace = int(self.targets["orphaned_order_warehouses"]["namespace_base"])
         formula_errors = sum(
             int(row.warehouse_id) != namespace + int(row.order_id)
             for row in orphaned.itertuples(index=False)
@@ -278,8 +276,7 @@ class LogisticsImperfectionRateValidator:
 
         primary_table, primary_field = target["primary_target"].split(".", 1)
         occurrences = sum(
-            str(value) in boundaries
-            for value in tables[primary_table][primary_field]
+            str(value) in boundaries for value in tables[primary_table][primary_field]
         )
         results.append(
             _exact_count_result(
@@ -321,9 +318,10 @@ class LogisticsImperfectionRateValidator:
         contract_errors = 0
         field_errors = 0
         mutable = _mutable_fields(self.logistics_config)
-        if tuple(tables) != self.settings.table_order or tuple(
-            source_tables
-        ) != self.settings.table_order:
+        if (
+            tuple(tables) != self.settings.table_order
+            or tuple(source_tables) != self.settings.table_order
+        ):
             contract_errors += 1
         for table_name in self.settings.table_order:
             if table_name not in tables or table_name not in source_tables:

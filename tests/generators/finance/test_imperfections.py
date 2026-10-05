@@ -63,9 +63,7 @@ def test_near_duplicate_budgets_keep_business_key_and_vary_values(
         len(distributed["budgets"]),
         float(injector.config["duplicate_pct"]),
     )
-    target = injector.finance_config["imperfection_targets"][
-        "near_duplicate_budgets"
-    ]
+    target = injector.finance_config["imperfection_targets"]["near_duplicate_budgets"]
     duplicates = imperfect["budgets"].tail(duplicate_count)
     source = distributed["budgets"].set_index(target["business_key_fields"])
 
@@ -98,9 +96,11 @@ def test_transaction_outliers_rebuild_exact_balanced_ledger(
 
     assert len(outliers) == expected
     assert outliers["total_amount"].map(Decimal).between(minimum, maximum).all()
-    assert outliers["total_amount"].map(
-        lambda value: Decimal(value).as_tuple().exponent == -4
-    ).all()
+    assert (
+        outliers["total_amount"]
+        .map(lambda value: Decimal(value).as_tuple().exponent == -4)
+        .all()
+    )
     for row in outliers.itertuples(index=False):
         lines = imperfect["ledger_entries"][
             imperfect["ledger_entries"]["transaction_id"] == row.transaction_id

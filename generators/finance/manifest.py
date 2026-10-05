@@ -351,8 +351,7 @@ class FinanceManifestGenerator:
             )
         )
         observed_outliers = sum(
-            Decimal(row["total_amount"]) >= outlier_minimum
-            for row in transaction_rows
+            Decimal(row["total_amount"]) >= outlier_minimum for row in transaction_rows
         )
         boundaries = list(self.settings.imperfections["boundary_dates"])
         boundary_counts = Counter(row["transaction_date"] for row in transaction_rows)
@@ -449,9 +448,7 @@ def _prefixed_checks_passed(
     results: list[IntegrityCheckResult],
     prefixes: tuple[str, ...],
 ) -> bool:
-    matching = [
-        result for result in results if result.check_name.startswith(prefixes)
-    ]
+    matching = [result for result in results if result.check_name.startswith(prefixes)]
     return bool(matching) and _all_passed(matching)
 
 

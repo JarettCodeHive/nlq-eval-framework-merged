@@ -26,16 +26,24 @@ from qa_pairs.generator.crm.generate_crm import build as stage_crm_qa_dataset
 from qa_pairs.generator.crm.rephrase import generate_rephrases
 from qa_pairs.generator.crm.scale_pairs import generate_pairs as generate_crm_pairs
 from qa_pairs.generator.crm.validate_crm import validate as validate_crm_qa_dataset
-from qa_pairs.generator.finance.generate_finance import build as stage_finance_qa_dataset
+from qa_pairs.generator.finance.generate_finance import (
+    build as stage_finance_qa_dataset,
+)
 from qa_pairs.generator.finance.scale_pairs_finance import (
     generate_pairs as generate_finance_pairs,
 )
-from qa_pairs.generator.finance.validate_finance import validate as validate_finance_qa_dataset
-from qa_pairs.generator.logistics.generate_logistics import build as stage_logistics_qa_dataset
+from qa_pairs.generator.finance.validate_finance import (
+    validate as validate_finance_qa_dataset,
+)
+from qa_pairs.generator.logistics.generate_logistics import (
+    build as stage_logistics_qa_dataset,
+)
 from qa_pairs.generator.logistics.scale_pairs_logistics import (
     generate_pairs as generate_logistics_pairs,
 )
-from qa_pairs.generator.logistics.validate_logistics import validate as validate_logistics_qa_dataset
+from qa_pairs.generator.logistics.validate_logistics import (
+    validate as validate_logistics_qa_dataset,
+)
 from qa_pairs.generator.project_management.generate_project_management import (
     build as stage_project_management_qa_dataset,
 )
@@ -46,8 +54,12 @@ from qa_pairs.generator.project_management.validate_project_management import (
     validate as validate_project_management_qa_dataset,
 )
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
-from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
-from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
+from qa_pairs.generator.sales.scale_pairs_sales import (
+    generate_pairs as generate_sales_pairs,
+)
+from qa_pairs.generator.sales.validate_sales import (
+    validate as validate_sales_qa_dataset,
+)
 from qa_pairs.utils.release_bundle import default_release_version
 from qa_pairs.utils.release_bundle import component_dir
 from qa_pairs.utils.release_bundle import use_release_version
@@ -69,12 +81,15 @@ def _platform_manifest_path(
 ) -> Path:
     """Audit record shared by upload and post-run cleanup."""
 
-    return component_dir(
-        domain,
-        "platform",
-        version or default_release_version(domain),
-        repo_root=REPO_ROOT,
-    ) / f"{profile}.json"
+    return (
+        component_dir(
+            domain,
+            "platform",
+            version or default_release_version(domain),
+            repo_root=REPO_ROOT,
+        )
+        / f"{profile}.json"
+    )
 
 
 # Commands that are not scoped to one domain/release (score aggregates
@@ -107,13 +122,20 @@ def _resolve_command_log_path(args: argparse.Namespace) -> Path:
         try:
             version = args.release_version or default_release_version(domain)
             return (
-                component_dir(domain, "logs", version, repo_root=REPO_ROOT)
-                / filename
+                component_dir(domain, "logs", version, repo_root=REPO_ROOT) / filename
             )
         except ValueError:
             pass  # unknown domain or missing release config - fall back below
 
-    return REPO_ROOT / "tmp" / "generated" / domain / (profile or "shared") / "logs" / filename
+    return (
+        REPO_ROOT
+        / "tmp"
+        / "generated"
+        / domain
+        / (profile or "shared")
+        / "logs"
+        / filename
+    )
 
 
 class _TeeTextStream(io.TextIOBase):
@@ -601,9 +623,7 @@ def run_qa_build(args: argparse.Namespace) -> None:
         )
         generate(args.profile)
         if args.domain == "crm":
-            progress.report(
-                "Step 4/4: Generate and verify CRM rephrase-group variants"
-            )
+            progress.report("Step 4/4: Generate and verify CRM rephrase-group variants")
             generate_rephrases(args.profile)
 
     print(f"{args.domain} Q&A pair build passed")

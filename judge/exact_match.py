@@ -511,7 +511,6 @@ def _printed_at_lower_precision(
     return hits
 
 
-
 def _consume_date(index: _ActualIndex, field: ExpectedField, used: set[int]):
     hits = [
         pos for value, pos in index.dates if value == field.value and pos not in used

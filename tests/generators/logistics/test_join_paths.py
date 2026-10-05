@@ -19,9 +19,7 @@ EXPECTED_JOIN_PATH_IDS = [f"logistics_jp_{number:03d}" for number in range(1, 7)
 
 @pytest.fixture(scope="module")
 def imperfect_tables() -> dict:
-    return LogisticsImperfectionInjector.for_profile(
-        "dev"
-    ).generate_imperfect_tables()
+    return LogisticsImperfectionInjector.for_profile("dev").generate_imperfect_tables()
 
 
 def test_config_and_registered_sql_cover_required_paths() -> None:
@@ -43,9 +41,7 @@ def test_many_to_many_sql_covers_both_shipment_directions() -> None:
 
 
 def test_generated_join_path_validation_passes() -> None:
-    results = LogisticsJoinPathValidator.for_profile(
-        "dev"
-    ).generate_and_validate()
+    results = LogisticsJoinPathValidator.for_profile("dev").generate_and_validate()
     checks = _results_by_name(results)
 
     assert len(results) == 17
@@ -69,9 +65,7 @@ def test_left_join_requires_null_and_orphan_unmatched_cases(
     warehouse_ids = set(modified["warehouses"]["warehouse_id"])
     modified["orders"]["warehouse_id"] = modified["orders"]["warehouse_id"].map(
         lambda value: (
-            valid_warehouse
-            if value == "" or value not in warehouse_ids
-            else value
+            valid_warehouse if value == "" or value not in warehouse_ids else value
         )
     )
 
@@ -105,13 +99,9 @@ def test_null_and_orphan_unmatched_checks_are_independent(
 
     no_orphans = _copy_tables(imperfect_tables)
     warehouse_ids = set(no_orphans["warehouses"]["warehouse_id"])
-    no_orphans["orders"]["warehouse_id"] = no_orphans["orders"][
-        "warehouse_id"
-    ].map(
+    no_orphans["orders"]["warehouse_id"] = no_orphans["orders"]["warehouse_id"].map(
         lambda value: (
-            valid_warehouse
-            if value != "" and value not in warehouse_ids
-            else value
+            valid_warehouse if value != "" and value not in warehouse_ids else value
         )
     )
     orphan_checks = _results_by_name(

@@ -116,9 +116,7 @@ def test_full_export_writes_only_final_tables(
 
     results = exporter.export_full_profile_csvs()
 
-    assert [result.table_name for result in results] == list(
-        LOGISTICS_COLUMN_CONTRACTS
-    )
+    assert [result.table_name for result in results] == list(LOGISTICS_COLUMN_CONTRACTS)
     assert not (tmp_path / "base").exists()
     assert not (tmp_path / "distributed").exists()
     assert not (tmp_path / "imperfect").exists()

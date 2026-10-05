@@ -18,9 +18,7 @@ from generators.crm.imperfections import CRMImperfectionInjector
 from generators.crm.manifest import CRMManifestGenerator
 
 
-BASELINE_PATH = (
-    PROJECT_ROOT / "CRM_Config_Simplification_Pre_Migration_Baseline.json"
-)
+BASELINE_PATH = PROJECT_ROOT / "CRM_Config_Simplification_Pre_Migration_Baseline.json"
 CONTROLLED_MANIFEST_SHA256 = (
     "8f85779c3ab5182032fb890d21a59c3b8071f56cd289340e62d994b511a10cc1"
 )
@@ -46,9 +44,10 @@ def test_assembled_crm_config_matches_pre_migration_baseline() -> None:
 def test_profile_settings_match_pre_migration_baseline(profile: str) -> None:
     baseline = _load_baseline()
 
-    assert settings_for_profile(profile).metadata() == baseline["profile_settings"][
-        profile
-    ]
+    assert (
+        settings_for_profile(profile).metadata()
+        == baseline["profile_settings"][profile]
+    )
 
 
 def test_dev_stage_csvs_match_pre_migration_hashes(tmp_path: Path) -> None:

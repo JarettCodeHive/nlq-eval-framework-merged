@@ -72,9 +72,9 @@ def print_distribution_summary(tables: dict[str, Any]) -> None:
     transaction_amounts = transactions["total_amount"].astype(float)
     budget_amounts = budgets["budget_amount"].astype(float)
     ledger_counts = ledger_entries.groupby("transaction_id").size()
-    populated_rates = fx_rates.loc[
-        fx_rates["rate"].astype(str).ne(""), "rate"
-    ].astype(float)
+    populated_rates = fx_rates.loc[fx_rates["rate"].astype(str).ne(""), "rate"].astype(
+        float
+    )
 
     print("distribution_checks:")
     print(f"  transaction_amount_min: {transaction_amounts.min():.4f}")

@@ -35,9 +35,7 @@ def build_logistics_column_contracts(
     """
 
     config = (
-        logistics_config
-        if logistics_config is not None
-        else load_logistics_config()
+        logistics_config if logistics_config is not None else load_logistics_config()
     )
     contracts = {
         table_name: [field["name"] for field in config["tables"][table_name]["fields"]]
@@ -101,9 +99,7 @@ class LogisticsBaseEntityGenerator:
         """Generate all clean Logistics tables in dependency-safe order."""
 
         carriers = self._generate_and_report("carriers", self.generate_carriers)
-        warehouses = self._generate_and_report(
-            "warehouses", self.generate_warehouses
-        )
+        warehouses = self._generate_and_report("warehouses", self.generate_warehouses)
         orders = self._generate_and_report(
             "orders", lambda: self.generate_orders(warehouses)
         )
@@ -145,9 +141,7 @@ class LogisticsBaseEntityGenerator:
             rng, carrier_types, float(rules["missing_type_probability"])
         )
         rates = _uniform_decimal_strings(rng, count, rules["base_rate"])
-        _apply_missing_values(
-            rng, rates, float(rules["missing_base_rate_probability"])
-        )
+        _apply_missing_values(rng, rates, float(rules["missing_base_rate_probability"]))
         prefixes = values["carrier_name_prefixes"]
         start = _configured_datetime(self.rules["date_windows"]["entity_created_start"])
         end = _reference_datetime(self.settings.reference_today)
@@ -299,7 +293,9 @@ class LogisticsBaseEntityGenerator:
         )
         start = date.fromisoformat(self.rules["date_windows"]["order_activity_start"])
         end = self.settings.reference_today - timedelta(days=45)
-        order_dates = [random_date_inclusive(date_rng, start, end) for _ in range(count)]
+        order_dates = [
+            random_date_inclusive(date_rng, start, end) for _ in range(count)
+        ]
         created_start = _configured_datetime(
             self.rules["date_windows"]["entity_created_start"]
         )
@@ -328,8 +324,7 @@ class LogisticsBaseEntityGenerator:
                 "order_id": ids,
                 "warehouse_id": rng.choice(warehouse_ids, size=count).astype(int),
                 "customer_name": [
-                    _synthetic_customer_name(fake, order_id)
-                    for order_id in ids
+                    _synthetic_customer_name(fake, order_id) for order_id in ids
                 ],
                 "order_date": [value.isoformat() for value in order_dates],
                 "status": statuses,
@@ -372,7 +367,9 @@ class LogisticsBaseEntityGenerator:
             if int(order_id) not in unshipped_ids
         ]
         if count < len(eligible_ids):
-            raise ValueError("Shipment target cannot cover every shipment-bearing order")
+            raise ValueError(
+                "Shipment target cannot cover every shipment-bearing order"
+            )
         selected_orders = list(eligible_ids)
         remaining = count - len(selected_orders)
         if remaining:
@@ -398,9 +395,7 @@ class LogisticsBaseEntityGenerator:
         delivery_dates: list[str] = []
         created_at: list[str] = []
         costs = _uniform_decimal_strings(rng, count, rules["shipping_cost"])
-        _apply_missing_values(
-            rng, costs, float(rules["missing_cost_probability"])
-        )
+        _apply_missing_values(rng, costs, float(rules["missing_cost_probability"]))
         seen_orders: set[int] = set()
         for order_id in selected_orders:
             order = order_records[order_id]
@@ -439,9 +434,9 @@ class LogisticsBaseEntityGenerator:
                 )
             )
         ids = self.generator.make_integer_ids(count)
-        tracking_format = self.logistics_config["business_mappings"][
-            "tracking_number"
-        ]["format"]
+        tracking_format = self.logistics_config["business_mappings"]["tracking_number"][
+            "format"
+        ]
         return pd.DataFrame(
             {
                 "shipment_id": ids,
@@ -474,9 +469,7 @@ class LogisticsBaseEntityGenerator:
         selected_warehouses = [
             warehouse_ids[position % len(warehouse_ids)] for position in range(count)
         ]
-        sku_format = self.logistics_config["business_mappings"]["product_sku"][
-            "format"
-        ]
+        sku_format = self.logistics_config["business_mappings"]["product_sku"]["format"]
         skus = [
             sku_format.format(sku_id=(position // len(warehouse_ids)) + 1)
             for position in range(count)
@@ -586,7 +579,9 @@ def _apply_missing_values(
 ) -> None:
     protected = protected_positions or set()
     count = _count_probability(len(values), probability)
-    candidates = [position for position in range(len(values)) if position not in protected]
+    candidates = [
+        position for position in range(len(values)) if position not in protected
+    ]
     if count > len(candidates):
         raise ValueError("Missing-value target exceeds eligible capacity")
     if count:

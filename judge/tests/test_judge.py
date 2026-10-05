@@ -237,8 +237,10 @@ async def test_malformed_output_fails_loudly_after_retry_limit(tmp_path):
 async def test_cache_hit_replays_full_trace_with_current_run_id(tmp_path):
     log_path = tmp_path / "prompts.jsonl"
     judge = _StubLLMJudge([GOOD], log_path, cache_path=tmp_path / "cache")
-    await judge.judge(REQ)          # populates the cache
-    await judge.judge(REQ)          # served from it
+    await judge.judge(REQ)  # populates the cache
+    await judge.judge(REQ)  # served from it
+
+
 # --- cache ----------------------------------------------------------------
 
 
@@ -549,6 +551,7 @@ def test_pulse_client_still_exported():
 
 # --- Azure/OpenAI settings ------------------------------------------------
 
+
 def _write_configs(root, default: dict, domain: dict, domain_name="crm"):
     root.mkdir(parents=True, exist_ok=True)
     (root / "default.json").write_text(json.dumps(default), encoding="utf-8")
@@ -583,6 +586,7 @@ def test_model_selection_precedence(tmp_path, monkeypatch):
     # 3. an explicit per-domain choice beats the environment
     _write_configs(root, _BASE_CFG, {"model": "crm-specific-model"})
     assert load_judge_config("crm", root).model == "crm-specific-model"
+
 
 def test_prompt_carries_non_determinism_boundary_examples():
     """§10.2 explicitly requires worked negative examples in the prompt."""
@@ -821,9 +825,7 @@ def test_the_scoring_gate_is_off_by_default():
     """
 
     assert load_judge_config("crm").calibration.require_calibration is False
-    assert (
-        load_judge_config("crm").calibration.require_calibration_for_release is False
-    )
+    assert load_judge_config("crm").calibration.require_calibration_for_release is False
 
 
 def test_a_domain_can_opt_back_into_the_scoring_gate(tmp_path):
@@ -864,7 +866,9 @@ def test_a_value_printed_at_lower_precision_passes():
     look worse than it is.
     """
 
-    assert exact_match("1339.1438", "the highest is at 1339.14") is ExactMatchResult.PASS
+    assert (
+        exact_match("1339.1438", "the highest is at 1339.14") is ExactMatchResult.PASS
+    )
     assert (
         exact_match("2894260664.44", "at approximately $2,894,260,664")
         is ExactMatchResult.PASS
@@ -897,10 +901,14 @@ def test_lower_precision_still_requires_the_right_label():
     """Relaxing precision must not relax entity ownership (the Appendix A shape)."""
 
     assert (
-        exact_match("Hardware | 2894260664.44", "Software at approximately $2,894,260,664")
+        exact_match(
+            "Hardware | 2894260664.44", "Software at approximately $2,894,260,664"
+        )
         is ExactMatchResult.FAIL
     )
     assert (
-        exact_match("Hardware | 2894260664.44", "Hardware at approximately $2,894,260,664")
+        exact_match(
+            "Hardware | 2894260664.44", "Hardware at approximately $2,894,260,664"
+        )
         is ExactMatchResult.PASS
     )

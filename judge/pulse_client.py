@@ -263,9 +263,7 @@ def check_token_headroom(settings: PulseSettings, needed_s: float) -> "str | Non
         return None
     left = (exp - datetime.now(timezone.utc)).total_seconds()
     if left <= 0:
-        return (
-            f"PULSE_AUTH_TOKEN expired {-left / 60:.0f} min ago — refresh .env."
-        )
+        return f"PULSE_AUTH_TOKEN expired {-left / 60:.0f} min ago — refresh .env."
     if left < needed_s:
         return (
             f"PULSE_AUTH_TOKEN has {left / 60:.0f} min left but this run needs about "

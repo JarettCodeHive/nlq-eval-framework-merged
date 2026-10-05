@@ -87,9 +87,7 @@ class FinanceImperfectionInjector:
             table_name: table.copy(deep=True) for table_name, table in tables.items()
         }
 
-        imperfect["budgets"] = self._inject_near_duplicate_budgets(
-            imperfect["budgets"]
-        )
+        imperfect["budgets"] = self._inject_near_duplicate_budgets(imperfect["budgets"])
         self._report("Injected near-duplicate budgets")
 
         outlier_ids = self._inject_transaction_amount_outliers(imperfect)
@@ -177,12 +175,16 @@ class FinanceImperfectionInjector:
         if outlier_count == 0:
             return set()
 
-        posted_ids = set(int(value) for value in tables["ledger_entries"]["transaction_id"])
+        posted_ids = set(
+            int(value) for value in tables["ledger_entries"]["transaction_id"]
+        )
         eligible_positions = transactions.index[
             transactions["transaction_id"].isin(posted_ids)
         ].to_numpy()
         if outlier_count > len(eligible_positions):
-            raise ValueError("Finance transaction outlier target exceeds posted capacity")
+            raise ValueError(
+                "Finance transaction outlier target exceeds posted capacity"
+            )
 
         rng = self.generator.rng_for(
             "imperfections:finance:transactions:amount_outliers"
@@ -219,7 +221,9 @@ class FinanceImperfectionInjector:
         boundaries = list(self.config["boundary_dates"])
         if not boundaries:
             return set()
-        posted_ids = set(int(value) for value in tables["ledger_entries"]["transaction_id"])
+        posted_ids = set(
+            int(value) for value in tables["ledger_entries"]["transaction_id"]
+        )
         eligible_positions = transactions.index[
             transactions["transaction_id"].isin(posted_ids)
         ].to_numpy()
@@ -396,8 +400,7 @@ def _sample_positions(
     remaining = count - preferred_count
     if remaining:
         selected.extend(
-            int(value)
-            for value in rng.choice(fallback, size=remaining, replace=False)
+            int(value) for value in rng.choice(fallback, size=remaining, replace=False)
         )
     return selected
 

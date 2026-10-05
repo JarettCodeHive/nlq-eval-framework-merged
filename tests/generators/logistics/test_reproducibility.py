@@ -114,9 +114,7 @@ def test_reproducibility_contract_and_profile_guard() -> None:
     reason="generation dependencies are not installed",
 )
 def test_two_full_clean_room_logistics_releases_are_identical() -> None:
-    results = LogisticsReproducibilityValidator.for_profile(
-        "full"
-    ).validate_release()
+    results = LogisticsReproducibilityValidator.for_profile("full").validate_release()
 
     assert len(results) == 10
     assert all(result.passed for result in results)

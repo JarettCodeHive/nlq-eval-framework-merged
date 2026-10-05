@@ -94,24 +94,35 @@ def score_scalar_exact(golden: str, response: str, tol: Decimal = _ZERO) -> Verd
 def score_table_exact(golden: str, response: str, tol: Decimal = _ZERO) -> Verdict:
     gg, ga = _grid(golden), _grid(response)
     if len(gg) != len(ga):
-        return Verdict(False, "table_exact", f"row count {len(ga)} != expected {len(gg)}")
+        return Verdict(
+            False, "table_exact", f"row count {len(ga)} != expected {len(gg)}"
+        )
     mism = []
     for ri, (gr, ar) in enumerate(zip(gg, ga)):
         if len(gr) != len(ar):
             return Verdict(
-                False, "table_exact", f"row {ri}: column count {len(ar)} != expected {len(gr)}"
+                False,
+                "table_exact",
+                f"row {ri}: column count {len(ar)} != expected {len(gr)}",
             )
         for ci, (gc, ac) in enumerate(zip(gr, ar)):
             if not _cell_eq(gc, ac, tol):
                 mism.append(f"[{ri},{ci}] {gc!r} vs {ac!r}")
     ok = not mism
     return Verdict(
-        ok, "table_exact", "exact table match" if ok else f"{len(mism)} cell mismatch(es)", mism
+        ok,
+        "table_exact",
+        "exact table match" if ok else f"{len(mism)} cell mismatch(es)",
+        mism,
     )
 
 
 def score_judge_plus_exact(
-    golden: str, response: str, *, judge_verdict: bool | None = None, tol: Decimal = _ZERO
+    golden: str,
+    response: str,
+    *,
+    judge_verdict: bool | None = None,
+    tol: Decimal = _ZERO,
 ) -> Verdict:
     g, a = numbers(golden), numbers(response)
     mism = []
@@ -128,9 +139,13 @@ def score_judge_plus_exact(
         if hit is None:
             mism.append(f"missing numeric component {gn}")
     if mism:
-        return Verdict(False, "judge_plus_exact", "numeric component(s) not matched", mism)
+        return Verdict(
+            False, "judge_plus_exact", "numeric component(s) not matched", mism
+        )
     if judge_verdict is False:
-        return Verdict(False, "judge_plus_exact", "numerics match; judge rejected the reasoning")
+        return Verdict(
+            False, "judge_plus_exact", "numerics match; judge rejected the reasoning"
+        )
     reason = (
         "numerics match; judge not run"
         if judge_verdict is None
@@ -152,5 +167,7 @@ def score(
     if mode == "table_exact":
         return score_table_exact(golden, response, tol)
     if mode == "judge_plus_exact":
-        return score_judge_plus_exact(golden, response, judge_verdict=judge_verdict, tol=tol)
+        return score_judge_plus_exact(
+            golden, response, judge_verdict=judge_verdict, tol=tol
+        )
     raise ValueError(f"unknown scoring mode: {mode!r} (expected one of {MODES})")

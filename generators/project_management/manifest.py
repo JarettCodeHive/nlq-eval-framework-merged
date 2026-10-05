@@ -50,8 +50,7 @@ class ProjectManagementManifestGenerator:
     def __init__(self, generator: DeterministicGenerator) -> None:
         if generator.settings.domain != "project_management":
             raise ValueError(
-                "ProjectManagementManifestGenerator only supports "
-                "project_management"
+                "ProjectManagementManifestGenerator only supports " "project_management"
             )
         validate_project_management_config()
         self.generator = generator
@@ -124,16 +123,10 @@ class ProjectManagementManifestGenerator:
             "decimal_rules": list(self.pm_config["decimal_rules"]),
             "currency_rules": list(self.pm_config["currency_rules"]),
             "semantic_contract": list(self.pm_config["semantic_contract"]),
-            "distribution_targets": dict(
-                self.pm_config["distribution_targets"]
-            ),
-            "imperfection_targets": dict(
-                self.pm_config["imperfection_targets"]
-            ),
+            "distribution_targets": dict(self.pm_config["distribution_targets"]),
+            "imperfection_targets": dict(self.pm_config["imperfection_targets"]),
             "relationships": list(self.pm_config["relationships"]),
-            "join_path_requirements": list(
-                self.pm_config["join_path_requirements"]
-            ),
+            "join_path_requirements": list(self.pm_config["join_path_requirements"]),
             "consistency_rules": list(self.pm_config["consistency_rules"]),
             "library_versions": _library_versions(),
             "validation_status": validation_status,
@@ -189,9 +182,7 @@ class ProjectManagementManifestGenerator:
         dictionary = self.settings.output_path / "data_dictionary.md"
         canonical_ddl = self.settings.schema_source
         erd = canonical_ddl.with_name("project_management_er.dbml")
-        header_spec = canonical_ddl.with_name(
-            "project_management_csv_header_spec.md"
-        )
+        header_spec = canonical_ddl.with_name("project_management_csv_header_spec.md")
         required = (release_schema, dictionary, canonical_ddl, erd, header_spec)
         missing = [path for path in required if not path.is_file()]
         if missing:
@@ -300,9 +291,7 @@ class ProjectManagementManifestGenerator:
         projects = _read_csv_rows(output / "projects.csv")
         tasks = _read_csv_rows(output / "tasks.csv")
         time_entries = _read_csv_rows(output / "time_entries.csv")
-        validator = ProjectManagementImperfectionRateValidator(
-            self._fresh_generator()
-        )
+        validator = ProjectManagementImperfectionRateValidator(self._fresh_generator())
 
         duplicate_target = self.pm_config["imperfection_targets"][
             "near_duplicate_time_entries"
@@ -314,9 +303,9 @@ class ProjectManagementManifestGenerator:
         duplicate_count = sum(count - 1 for count in counts.values())
         minimum = Decimal(
             str(
-                self.pm_config["imperfection_targets"][
-                    "task_estimate_outliers"
-                ]["minimum_value"]
+                self.pm_config["imperfection_targets"]["task_estimate_outliers"][
+                    "minimum_value"
+                ]
             )
         )
         outlier_count = sum(
@@ -337,9 +326,7 @@ class ProjectManagementManifestGenerator:
         ]["targets"]:
             table_name, field_name = qualified.split(".", 1)
             values = Counter(row[field_name] for row in table_rows[table_name])
-            boundary_counts[qualified] = {
-                value: values[value] for value in boundaries
-            }
+            boundary_counts[qualified] = {value: values[value] for value in boundaries}
 
         return {
             "near_duplicate_time_entries": {

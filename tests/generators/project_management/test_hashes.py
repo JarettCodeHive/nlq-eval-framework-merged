@@ -26,14 +26,15 @@ def test_hash_computer_loads_full_profile_settings() -> None:
 
     assert computer.settings.domain == "project_management"
     assert computer.settings.profile == "full"
-    assert computer.settings.output_path == Path("release/v1.0.0/project_management/dataset").resolve()
+    assert (
+        computer.settings.output_path
+        == Path("release/v1.0.0/project_management/dataset").resolve()
+    )
 
 
 def test_hash_computer_refuses_non_release_profile() -> None:
     with pytest.raises(ValueError, match="requires the full profile"):
-        ProjectManagementHashComputer.for_profile(
-            "dev"
-        ).compute_exported_csv_hashes()
+        ProjectManagementHashComputer.for_profile("dev").compute_exported_csv_hashes()
 
 
 def test_hash_computer_reports_missing_release_csvs(tmp_path: Path) -> None:

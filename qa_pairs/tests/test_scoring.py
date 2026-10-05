@@ -54,7 +54,8 @@ def _bump_first_number(answer: str) -> str:
     first = nums[0]
     target = str(first)
     replacement = str(
-        first + (Decimal("1") if first == first.to_integral_value() else Decimal("0.01"))
+        first
+        + (Decimal("1") if first == first.to_integral_value() else Decimal("0.01"))
     )
     return answer.replace(target, replacement, 1)
 
@@ -70,7 +71,13 @@ def test_numeric_change_fails_for_every_numeric_answer(pairs, companion):
         if tampered == golden:
             continue
         v = score(mode, golden, tampered, judge_verdict=True)
-        assert not v.passed, (r["natural_language_question"], mode, golden, "->", tampered)
+        assert not v.passed, (
+            r["natural_language_question"],
+            mode,
+            golden,
+            "->",
+            tampered,
+        )
         checked += 1
     assert checked > 100  # the vast majority of the 160 carry a number
 

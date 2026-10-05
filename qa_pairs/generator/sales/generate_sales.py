@@ -158,7 +158,9 @@ def build(profile: str) -> None:
     (DATASET / f"manifest_sales_{profile}.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
     )
-    print(f"\ndataset/sales/{profile}/  +  {db_path.name}  +  manifest_sales_{profile}.json")
+    print(
+        f"\ndataset/sales/{profile}/  +  {db_path.name}  +  manifest_sales_{profile}.json"
+    )
     print(
         f"reference_today = {manifest['reference_today']}  "
         f"integrity: {integrity['row_cap_check']}, fk {integrity['fk_check']}"

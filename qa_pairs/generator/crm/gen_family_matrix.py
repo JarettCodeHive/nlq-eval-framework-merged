@@ -50,4 +50,6 @@ with out.open("w", newline="", encoding="utf-8") as fh:
 tiers = {}
 for f in fams:
     tiers[f["tier"]] = tiers.get(f["tier"], 0) + f["quota"]
-print(f"{len(fams)} families -> {out.name}  |  tier quotas {tiers} = {sum(tiers.values())}")
+print(
+    f"{len(fams)} families -> {out.name}  |  tier quotas {tiers} = {sum(tiers.values())}"
+)

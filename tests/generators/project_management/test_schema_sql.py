@@ -80,9 +80,7 @@ def test_schema_sql_executes_in_duckdb() -> None:
 
 def test_schema_sql_refuses_non_release_profile() -> None:
     with pytest.raises(ValueError, match="requires the full profile"):
-        ProjectManagementSchemaSQLGenerator.for_profile(
-            "dev"
-        ).write_release_schema()
+        ProjectManagementSchemaSQLGenerator.for_profile("dev").write_release_schema()
 
 
 def test_schema_sql_writes_byte_identical_artifact(tmp_path: Path) -> None:
@@ -93,9 +91,10 @@ def test_schema_sql_writes_byte_identical_artifact(tmp_path: Path) -> None:
 
     assert output_path == tmp_path / "schema.sql"
     assert output_path.read_bytes() == generator.settings.schema_source.read_bytes()
-    assert compute_sha256(output_path).sha256 == compute_sha256(
-        generator.settings.schema_source
-    ).sha256
+    assert (
+        compute_sha256(output_path).sha256
+        == compute_sha256(generator.settings.schema_source).sha256
+    )
     assert not (tmp_path / "schema.sql.tmp").exists()
 
 

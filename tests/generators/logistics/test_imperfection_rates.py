@@ -74,9 +74,7 @@ def test_duplicate_variation_failure_is_reported(
     distributed, imperfect = distributed_and_imperfect
     malformed = _copy_tables(imperfect)
     duplicate_position = len(distributed["shipments"])
-    tracking_number = malformed["shipments"].at[
-        duplicate_position, "tracking_number"
-    ]
+    tracking_number = malformed["shipments"].at[duplicate_position, "tracking_number"]
     base_shipments = malformed["shipments"].loc[: duplicate_position - 1]
     original = base_shipments[
         base_shipments["tracking_number"] == tracking_number
@@ -155,9 +153,7 @@ def test_exported_validation_reads_profile_csvs(
     _, imperfect = distributed_and_imperfect
     configured = LogisticsImperfectionRateValidator.for_profile("dev")
     settings = replace(configured.settings, output_path=tmp_path)
-    validator = LogisticsImperfectionRateValidator(
-        DeterministicGenerator(settings)
-    )
+    validator = LogisticsImperfectionRateValidator(DeterministicGenerator(settings))
     CSVExporter(settings.csv_format).export_tables(
         tables=imperfect,
         table_order=settings.table_order,
