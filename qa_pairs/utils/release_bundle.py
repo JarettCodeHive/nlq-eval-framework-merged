@@ -13,6 +13,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _VERSION = ContextVar[str | None]("nlq_release_version", default=None)
 _VALID_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_VALID_COMPONENTS = frozenset(
+    {"dataset", "qa_pairs", "judge", "scorecard", "platform", "logs"}
+)
 
 
 class LegacyReleaseLayoutWarning(UserWarning):
@@ -143,7 +146,7 @@ def component_dir(
 ) -> Path:
     """Return a canonical write location inside a release bundle."""
 
-    if component not in {"dataset", "qa_pairs", "judge", "scorecard", "platform"}:
+    if component not in _VALID_COMPONENTS:
         raise ValueError(f"unknown release component: {component}")
     return bundle_root(domain, version, repo_root=repo_root) / component
 
@@ -157,7 +160,7 @@ def legacy_component_dir(
 ) -> Path:
     """Return one component in the retired domain-first layout."""
 
-    if component not in {"dataset", "qa_pairs", "judge", "scorecard", "platform"}:
+    if component not in _VALID_COMPONENTS:
         raise ValueError(f"unknown release component: {component}")
     return legacy_bundle_root(
         domain, version, repo_root=repo_root

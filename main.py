@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -72,6 +75,72 @@ def _platform_manifest_path(
         version or default_release_version(domain),
         repo_root=REPO_ROOT,
     ) / f"{profile}.json"
+
+
+# Commands that are not scoped to one domain/release (score aggregates
+# several domains; rubric just renders a template), so they log to a stable
+# local path instead of a release component directory.
+_UNSCOPED_LOG_COMMANDS: frozenset[str] = frozenset({"score", "rubric"})
+
+
+def _resolve_command_log_path(args: argparse.Namespace) -> Path:
+    """Return the on-disk log file target for one CLI invocation.
+
+    A `full`-profile command logs beside the release artefacts it produces,
+    under release/<version>/<domain>/logs/, so the console record of a run
+    lives with everything that run wrote. Commands without a resolvable
+    release version (dev profile, or a domain whose release config is
+    missing) fall back to a local tmp/ path so logging never blocks the
+    command itself.
+    """
+
+    timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    filename = f"{args.command}_{timestamp}.log"
+
+    if args.command in _UNSCOPED_LOG_COMMANDS:
+        return REPO_ROOT / "logs" / filename
+
+    domain = getattr(args, "domain", None) or "shared"
+    profile = getattr(args, "profile", None)
+
+    if profile == "full":
+        try:
+            version = args.release_version or default_release_version(domain)
+            return (
+                component_dir(domain, "logs", version, repo_root=REPO_ROOT)
+                / filename
+            )
+        except ValueError:
+            pass  # unknown domain or missing release config - fall back below
+
+    return REPO_ROOT / "tmp" / "generated" / domain / (profile or "shared") / "logs" / filename
+
+
+class _TeeTextStream(io.TextIOBase):
+    """Mirror every write to a live stream and an open log file."""
+
+    def __init__(self, primary: Any, secondary: Any) -> None:
+        self._primary = primary
+        self._secondary = secondary
+
+    @property
+    def encoding(self) -> str:
+        return "utf-8"
+
+    def writable(self) -> bool:
+        return True
+
+    def isatty(self) -> bool:
+        return bool(getattr(self._primary, "isatty", lambda: False)())
+
+    def write(self, text: str) -> int:
+        self._primary.write(text)
+        self._secondary.write(text)
+        return len(text)
+
+    def flush(self) -> None:
+        self._primary.flush()
+        self._secondary.flush()
 
 
 def run_validate_config(args: argparse.Namespace) -> None:
@@ -1154,12 +1223,26 @@ def main() -> None:
     if forward_help:
         command_argv.append("--help")
     args.command_argv = command_argv
-    try:
+
+    if forward_help:
+        # A --help dispatch produces no artefacts, so it earns no log file.
         with use_release_version(args.release_version):
             COMMANDS[args.command](args)
-    except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        raise SystemExit(1) from exc
+        return
+
+    log_path = _resolve_command_log_path(args)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8") as log_file:
+        tee_out = _TeeTextStream(sys.stdout, log_file)
+        tee_err = _TeeTextStream(sys.stderr, log_file)
+        with contextlib.redirect_stdout(tee_out), contextlib.redirect_stderr(tee_err):
+            print(f"[log] writing command output to {log_path}")
+            try:
+                with use_release_version(args.release_version):
+                    COMMANDS[args.command](args)
+            except Exception as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":
