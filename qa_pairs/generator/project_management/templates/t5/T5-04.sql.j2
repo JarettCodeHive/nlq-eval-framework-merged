@@ -1,0 +1,6 @@
+SELECT task_type AS entity, COUNT(*) AS metric
+FROM tasks
+WHERE due_date < DATE '2026-08-01' AND completed_date IS NULL AND task_type IS NOT NULL
+GROUP BY task_type
+ORDER BY metric DESC, entity ASC
+LIMIT 3;

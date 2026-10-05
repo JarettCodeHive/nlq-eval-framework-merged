@@ -56,6 +56,9 @@ from qa_pairs.generator.project_management.generate_project_management import (
 from qa_pairs.generator.project_management.scale_pairs_project_management import (
     generate_pairs as generate_project_management_pairs,
 )
+from qa_pairs.generator.project_management.rephrase import (
+    generate_rephrases as generate_project_management_rephrases,
+)
 from qa_pairs.generator.project_management.validate_project_management import (
     validate as validate_project_management_qa_dataset,
 )
@@ -599,6 +602,7 @@ QA_REPHRASE: dict[str, CommandHandler] = {
     "sales": generate_sales_rephrases,
     "finance": generate_finance_rephrases,
     "logistics": generate_logistics_rephrases,
+    "project_management": generate_project_management_rephrases,
 }
 
 

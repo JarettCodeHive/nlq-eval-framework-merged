@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS milestone_count
+FROM milestones
+WHERE milestone_type = {{ milestone_type | sqlstr }};

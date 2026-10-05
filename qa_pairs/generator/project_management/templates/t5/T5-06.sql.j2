@@ -1,0 +1,8 @@
+SELECT te.work_type AS entity, ROUND(SUM(te.hours), 2) AS total_hours
+FROM projects p
+INNER JOIN tasks t ON p.project_id = t.project_id
+INNER JOIN time_entries te ON t.task_id = te.task_id
+WHERE p.status = {{ project_status | sqlstr }}
+GROUP BY te.work_type
+ORDER BY total_hours DESC, entity ASC
+LIMIT 3;

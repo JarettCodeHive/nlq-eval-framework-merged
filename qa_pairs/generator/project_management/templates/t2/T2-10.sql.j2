@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS entry_count
+FROM time_entries te
+INNER JOIN tasks t ON te.task_id = t.task_id
+WHERE t.task_type = {{ task_type | sqlstr }};
