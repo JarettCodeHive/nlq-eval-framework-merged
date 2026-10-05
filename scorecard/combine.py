@@ -441,7 +441,11 @@ def combine(
                         "rows": len(r.rows),
                         "pulse_mode": r.pulse_mode,
                         "judge": r.judge_name,
-                        "calibrated": r.calibrated,
+                        # Calibration state is deliberately NOT recorded here.
+                        # The scorecard directory carries no trace of it, by
+                        # project decision; `results_json` above points at the
+                        # run, whose summary still holds `calibrated` for the
+                        # release gate and for an audit that goes looking.
                         "platform_version": r.platform_version,
                         "dataset_version": r.dataset_version,
                     }
