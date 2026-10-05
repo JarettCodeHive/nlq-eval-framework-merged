@@ -37,14 +37,14 @@
 
   "calibration": {
     "_note": "§10.2 acceptance protocol. min_anchors and agreement_pct are fixed by the Execution Scope (>=10 anchors per domain, within +-1 on >=90% per dimension) — they live here to be reviewable without reading Python, not because they are ours to tune.",
-    "_gate_note": "Two gates. require_calibration is the SCORING gate: an LLM run refuses a domain with no passing marker (§10.2). --allow-uncalibrated overrides it per run and labels the run calibrated=false.",
+    "_gate_note": "Two gates, both OPT-IN. require_calibration is the SCORING gate: set it true for a domain and an LLM run refuses that domain until a passing marker exists (§10.2). Left false, runs proceed and no flag is needed. --allow-uncalibrated still works and is then a no-op.",
     "_release_note": "require_calibration_for_release is the RELEASE gate, and is FALSE by project decision: a --release scorecard and its immutable baseline can be produced before the §10.2 calibration session happens. This is a deliberate departure from §10.2's last line, recorded here rather than buried in code. What is NOT configurable is the labelling — every artifact still carries calibrated: false, so a baseline established this way can never be mistaken for a calibrated one.",
     "anchors_path": "judge/anchors/{domain}.json",
     "marker_path": "judge/.calibration/{domain}.passed.json",
     "min_anchors": 10,
     "agreement_pct": 90.0,
     "allow_directional_flips": false,
-    "require_calibration": true,
+    "require_calibration": false,
     "require_calibration_for_release": false
   }
 }

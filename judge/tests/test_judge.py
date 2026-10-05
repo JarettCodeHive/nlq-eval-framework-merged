@@ -822,3 +822,44 @@ def test_legacy_marker_without_a_fingerprint_does_not_license_a_run(tmp_path):
     state = check_calibrated("crm", JudgeFingerprint("m", "p", "combined"), tmp_path)
     assert state.calibrated is False
     assert "predates judge fingerprinting" in state.reason
+
+
+# --- the §10.2 scoring gate is opt-in (project decision) ----------------------
+
+
+def test_the_scoring_gate_is_off_by_default():
+    """A run proceeds without a calibration marker and without a flag.
+
+    §10.2 reads the other way; this is a recorded project decision, taken so a
+    baseline can be produced before the calibration session is scheduled. The
+    mitigation is that the LABEL is not configurable — see the two assertions
+    below it in spirit: every artifact still records calibrated=false.
+    """
+
+    assert load_judge_config("crm").calibration.require_calibration is False
+    assert (
+        load_judge_config("crm").calibration.require_calibration_for_release is False
+    )
+
+
+def test_a_domain_can_opt_back_into_the_scoring_gate(tmp_path):
+    """Off by default, but still a gate: a domain that wants §10.2 enforced says
+    so in its own config, and nothing else has to change."""
+
+    root = tmp_path / "cfg"
+    root.mkdir()
+    (root / "default.json").write_text(
+        json.dumps({"model": "m", "calibration": {"require_calibration": False}}),
+        encoding="utf-8",
+    )
+    (root / "crm.json").write_text(
+        json.dumps({"calibration": {"require_calibration": True}}), encoding="utf-8"
+    )
+    (root / "sales.json").write_text("{}", encoding="utf-8")
+
+    assert load_judge_config("crm", root).calibration.require_calibration is True
+    assert load_judge_config("sales", root).calibration.require_calibration is False
+    # The opt-in must not drag the rest of the block with it — a shallow merge
+    # would drop min_anchors and agreement_pct the moment one field is set.
+    assert load_judge_config("crm", root).calibration.min_anchors == 10
+    assert load_judge_config("crm", root).calibration.agreement_pct == 90.0

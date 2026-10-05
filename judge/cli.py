@@ -1162,9 +1162,11 @@ async def _run(args: argparse.Namespace) -> int:
 
     if not summary["calibrated"] and args.judge == "llm":
         print(
-            "\n[judge] NOTE: judge is uncalibrated (§10.2). These scores are "
-            "diagnostic only and are labelled `calibrated=false` in the summary. "
-            "They must NOT be fed to a scorecard until calibration passes."
+            "\n[judge] NOTE: judge is uncalibrated (§10.2). Every artifact this "
+            "run writes is labelled `calibrated=false`, including any scorecard "
+            "or baseline built from it — that label is not configurable. Grade "
+            f"anchors and run `python main.py calibrate --domain {args.domain}` "
+            "to replace it with a real pass."
         )
     if hasattr(judge, "cache_stats"):
         stats = judge.cache_stats()
@@ -1566,7 +1568,9 @@ def build_argparser(prog: str | None = None) -> argparse.ArgumentParser:
         "--allow-uncalibrated",
         action="store_true",
         help="§10.2 override: run the LLM judge without a calibration marker. "
-        "Scores are labelled uncalibrated and MUST NOT feed a scorecard.",
+        "Only needed where a domain sets calibration.require_calibration=true; "
+        "the gate is opt-in and off by default, so this is otherwise a no-op. "
+        "Scores are labelled uncalibrated either way.",
     )
     ap.add_argument(
         "--release",

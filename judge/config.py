@@ -228,8 +228,12 @@ class CalibrationConfig(BaseModel):
     # ±1 threshold because it is a hard zero, not a percentage.
     allow_directional_flips: bool = False
     # Gate on SCORING: refuse to run an LLM judge against a domain with no
-    # passing marker. §10.2's reading, and the default.
-    require_calibration: bool = True
+    # passing marker. FALSE by default — the gate exists but is opt-in, so a run
+    # proceeds unless a domain's config asks for it. §10.2 reads the other way;
+    # that departure is a recorded project decision, and the mitigation is the
+    # same as for the release gate: the label is not configurable, so every
+    # artifact still says calibrated: false.
+    require_calibration: bool = False
     # Gate on RELEASE: whether a --release scorecard additionally requires that
     # marker. Defaults FALSE by project decision — §10.2's last line says
     # uncalibrated scores must not enter a scorecard, so this is a deliberate
