@@ -17,6 +17,76 @@ from scorecard.summary import (
     build_summary_rows,
 )
 
+def _register_report_fonts() -> tuple[str, str, str]:
+    """Embed a Unicode font, returning (regular, bold, italic) family names.
+
+    The built-in Helvetica is one of the PDF standard-14 faces, which are NOT
+    embedded: the viewer substitutes a local font, and a substitute missing a
+    glyph draws a box. That is why `§` — a perfectly ordinary WinAnsi character —
+    came out broken on another machine while extracting fine here.
+
+    Bitstream Vera ships inside reportlab itself, so embedding it needs no system
+    font and behaves identically on a developer Mac and in CI. It covers §, ≥, ±,
+    the em dash and the middle dot. It does NOT cover U+25CF or U+26A0, so those
+    are not used anywhere in this module — see `_CHIP`.
+
+    Falls back to Helvetica if registration fails for any reason: a slightly
+    wrong glyph is better than no report.
+    """
+
+    try:
+        import reportlab
+        from reportlab.lib.fonts import addMapping
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        root = Path(reportlab.__file__).resolve().parent / "fonts"
+        faces = {
+            "NLQSans": "Vera.ttf",
+            "NLQSans-Bold": "VeraBd.ttf",
+            "NLQSans-Italic": "VeraIt.ttf",
+            "NLQSans-BoldItalic": "VeraBI.ttf",
+        }
+        for name, filename in faces.items():
+            pdfmetrics.registerFont(TTFont(name, str(root / filename)))
+        # So <b> and <i> inside a Paragraph resolve to the embedded faces rather
+        # than silently falling back to Helvetica mid-sentence.
+        pdfmetrics.registerFontFamily(
+            "NLQSans",
+            normal="NLQSans",
+            bold="NLQSans-Bold",
+            italic="NLQSans-Italic",
+            boldItalic="NLQSans-BoldItalic",
+        )
+        for bold in (0, 1):
+            for italic in (0, 1):
+                addMapping("NLQSans", bold, italic, [
+                    "NLQSans", "NLQSans-Italic", "NLQSans-Bold", "NLQSans-BoldItalic"
+                ][bold * 2 + italic])
+        # Patching every ParagraphStyle and TableStyle by hand missed blocks, and
+        # anything missed silently falls back to a NON-embedded standard-14 face.
+        # These are the three places reportlab resolves an unspecified font, so
+        # setting them covers the whole document by construction:
+        #   canvas_basefontname -> the canvas, the sample stylesheet, Table cells
+        #   shapes STATE_DEFAULTS -> graphics String(), which defaults to
+        #                            Times-Roman and is what the charts draw with
+        from reportlab import rl_config
+        from reportlab.graphics import shapes
+
+        rl_config.canvas_basefontname = "NLQSans"
+        shapes.STATE_DEFAULTS["fontName"] = "NLQSans"
+        return "NLQSans", "NLQSans-Bold", "NLQSans-Italic"
+    except Exception:  # pragma: no cover - a broken install, not a code path
+        return _FONT, _FONT_BOLD, _FONT_ITALIC
+
+
+_FONT, _FONT_BOLD, _FONT_ITALIC = _register_report_fonts()
+
+# The status mark beside a figure. U+25CF (a filled circle) is the obvious
+# choice and is absent from the embedded face, so it drew a box; U+2022 is
+# present and reads the same at 8pt beside a number.
+_CHIP = "&#8226;"
+
 # §14.2 condition 1: the package does not ship below this. The PDF colours
 # against it so a reader sees pass/fail rather than a number needing context.
 ACCURACY_GATE_PCT: float = 95.0
@@ -405,7 +475,7 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
     from reportlab.platypus import Paragraph, Table, TableStyle
 
     cell = ParagraphStyle(
-        "cell", fontName="Helvetica", fontSize=8.5, leading=10, alignment=2
+        "cell", fontName=_FONT, fontSize=8.5, leading=10, alignment=2
     )
 
     header = [_HEADER_LABELS.get(c, c) for c in columns]
@@ -429,7 +499,7 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
                 chip = _status_fill(row[column])
                 cells.append(
                     Paragraph(
-                        f'<font color="{chip}">&#9679;</font>&nbsp;{text}', cell
+                        f'<font color="{chip}">{_CHIP}</font>&nbsp;{text}', cell
                     )
                 )
             else:
@@ -438,9 +508,10 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
 
     table = Table(body, repeatRows=1, hAlign="LEFT")
     style = [
+        ("FONTNAME", (0, 0), (-1, -1), _FONT),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#22304a")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), _FONT_BOLD),
         ("FONTSIZE", (0, 0), (-1, 0), 8),
         ("FONTSIZE", (0, 1), (-1, -1), 8.5),
         ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
@@ -457,14 +528,14 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
             style.append(
                 ("BACKGROUND", (0, index), (-1, index), colors.HexColor("#eef1f6"))
             )
-            style.append(("FONTNAME", (0, index), (-1, index), "Helvetica-Bold"))
+            style.append(("FONTNAME", (0, index), (-1, index), _FONT_BOLD))
         if row.get("regression_flag") and "regression_flag" in columns:
             column = columns.index("regression_flag")
             style.append(
                 ("TEXTCOLOR", (column, index), (column, index), colors.HexColor("#b42318"))
             )
             style.append(
-                ("FONTNAME", (column, index), (column, index), "Helvetica-Bold")
+                ("FONTNAME", (column, index), (column, index), _FONT_BOLD)
             )
     table.setStyle(TableStyle(style))
     return table
@@ -530,7 +601,7 @@ def _outcome_chart(rows: list[dict], *, width: float, height: float):
         y = bottom + index * (bar_h + gap) + gap / 2
         drawing.add(
             String(left - 8, y + bar_h / 2 - 3, _domain_label(row["domain"]),
-                   fontName="Helvetica-Bold", fontSize=8,
+                   fontName=_FONT_BOLD, fontSize=8,
                    fillColor=colors.HexColor(_INK), textAnchor="end")
         )
         x = left
@@ -548,14 +619,14 @@ def _outcome_chart(rows: list[dict], *, width: float, height: float):
             if seg_w > 24:
                 drawing.add(
                     String(x + (seg_w - 2) / 2, y + bar_h / 2 - 3, str(count),
-                           fontName="Helvetica-Bold", fontSize=7,
+                           fontName=_FONT_BOLD, fontSize=7,
                            fillColor=colors.white, textAnchor="middle")
                 )
             # 2px surface gap between fills, per the mark spec — a gap, not a border.
             x += seg_w
         drawing.add(
             String(left + plot_w + 4, y + bar_h / 2 - 3, f"n={total}",
-                   fontName="Helvetica", fontSize=7,
+                   fontName=_FONT, fontSize=7,
                    fillColor=colors.HexColor(_INK_MUTED))
         )
 
@@ -587,7 +658,7 @@ def _outcome_chart(rows: list[dict], *, width: float, height: float):
     for _key, label, fill in [s for s in segments if s[0] in present]:
         drawing.add(Rect(lx, ly, 7, 7, fillColor=colors.HexColor(fill),
                          strokeColor=colors.HexColor(fill), strokeWidth=0))
-        drawing.add(String(lx + 11, ly + 1, label, fontName="Helvetica", fontSize=6.5,
+        drawing.add(String(lx + 11, ly + 1, label, fontName=_FONT, fontSize=6.5,
                            fillColor=colors.HexColor(_INK_MUTED)))
         lx += 11 + len(label) * 3.3 + 14
     drawing.add(Line(left, bottom - 6, left + plot_w, bottom - 6,
@@ -640,13 +711,13 @@ def _dimension_chart(rows: list[dict], domain: str, *, width: float, height: flo
         drawing.add(Line(x, bottom, x, bottom + plot_h,
                          strokeColor=colors.HexColor("#e6e7e4"), strokeWidth=0.5))
         drawing.add(String(x, bottom - 10, str(score) if score in (1, 3, 5) else "",
-                           fontName="Helvetica", fontSize=6.5,
+                           fontName=_FONT, fontSize=6.5,
                            fillColor=colors.HexColor(_INK_MUTED), textAnchor="middle"))
 
     for index, (label, value) in enumerate(reversed(values)):
         y = bottom + index * (bar_h + gap) + gap / 2
         drawing.add(String(left - 6, y + bar_h / 2 - 2.5, label,
-                           fontName="Helvetica", fontSize=7.5,
+                           fontName=_FONT, fontSize=7.5,
                            fillColor=colors.HexColor(_INK), textAnchor="end"))
         if not isinstance(value, (int, float)):
             continue
@@ -657,7 +728,7 @@ def _dimension_chart(rows: list[dict], domain: str, *, width: float, height: flo
             drawing.add(Rect(left, y, bar_w, bar_h, rx=3, ry=3, fillColor=fill,
                              strokeColor=fill.clone(), strokeWidth=0.5))
         drawing.add(String(left + plot_w + 6, y + bar_h / 2 - 2.5, f"{value:.2f}",
-                           fontName="Helvetica-Bold", fontSize=7.5,
+                           fontName=_FONT_BOLD, fontSize=7.5,
                            fillColor=colors.HexColor(_INK)))
     return drawing
 
@@ -704,7 +775,7 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
         )
         drawing.add(
             String(x, bottom - 11, f"{pct}",
-                   fontName="Helvetica", fontSize=6.5,
+                   fontName=_FONT, fontSize=6.5,
                    fillColor=colors.HexColor(_INK_MUTED), textAnchor="middle")
         )
 
@@ -713,13 +784,13 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
         y = bottom + index * (bar_h + gap) + gap / 2
         drawing.add(
             String(left - 6, y + bar_h / 2 - 2.5, str(row["tier"]),
-                   fontName="Helvetica-Bold", fontSize=7.5,
+                   fontName=_FONT_BOLD, fontSize=7.5,
                    fillColor=colors.HexColor(_INK), textAnchor="end")
         )
         if not isinstance(pct, (int, float)):
             drawing.add(
                 String(left + 4, y + bar_h / 2 - 2.5, "no eligible questions",
-                       fontName="Helvetica-Oblique", fontSize=7,
+                       fontName=_FONT_ITALIC, fontSize=7,
                        fillColor=colors.HexColor(_INK_MUTED))
             )
             continue
@@ -740,7 +811,7 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
             String(left + plot_w + 6, y + bar_h / 2 - 2.5,
                    f"{pct:.1f}%  ({row.get('exact_match_pass')}/"
                    f"{row.get('questions_total')})",
-                   fontName="Helvetica", fontSize=7,
+                   fontName=_FONT, fontSize=7,
                    fillColor=colors.HexColor(_INK))
         )
 
@@ -753,7 +824,7 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
     drawing.add(
         String(gate_x, bottom + plot_h + 6,
                f"{ACCURACY_GATE_PCT:.0f}% gate (§14.2)",
-               fontName="Helvetica-Bold", fontSize=6.5,
+               fontName=_FONT_BOLD, fontSize=6.5,
                fillColor=colors.HexColor(_INK), textAnchor="middle")
     )
     return drawing
@@ -926,18 +997,27 @@ def write_scorecard_pdf(
     rows, comparisons = build_summary_rows(results, ctx, baseline=baseline)
 
     styles = getSampleStyleSheet()
+    for _name in ("Normal", "BodyText", "Title", "Heading1", "Heading2", "Heading3"):
+        if _name in styles:
+            styles[_name].fontName = _FONT_BOLD if "Heading" in _name or _name == "Title" else _FONT
     body = ParagraphStyle(
-        "body", parent=styles["BodyText"], fontSize=9, leading=12, alignment=TA_LEFT
+        "body",
+        parent=styles["BodyText"],
+        fontName=_FONT,
+        fontSize=9,
+        leading=12,
+        alignment=TA_LEFT,
     )
     warn = ParagraphStyle(
         "warn",
         parent=body,
         textColor=colors.HexColor("#b42318"),
-        fontName="Helvetica-Bold",
+        fontName=_FONT_BOLD,
     )
     section = ParagraphStyle(
         "section",
         parent=styles["Heading3"],
+        fontName=_FONT_BOLD,
         fontSize=11,
         spaceBefore=10,
         spaceAfter=4,
@@ -991,6 +1071,7 @@ def write_scorecard_pdf(
     masthead.setStyle(
         TableStyle(
             [
+                ("FONTNAME", (0, 0), (-1, -1), _FONT),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
@@ -1083,6 +1164,7 @@ def write_scorecard_pdf(
             tiles[-1].setStyle(
                 TableStyle(
                     [
+                        ("FONTNAME", (0, 0), (-1, -1), _FONT),
                         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9ced6")),
                         ("LINEBEFORE", (0, 0), (0, -1), 3, colors.HexColor(_status_fill(pct))),
                         ("LEFTPADDING", (0, 0), (-1, -1), 9),
@@ -1103,6 +1185,7 @@ def write_scorecard_pdf(
         tile_row.setStyle(
             TableStyle(
                 [
+                    ("FONTNAME", (0, 0), (-1, -1), _FONT),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 8),
@@ -1148,6 +1231,7 @@ def write_scorecard_pdf(
             notice_rows, colWidths=[0.14 * inch, 9.96 * inch], hAlign="LEFT"
         )
         notice_style = [
+            ("FONTNAME", (0, 0), (-1, -1), _FONT),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (0, -1), 0),
             ("RIGHTPADDING", (0, 0), (0, -1), 0),
@@ -1173,7 +1257,8 @@ def write_scorecard_pdf(
     prov.setStyle(
         TableStyle(
             [
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (0, 0), (-1, -1), _FONT),
+                ("FONTNAME", (0, 0), (0, -1), _FONT_BOLD),
                 ("FONTSIZE", (0, 0), (-1, -1), 8.5),
                 ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#42506b")),
                 ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#f6f7f9")]),
@@ -1204,11 +1289,12 @@ def write_scorecard_pdf(
         repeatRows=1,
     )
     gate_style = [
+        ("FONTNAME", (0, 0), (-1, -1), _FONT),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#22304a")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), _FONT_BOLD),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("FONTNAME", (1, 1), (1, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 1), (1, -1), _FONT_BOLD),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#c9ced6")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING", (0, 0), (-1, -1), 2.5),
@@ -1310,9 +1396,12 @@ def write_scorecard_pdf(
         reason_table.setStyle(
             TableStyle(
                 [
+                    # Base font first: a FONTNAME scoped to the header row only
+                    # leaves the body cells on a non-embedded standard-14 face.
+                    ("FONTNAME", (0, 0), (-1, -1), _FONT),
                     ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#22304a")),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, 0), (-1, 0), _FONT_BOLD),
                     ("FONTSIZE", (0, 0), (-1, -1), 8),
                     ("ALIGN", (0, 1), (0, -1), "RIGHT"),
                     ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#c9ced6")),
@@ -1381,7 +1470,7 @@ def write_scorecard_pdf(
         """
 
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
+        canvas.setFont(_FONT, 7)
         canvas.setFillColor(colors.HexColor(_INK_MUTED))
         canvas.setStrokeColor(colors.HexColor("#c9ced6"))
         y = 0.34 * inch

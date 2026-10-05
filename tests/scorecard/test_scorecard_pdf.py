@@ -257,3 +257,70 @@ def test_the_new_sections_reach_the_pdf(tmp_path: Path) -> None:
     for ours in ("Independent reviewer", "Clean-room", "§9.1 quota",
                  "Cross-domain question uniqueness"):
         assert ours not in text, f"framework self-assessment leaked in: {ours}"
+
+
+# --- fonts: the §-renders-as-a-box class of bug --------------------------------
+
+
+def _text_of(path: Path) -> str:
+    pypdf = pytest.importorskip("pypdf")
+    return "\n".join(p.extract_text() for p in pypdf.PdfReader(str(path)).pages)
+
+
+def _pdf_fonts_used(path: Path) -> set[str]:
+    """Faces the content streams actually SELECT, not merely declare.
+
+    ReportLab lists fonts in a page's resource dictionary whether or not any text
+    uses them, so the resource dict alone proves nothing.
+    """
+
+    import re
+
+    pypdf = pytest.importorskip("pypdf")
+    reader = pypdf.PdfReader(str(path))
+    used: set[str] = set()
+    for page in reader.pages:
+        fonts = (page.get("/Resources", {}) or {}).get("/Font") or {}
+        lookup = {k: str(v.get_object().get("/BaseFont")) for k, v in fonts.items()}
+        # The RAW /Contents stream, not ContentStream.get_data() — the latter
+        # reconstructs the stream and drops the Tf operators we are looking for.
+        contents = page.get("/Contents")
+        streams = contents if isinstance(contents, list) else [contents]
+        for stream in streams:
+            if stream is None:
+                continue
+            data = stream.get_object().get_data().decode("latin-1", "ignore")
+            for ref in re.findall(r"(/[A-Za-z0-9#+_.-]+)\s+[\d.]+\s+Tf", data):
+                used.add(lookup.get(ref, ref))
+    return used
+
+
+def test_every_glyph_comes_from_an_embedded_font(tmp_path: Path) -> None:
+    """The standard-14 faces are NOT embedded: the viewer substitutes a local
+    font, and a substitute missing a glyph draws a box. That is how `§` — an
+    ordinary WinAnsi character — came out broken on another machine while
+    extracting cleanly here. Every face the document draws with must be embedded.
+    """
+
+    out = tmp_path / "card"
+    results = _results(passes=20, fails=12, clarifications=2)
+    report.write_scorecard_pdf(out, results, _ctx())
+
+    used = _pdf_fonts_used(out / "scorecard.pdf")
+    assert used, "no font selections found — the probe is broken, not the PDF"
+    not_embedded = sorted(f for f in used if "Vera" not in f)
+    assert not not_embedded, f"non-embedded faces in use: {not_embedded}"
+
+
+def test_the_pdf_contains_no_missing_glyph_boxes(tmp_path: Path) -> None:
+    """U+25CF and U+26A0 are absent from the embedded face and used to render as
+    black boxes. Nothing in the document may rely on a glyph the font lacks."""
+
+    out = tmp_path / "card"
+    report.write_scorecard_pdf(out, _results(passes=20, fails=12), _ctx())
+    text = _text_of(out / "scorecard.pdf")
+
+    for box in ("■", "□", "�"):
+        assert box not in text, f"missing-glyph box {box!r} rendered"
+    # And the characters we DO rely on survive the round trip.
+    assert "§" in text
