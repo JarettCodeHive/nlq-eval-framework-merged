@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS entry_count
+FROM ledger_entries le
+INNER JOIN accounts a ON le.account_id = a.account_id
+WHERE a.normal_balance = {{ normal_balance | sqlstr }};

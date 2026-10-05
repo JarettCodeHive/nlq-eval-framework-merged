@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS account_count
+FROM accounts a
+LEFT JOIN ledger_entries le ON a.account_id = le.account_id
+WHERE le.entry_id IS NULL;

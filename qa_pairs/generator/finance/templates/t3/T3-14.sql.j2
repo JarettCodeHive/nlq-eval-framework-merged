@@ -1,0 +1,7 @@
+SELECT COUNT(*) AS rate_count
+FROM fx_rates f
+LEFT JOIN transactions t
+    ON f.from_currency = t.source_currency
+    AND f.to_currency = t.target_currency
+    AND f.rate_date = t.transaction_date
+WHERE f.is_estimated = false AND t.transaction_id IS NULL;

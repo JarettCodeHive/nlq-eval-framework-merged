@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS transaction_count
+FROM transactions t
+LEFT JOIN ledger_entries le ON t.transaction_id = le.transaction_id
+WHERE t.reversed = true AND le.entry_id IS NULL;

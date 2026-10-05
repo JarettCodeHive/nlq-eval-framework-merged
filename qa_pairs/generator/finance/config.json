@@ -18,7 +18,7 @@
       "full": "release/{release_version}/{domain}/qa_pairs"
     }
   },
-  "tier_quota": {"T1": 18, "T2": 30, "T3": 18, "T4": 18, "T5": 10},
+  "tier_quota": {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24},
   "tables": ["accounts", "transactions", "ledger_entries", "budgets", "fx_rates"],
   "scoring": {
     "numeric_tolerance": "0",

@@ -1,0 +1,8 @@
+SELECT t.source_system AS entity, COUNT(*) AS metric
+FROM transactions t
+INNER JOIN ledger_entries le ON t.transaction_id = le.transaction_id
+INNER JOIN accounts a ON le.account_id = a.account_id
+WHERE a.account_type = {{ account_type | sqlstr }}
+GROUP BY t.source_system
+ORDER BY metric DESC, entity ASC
+LIMIT 3;
