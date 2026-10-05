@@ -112,7 +112,7 @@ class ProjectManagementDataDictionaryGenerator:
         lines = [
             "# Project Management Data Dictionary",
             "",
-            f"Dataset version: `{self.settings.dataset_version}`",
+            f"Release version: `{self.settings.release_version}`",
             "",
             f"Schema source: `{self.pm_config['schema_source']}`",
             "",

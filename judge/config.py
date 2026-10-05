@@ -166,45 +166,6 @@ FloodgateSettings = Union[FloodgateOIDCSettings, FloodgateNarrativeSettings]
 LLMSettings = FloodgateSettings
 
 
-class ReleaseConfig(BaseModel):
-    """Which dataset and Q&A build a run of this domain scores.
-
-    Shaped like the generation and Q&A configs it sits beside: profile-keyed path
-    maps, `{domain}` / `{dataset_version}` / `{qa_version}` interpolation, and
-    pointer strings to the sibling configs rather than restated paths. Those two
-    pointers are READ-ONLY — the judge resolves versions out of them and never
-    writes to `config/generation/` or `qa_pairs/`.
-
-    `dataset_version` / `qa_version` are the point of the block. Left null they
-    resolve to the newest build on disk, which is what the judge always did
-    implicitly. Pinned to a string they select one build, so a domain carrying
-    several dataset versions can be re-scored against an older one — a regression
-    comparison — without regenerating anything or editing another module's config.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    dataset_version: str | None = None
-    qa_version: str | None = None
-    qa_config_path: str = "qa_pairs/generator/{domain}/config.json"
-    dataset_release_config_path: str = "config/generation/{domain}/release.json"
-    qa_sources: dict[str, str] = Field(
-        default_factory=lambda: {
-            "dev": "tmp/generated/{domain}/dev/qa_pairs",
-            "full": "release/{domain}/qa-pairs-v{qa_version}",
-        }
-    )
-    dataset_sources: dict[str, str] = Field(
-        default_factory=lambda: {
-            "dev": "tmp/generated/{domain}/dev/imperfect",
-            "full": "release/{domain}/{dataset_version}",
-        }
-    )
-    input_csv_name: str = "{domain}_judge_input.csv"
-    pairs_csv_name: str = "{domain}_qa_pairs.csv"
-    companion_csv_name: str = "{domain}_qa_pairs_companion.csv"
-
-
 class CalibrationConfig(BaseModel):
     """§10.2 acceptance thresholds and where the anchors and marker live.
 
@@ -259,14 +220,13 @@ class JudgeConfig(BaseModel):
     mode: str = "combined"  # combined | per_dimension
     json_mode: bool = True
     cache_enabled: bool = True
-    release: ReleaseConfig = Field(default_factory=ReleaseConfig)
     calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
     # Where a scoring run writes its artifacts, mirroring how the dataset and
     # Q&A stages resolve their own release paths from config. `{domain}` is
     # interpolated; the path is relative to the repository root. Run outputs are
     # per-run and append-only, unlike the sealed single-version dataset and Q&A
     # packages that sit beside them under release/.
-    run_output_root: str = "release/{domain}/eval-runs"
+    run_output_root: str = "release/{release_version}/{domain}/judge"
     # §11.1 version tag for the platform under evaluation. Empty by default and
     # overridden by PLATFORM_VERSION or --platform-version — unlike the model,
     # this describes whichever deployment a machine is pointed at, so the

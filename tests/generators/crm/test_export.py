@@ -64,7 +64,7 @@ def test_crm_exporter_loads_full_profile() -> None:
     exporter = CRMCSVExporter.for_profile("full")
 
     assert exporter.settings.is_release_profile
-    assert exporter.output_dir.name == "dataset-v1.0.0"
+    assert exporter.output_dir == Path("release/v1.0.0/crm/dataset").resolve()
 
 
 def test_crm_export_refuses_dev_profile() -> None:

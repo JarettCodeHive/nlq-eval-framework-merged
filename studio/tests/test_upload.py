@@ -30,6 +30,7 @@ class _FakeClient:
         no_job_id: bool = False,
         no_status_route: bool = False,
         row_count: int | None = -1,
+        fail_delete_ids: set[int] | None = None,
     ):
         self.existing = dict(existing or {})
         self.batch_rows = batch_rows
@@ -38,6 +39,7 @@ class _FakeClient:
         self.no_status_route = no_status_route
         # -1 means "answer truthfully"; anything else is the lie to tell.
         self.row_count = row_count
+        self.fail_delete_ids = set(fail_delete_ids or set())
         self.loaded_rows: dict[int, int] = {}
         self.calls: list[tuple] = []
         self._next_id = 100
@@ -77,6 +79,8 @@ class _FakeClient:
 
     def delete_entity(self, entity_id):
         self.calls.append(("delete", entity_id))
+        if entity_id in self.fail_delete_ids:
+            raise RuntimeError(f"cannot delete {entity_id}")
         for name, value in list(self.existing.items()):
             if value == entity_id:
                 del self.existing[name]
@@ -181,6 +185,8 @@ def test_an_existing_table_is_left_alone_without_replace(crm_repo: Path) -> None
     assert ("create", "accounts", 2) not in client.calls
     # The other table still uploads.
     assert ("create", "contacts", 2) in client.calls
+    assert accounts.created_by_run is False
+    assert next(t for t in outcome.tables if t.table == "contacts").created_by_run
 
 
 def test_replace_deletes_the_existing_table_first(crm_repo: Path) -> None:
@@ -230,6 +236,75 @@ def test_delete_only_targets_tables_this_pipeline_owns(crm_repo: Path) -> None:
     assert ("find", "someone_elses_table") not in client.calls
 
 
+def test_post_run_cleanup_uses_only_created_ids_in_reverse_order(
+    crm_repo: Path,
+) -> None:
+    client = _FakeClient(existing={"accounts": 25})
+    outcome = upload.upload_domain("crm", "full", client=client)
+    calls_before_cleanup = len(client.calls)
+
+    cleanup = upload.cleanup_uploaded_entities(outcome, client=client)
+
+    cleanup_calls = client.calls[calls_before_cleanup:]
+    assert cleanup.attempted == [("contacts", 101)]
+    assert cleanup.deleted == [("contacts", 101)]
+    assert cleanup_calls == [("delete", 101)]
+    assert ("delete", 25) not in cleanup_calls
+    assert not any(call[0] == "find" for call in cleanup_calls)
+    assert outcome.cleanup_status == "completed"
+
+
+def test_post_run_cleanup_deletes_children_before_parents(crm_repo: Path) -> None:
+    client = _FakeClient()
+    outcome = upload.upload_domain("crm", "full", client=client)
+    calls_before_cleanup = len(client.calls)
+
+    upload.cleanup_uploaded_entities(outcome, client=client)
+
+    assert client.calls[calls_before_cleanup:] == [("delete", 102), ("delete", 101)]
+
+
+def test_partial_upload_exposes_created_ids_for_cleanup(crm_repo: Path) -> None:
+    client = _FakeClient()
+    original_load = client.load_rows
+    captured = []
+
+    def fail_on_contacts(entity_id, rows):
+        if entity_id == 102:
+            raise RuntimeError("load failed")
+        return original_load(entity_id, rows)
+
+    client.load_rows = fail_on_contacts
+    with pytest.raises(RuntimeError, match="load failed"):
+        upload.upload_domain(
+            "crm", "full", client=client, on_outcome=captured.append
+        )
+
+    assert len(captured) == 1
+    assert [(table.table, table.entity_id) for table in captured[0].created_tables] == [
+        ("accounts", 101),
+        ("contacts", 102),
+    ]
+    cleanup = upload.cleanup_uploaded_entities(captured[0], client=client)
+    assert cleanup.deleted == [("contacts", 102), ("accounts", 101)]
+
+
+def test_cleanup_records_failures_and_continues(crm_repo: Path) -> None:
+    client = _FakeClient(fail_delete_ids={102})
+    outcome = upload.upload_domain("crm", "full", client=client)
+
+    cleanup = upload.cleanup_uploaded_entities(outcome, client=client)
+
+    assert cleanup.deleted == [("accounts", 101)]
+    assert [(failure.table, failure.entity_id) for failure in cleanup.failures] == [
+        ("contacts", 102)
+    ]
+    assert outcome.cleanup_status == "failed"
+    assert next(t for t in outcome.tables if t.table == "contacts").cleanup_status == (
+        "failed"
+    )
+
+
 def test_a_missing_dataset_names_the_command_that_builds_it(monkeypatch) -> None:
     monkeypatch.setattr("studio.upload.dataset_csv_dir", lambda d, p: None)
 
@@ -265,6 +340,10 @@ def test_manifest_records_the_entity_ids(crm_repo: Path, tmp_path: Path) -> None
     assert recorded["domain"] == "crm"
     assert [t["table"] for t in recorded["tables"]] == ["accounts", "contacts"]
     assert all(t["entity_id"] for t in recorded["tables"])
+    assert all(t["created_by_run"] for t in recorded["tables"])
+    assert all(t["cleanup_status"] == "retained" for t in recorded["tables"])
+    assert recorded["cleanup"]["status"] == "retained"
+    assert not (path.parent / f".{path.name}.tmp").exists()
 
 
 def test_summary_reads_as_a_report(crm_repo: Path) -> None:
@@ -336,6 +415,20 @@ def test_job_ids_and_confirmation_reach_the_manifest(
 
     assert recorded["tables"][0]["job_ids"] == [301]
     assert recorded["tables"][0]["loads_confirmed"] is True
+
+
+def test_manifest_records_completed_cleanup(crm_repo: Path, tmp_path: Path) -> None:
+    client = _FakeClient()
+    outcome = upload.upload_domain("crm", "full", client=client)
+    upload.cleanup_uploaded_entities(outcome, client=client)
+
+    recorded = json.loads(
+        upload.write_manifest(outcome, tmp_path / "m.json").read_text(encoding="utf-8")
+    )
+
+    assert recorded["cleanup"]["status"] == "completed"
+    assert recorded["cleanup"]["completed_at"]
+    assert all(table["cleanup_status"] == "deleted" for table in recorded["tables"])
 
 
 def test_row_counts_are_verified_against_the_platform(crm_repo: Path) -> None:

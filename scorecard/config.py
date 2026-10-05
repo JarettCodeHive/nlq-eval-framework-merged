@@ -18,6 +18,8 @@ import json
 from pathlib import Path
 
 from pydantic import BaseModel
+from qa_pairs.utils.release_bundle import component_dir
+from qa_pairs.utils.release_bundle import release_root
 
 MODULE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = MODULE_ROOT.parent
@@ -30,10 +32,10 @@ class ScorecardConfig(BaseModel):
 
     # Where the §11 deliverables land. `{domain}` is interpolated; the path is
     # relative to the repository root.
-    report_output_root: str = "release/{domain}/scorecards"
+    report_output_root: str = "release/{release_version}/{domain}/scorecard"
     # A combined scorecard spans domains, so it cannot live under one domain's
     # directory. This is the §14.1 artefact: one baseline across all domains.
-    combined_report_root: str = "release/scorecards"
+    combined_report_root: str = "release/{release_version}/scorecard"
 
 
 def _load_json(path: Path) -> dict:
@@ -63,17 +65,15 @@ def report_output_dir(
     a scorecard can always be traced back to the evidence that produced it.
     """
 
-    settings = cfg or load_scorecard_config(domain)
-    return REPO_ROOT / settings.report_output_root.format(domain=domain) / run_id
+    return component_dir(domain, "scorecard") / run_id
 
 
 def combined_report_dir(run_id: str, cfg: ScorecardConfig | None = None) -> Path:
     """Where a multi-domain scorecard is written.
 
-    Deliberately not under `release/<domain>/` — a scorecard covering five
-    domains filed under one of them would misrepresent what it is, and the
+    Deliberately not under `release/<version>/<domain>/` — a scorecard covering
+    five domains filed under one of them would misrepresent what it is, and the
     baseline it establishes is cross-domain by definition (§14.1).
     """
 
-    settings = cfg or load_scorecard_config(DEFAULT_DOMAIN_CONFIG)
-    return REPO_ROOT / settings.combined_report_root / run_id
+    return release_root(repo_root=REPO_ROOT) / "scorecard" / run_id

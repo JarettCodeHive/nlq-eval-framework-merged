@@ -28,7 +28,7 @@ from generators.project_management import config as pm_config_module
 
 REQUIRED_SECTIONS = {
     "domain",
-    "dataset_version",
+    "release_version",
     "schema_source",
     "fixed_values",
     "release_rules",

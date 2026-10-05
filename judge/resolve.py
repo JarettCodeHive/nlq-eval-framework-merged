@@ -18,32 +18,23 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from judge.config import REPO_ROOT, ReleaseConfig, load_env, load_judge_config
+from judge.build_input import build as build_judge_input
+from judge.config import REPO_ROOT, load_env, load_judge_config
+from qa_pairs.utils.release_bundle import active_release_version
+from qa_pairs.utils.release_bundle import existing_component_dir
 
 PROFILES: tuple[str, ...] = ("dev", "full")
 
-# Every path a run needs comes from `config/judge/<domain>.json` (the `release`
-# block), which is shaped like the generation and Q&A configs it sits beside.
-# Those two are still read — for the version a domain was generated at — through
-# the READ-ONLY pointers in that block, so all three stages move together when a
-# release layout changes. What is gone is this module naming one domain's Q&A
-# config: it used to point at qa_pairs/generator/crm/config.json for every
-# domain, so Sales resolved through CRM's declared version and only survived on
-# the filesystem fallback below.
+# The Q&A and generation stages each resolve their own outputs from a declarative
+# config (`qa_pairs/utils/output_paths.py`, `qa_pairs/utils/dataset_source.py`).
+# The judge reads the SAME two files rather than restating the paths, so all
+# three stages move together when a release layout changes.
+_QA_CONFIG_ROOT = Path("qa_pairs") / "generator"
 _GENERATION_CONFIG = Path("config") / "generation"
-
-
-def _release(domain: str) -> "ReleaseConfig":
-    return load_judge_config(domain).release
-
-
-def _fmt(template: str, **values: object) -> str:
-    return str(template).format(**values)
 
 
 class ResolutionError(RuntimeError):
@@ -80,98 +71,52 @@ def _root(repo_root: Path | None) -> Path:
     return repo_root or REPO_ROOT
 
 
-def _version_key(path: Path) -> tuple[int, ...]:
-    """Sort `qa-pairs-v0.10.0` after `qa-pairs-v0.9.0`, which a string sort does not."""
-
-    return tuple(int(n) for n in re.findall(r"\d+", path.name)) or (0,)
-
-
-def qa_version(domain: str, *, repo_root: Path | None = None) -> str:
-    """The Q&A version to score: the judge's pin, else what the domain declares.
-
-    A pin is the whole point of the `release` block — a domain carrying several
-    Q&A packages can be re-scored against an older one without touching
-    `qa_pairs/`, which the judge only ever reads.
-    """
-
-    release = _release(domain)
-    if release.qa_version:
-        return release.qa_version
-    root = _root(repo_root)
-    declared = _load_json(root / _fmt(release.qa_config_path, domain=domain))
-    return str((declared.get("qa_release") or {}).get("version") or "").strip()
-
-
 def _templated_qa_dir(domain: str, profile: str, repo_root: Path | None) -> Path | None:
-    release = _release(domain)
-    template = release.qa_sources.get(profile)
+    root = _root(repo_root)
+    config = _load_json(root / _QA_CONFIG_ROOT / domain / "config.json")
+    release = config.get("qa_release") or {}
+    template = (release.get("profile_outputs") or {}).get(profile)
     if not template:
         return None
-    version = qa_version(domain, repo_root=repo_root)
-    if profile == "full" and not version:
-        # Without a version there is no directory to name; fall through to the
-        # filesystem scan rather than resolving `qa-pairs-v` with nothing after it.
-        return None
-    return _root(repo_root) / _fmt(
-        template, domain=domain, qa_version=version, profile=profile
+    generation = dataset_release_config(domain, repo_root=repo_root)
+    version = active_release_version(generation)
+    if profile == "full":
+        return existing_component_dir(
+            domain, "qa_pairs", version, repo_root=root
+        )
+    return root / str(template).format(
+        domain=domain,
+        qa_version=version,
+        release_version=version,
+        profile=profile,
     )
 
 
 def qa_release_dir(
     domain: str, profile: str, *, repo_root: Path | None = None
 ) -> Path:
-    """The Q&A package a run of this domain/profile scores.
+    """Return the selected bundle's Q&A directory without guessing a version.
 
-    Config first, exactly as the generation and Q&A stages resolve their own
-    outputs: the path template comes from `release.qa_sources` in
-    `config/judge/<domain>.json`, and the version from `release.qa_version` if it
-    is pinned there, otherwise from what the domain's own Q&A config declares.
-
-    The filesystem is consulted only as a fallback, and only for `full` — for a
-    domain whose Q&A config does not exist yet, take the newest `qa-pairs-v*`
-    directory that actually holds pairs. Newest-by-version, and "holds pairs"
-    rather than "exists", so a half-created v0.4.0 cannot mask a complete v0.3.0.
-
-    A PINNED version never falls back. Asking for one build and silently scoring
-    another is the one failure this block exists to prevent, so a missing pin is
-    an error with the version named in it.
+    Falling back to whichever release happens to be newest can mix a dataset
+    from one release with questions from another.  A missing selected package
+    is therefore returned as missing and the caller reports how to build it.
     """
 
     root = _root(repo_root)
-    release = _release(domain)
     templated = _templated_qa_dir(domain, profile, repo_root)
-    if templated is not None and (profile != "full" or _has_pairs(templated, domain)):
-        return templated
-    if release.qa_version:
-        raise ResolutionError(
-            f"config/judge/{domain}.json pins release.qa_version="
-            f"{release.qa_version!r}, but {templated} holds no pairs. Either build "
-            f"that package or change the pin — falling back to a different "
-            f"version would score a build nobody asked for."
-        )
-    if profile == "full":
-        candidates = sorted(
-            (root / "release" / domain).glob("qa-pairs-v*"),
-            key=_version_key,
-            reverse=True,
-        )
-        for candidate in candidates:
-            if _has_pairs(candidate, domain):
-                return candidate
     if templated is not None:
         return templated
     raise ResolutionError(
         f"cannot locate the Q&A package for domain={domain!r} profile={profile!r}: "
-        f"no {root / 'release' / domain}/qa-pairs-v*/ holds pairs and "
-        f"config/judge/{domain}.json declares no release.qa_sources entry for it."
+        f"{root / _QA_CONFIG_ROOT / domain / 'config.json'} declares no output "
+        "path for that profile."
     )
 
 
 def _has_pairs(directory: Path, domain: str) -> bool:
-    release = _release(domain)
-    return (
-        directory / _fmt(release.input_csv_name, domain=domain)
-    ).is_file() or (directory / _fmt(release.pairs_csv_name, domain=domain)).is_file()
+    return (directory / f"{domain}_judge_input.csv").is_file() or (
+        directory / f"{domain}_qa_pairs.csv"
+    ).is_file()
 
 
 def judge_input_csv(
@@ -179,37 +124,36 @@ def judge_input_csv(
     profile: str,
     *,
     repo_root: Path | None = None,
+    build_if_missing: bool = True,
 ) -> Path:
-    """The pair CSV the judge consumes: the Q&A contract file itself.
+    """The joined pair CSV the judge consumes, built on demand if it is absent.
 
-    There used to be a derived `<domain>_judge_input.csv`, joined from the
-    contract plus its companion, because the §9.3 contract carried only the seven
-    answer fields and the companion was the only source of `question_id` and
-    `tier`. Since the Q&A side put both into the contract — every domain's
-    generator now emits them — the join added exactly two columns, `family` and
-    `scoring_mode`, and neither is read anywhere in `judge/` or `scorecard/`.
-
-    So the derived file is gone and this resolves the contract directly. A
-    pre-joined file is still honoured where one exists, so an older release
-    package keeps working untouched.
+    The Q&A release deliberately splits the §9.3 contract from the identifiers,
+    so the joined file is a judge-side artifact rather than part of the sealed
+    package. Building it here is the same deterministic join `judge-build-input`
+    performs — same release in, byte-identical CSV out — which makes "did you
+    remember to run judge-build-input first?" a question nobody has to answer.
     """
 
-    release = _release(domain)
     qa_dir = qa_release_dir(domain, profile, repo_root=repo_root)
+    csv_path = qa_dir / f"{domain}_judge_input.csv"
+    if csv_path.is_file():
+        return csv_path
 
-    joined = qa_dir / _fmt(release.input_csv_name, domain=domain)
-    if joined.is_file():
-        # An older package that still ships the derived file. Preferred over the
-        # contract so a run against it is byte-for-byte what it always was.
-        return joined
+    contract = qa_dir / f"{domain}_qa_pairs.csv"
+    companion = qa_dir / f"{domain}_qa_pairs_companion.csv"
+    if build_if_missing and contract.is_file() and companion.is_file():
+        print(
+            f"[judge] {csv_path.name} is missing — joining it from {qa_dir}",
+            file=sys.stderr,
+        )
+        build_judge_input(qa_dir, domain, csv_path)
+        return csv_path
 
-    contract = qa_dir / _fmt(release.pairs_csv_name, domain=domain)
-    if contract.is_file():
-        return contract
-
+    missing = [p.name for p in (contract, companion) if not p.is_file()]
     raise ResolutionError(
-        f"no pair set for domain={domain!r} profile={profile!r}: {qa_dir} "
-        f"is missing {contract.name}.\n"
+        f"no judge input for domain={domain!r} profile={profile!r}: {qa_dir} "
+        f"is missing {', '.join(missing) or csv_path.name}.\n"
         f"Generate the pairs first: python main.py qa-build --domain {domain} "
         f"--profile {profile}"
     )
@@ -218,44 +162,12 @@ def judge_input_csv(
 def dataset_release_config(domain: str, *, repo_root: Path | None = None) -> dict:
     """The generation-side release config, or `{}` for a judge-only domain.
 
-    Read through `release.dataset_release_config_path`, and only ever read — the
-    judge does not own `config/generation/`. Domains can be scored without being
-    generated here (`config/judge/` carries more domains than
-    `config/generation/` does), so an absent file is a normal state, not an error.
+    Domains can be scored without being generated here — `config/judge/` carries
+    more domains than `config/generation/` does — so an absent file is a normal
+    state, not an error.
     """
 
-    pointer = _fmt(_release(domain).dataset_release_config_path, domain=domain)
-    return _load_json(_root(repo_root) / pointer)
-
-
-def dataset_version(domain: str, *, repo_root: Path | None = None) -> str:
-    """The dataset version for this domain, resolved the way generation does.
-
-    `NLQ_DATASET_VERSION` → `release.dataset_version` in this domain's judge
-    config → what the domain's generation config declares. The pin is the
-    middle step and the reason the block exists: it lets a run score an older
-    build for a regression comparison without touching `config/generation/`.
-    Unpinned, the judge follows generation, so a version bump cannot leave the
-    scorer pointed at a build nobody generated. Returns `""` for a judge-only
-    domain with no generation config at all.
-    """
-
-    override = (os.getenv("NLQ_DATASET_VERSION") or "").strip()
-    if override:
-        return override
-    pinned = _release(domain).dataset_version
-    if pinned:
-        return pinned
-    release = dataset_release_config(domain, repo_root=repo_root)
-    if not release:
-        # Judge-only domain: there is no dataset here to have a version. The
-        # shared default would otherwise let a run label claim one.
-        return ""
-    declared = str(release.get("dataset_version") or "").strip()
-    if declared:
-        return declared
-    base = _load_json(_root(repo_root) / _GENERATION_CONFIG / "base.json")
-    return str(base.get("dataset_version") or "").strip()
+    return _load_json(_root(repo_root) / _GENERATION_CONFIG / domain / "release.json")
 
 
 def dataset_csv_dir(
@@ -269,30 +181,22 @@ def dataset_csv_dir(
     """
 
     root = _root(repo_root)
-    release = _release(domain)
-    version = dataset_version(domain, repo_root=repo_root)
-    template = release.dataset_sources.get(profile)
-    if template and (version or "{dataset_version}" not in template):
-        base = root / _fmt(
-            template, domain=domain, dataset_version=version, profile=profile
+    config = dataset_release_config(domain, repo_root=repo_root)
+    raw = (config.get("output_paths") or {}).get(profile)
+    if profile == "full" and config:
+        version = active_release_version(config)
+        base = existing_component_dir(
+            domain, "dataset", version, repo_root=root
+        )
+    elif raw:
+        base = root / str(raw).format(
+            domain=domain,
+            dataset_version=active_release_version(config),
+            release_version=active_release_version(config),
+            profile=profile,
         )
     else:
-        # No version to interpolate — a judge-only domain, or one generated
-        # outside this repo. Take the newest build present.
-        if release.dataset_version:
-            raise ResolutionError(
-                f"config/judge/{domain}.json pins release.dataset_version="
-                f"{release.dataset_version!r}, but no template can place it. "
-                f"Check release.dataset_sources[{profile!r}]."
-            )
-        versions = sorted(
-            (root / "release" / domain).glob("dataset-v*"),
-            key=_version_key,
-            reverse=True,
-        )
-        if not versions:
-            return None
-        base = versions[0]
+        return None
     # A dev build keeps one directory per pipeline stage. The pairs were authored
     # against the imperfect stage, so that is the only stage worth replaying.
     imperfect = base / "imperfect"
@@ -304,22 +208,16 @@ def dataset_version_label(
 ) -> str:
     """The §11.1 version tag for the data this run scored.
 
-    Two versions move independently — question templates change without a new
-    dataset, and vice versa — so neither alone identifies what was scored. The
-    label carries both: `dataset-v1.0.0+qa-pairs-v0.3.0`. It is a label only; no
-    path is ever derived back out of it.
+    The dataset and Q&A pairs share one immutable evaluation-release version,
+    so the scorecard label is that single version. Dev appends its profile to
+    distinguish disposable output from a full release.
     """
 
-    parts: list[str] = []
-    version = dataset_version(domain, repo_root=repo_root)
-    if version:
-        parts.append(version)
-    if profile == "full":
-        qa_dir = qa_release_dir(domain, profile, repo_root=repo_root)
-        parts.append(qa_dir.name)
-    else:
-        parts.append(profile)
-    return "+".join(parts)
+    config = dataset_release_config(domain, repo_root=repo_root)
+    if not config:
+        return profile
+    version = active_release_version(config)
+    return version if profile == "full" else f"{version}+{profile}"
 
 
 def platform_version(domain: str) -> str:

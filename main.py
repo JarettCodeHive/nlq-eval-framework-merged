@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from generators.core.progress import PipelineReporter
+from generators.core.progress import PipelineStage
 from generators.core.progress import ProgressReporter
 from generators.crm.pipeline import CRMDatasetPipeline
 from generators.domain_registry import DATASET_DOMAINS
@@ -43,6 +48,9 @@ from qa_pairs.generator.project_management.validate_project_management import (
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
 from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
 from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
+from qa_pairs.utils.release_bundle import default_release_version
+from qa_pairs.utils.release_bundle import component_dir
+from qa_pairs.utils.release_bundle import use_release_version
 
 from judge.cli import build_argparser as build_judge_argparser
 from judge.cli import run_calibrate_from_domain
@@ -50,9 +58,88 @@ from judge.cli import run_check_auth as run_check_auth_for_domain
 from judge.cli import run_from_args as run_judge_from_args
 from judge.resolve import qa_release_dir
 
-CommandHandler = Callable[[argparse.Namespace], None]
+CommandHandler = Callable[[argparse.Namespace], Any]
 
 REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _platform_manifest_path(
+    domain: str, profile: str, version: str | None = None
+) -> Path:
+    """Audit record shared by upload and post-run cleanup."""
+
+    return component_dir(
+        domain,
+        "platform",
+        version or default_release_version(domain),
+        repo_root=REPO_ROOT,
+    ) / f"{profile}.json"
+
+
+# Commands that are not scoped to one domain/release (score aggregates
+# several domains; rubric just renders a template), so they log to a stable
+# local path instead of a release component directory.
+_UNSCOPED_LOG_COMMANDS: frozenset[str] = frozenset({"score", "rubric"})
+
+
+def _resolve_command_log_path(args: argparse.Namespace) -> Path:
+    """Return the on-disk log file target for one CLI invocation.
+
+    A `full`-profile command logs beside the release artefacts it produces,
+    under release/<version>/<domain>/logs/, so the console record of a run
+    lives with everything that run wrote. Commands without a resolvable
+    release version (dev profile, or a domain whose release config is
+    missing) fall back to a local tmp/ path so logging never blocks the
+    command itself.
+    """
+
+    timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    filename = f"{args.command}_{timestamp}.log"
+
+    if args.command in _UNSCOPED_LOG_COMMANDS:
+        return REPO_ROOT / "logs" / filename
+
+    domain = getattr(args, "domain", None) or "shared"
+    profile = getattr(args, "profile", None)
+
+    if profile == "full":
+        try:
+            version = args.release_version or default_release_version(domain)
+            return (
+                component_dir(domain, "logs", version, repo_root=REPO_ROOT)
+                / filename
+            )
+        except ValueError:
+            pass  # unknown domain or missing release config - fall back below
+
+    return REPO_ROOT / "tmp" / "generated" / domain / (profile or "shared") / "logs" / filename
+
+
+class _TeeTextStream(io.TextIOBase):
+    """Mirror every write to a live stream and an open log file."""
+
+    def __init__(self, primary: Any, secondary: Any) -> None:
+        self._primary = primary
+        self._secondary = secondary
+
+    @property
+    def encoding(self) -> str:
+        return "utf-8"
+
+    def writable(self) -> bool:
+        return True
+
+    def isatty(self) -> bool:
+        return bool(getattr(self._primary, "isatty", lambda: False)())
+
+    def write(self, text: str) -> int:
+        self._primary.write(text)
+        self._secondary.write(text)
+        return len(text)
+
+    def flush(self) -> None:
+        self._primary.flush()
+        self._secondary.flush()
 
 
 def run_validate_config(args: argparse.Namespace) -> None:
@@ -105,14 +192,18 @@ def run_build_dataset(args: argparse.Namespace) -> None:
         ) from exc
 
     progress = ProgressReporter()
-    output_path = pipeline.for_profile(
-        args.profile,
-        progress=progress,
-    ).run()
+    with use_release_version(getattr(args, "release_version", None)):
+        configured_pipeline = pipeline.for_profile(
+            args.profile,
+            progress=progress,
+        )
+        output_path = configured_pipeline.run()
+        release_version = configured_pipeline.settings.release_version
 
     print(f"{runtime.display_name} dataset build passed")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
+    print(f"release_version: {release_version}")
     print(f"output: {output_path}")
 
 
@@ -129,6 +220,11 @@ def run_generate_base(args: argparse.Namespace) -> None:
     print(f"Generated clean {runtime.display_name} base entities")
     print(f"domain: {args.domain}")
     print(f"profile: {args.profile}")
+    if args.profile == "full":
+        print(
+            "release_version: "
+            f"{getattr(args, 'release_version', None) or default_release_version(args.domain)}"
+        )
     print("tables:")
     for table_name in generator.settings.table_order:
         table = tables[table_name]
@@ -482,23 +578,32 @@ def run_qa_stage_dataset(args: argparse.Namespace) -> None:
 
 
 def run_qa_build(args: argparse.Namespace) -> None:
-    """Stage, validate, and generate the production Q&A pair set."""
+    """Stage, validate, and generate the complete production Q&A package."""
 
     stage = _qa_domain_fn(QA_STAGE, args.domain)
     validate = _qa_domain_fn(QA_VALIDATE, args.domain)
     generate = _qa_domain_fn(QA_GENERATE, args.domain)
     progress = ProgressReporter()
+    total = 4 if args.domain == "crm" else 3
 
-    progress.report(
-        f"Step 1/3: Stage the generated {args.domain} dataset for Q&A authoring"
-    )
-    stage(args.profile)
+    with use_release_version(getattr(args, "release_version", None)):
+        progress.report(
+            f"Step 1/{total}: Stage the generated {args.domain} dataset for Q&A authoring"
+        )
+        stage(args.profile)
 
-    progress.report(f"Step 2/3: Validate the staged {args.domain} dataset")
-    validate(args.profile)
+        progress.report(f"Step 2/{total}: Validate the staged {args.domain} dataset")
+        validate(args.profile)
 
-    progress.report(f"Step 3/3: Generate and verify the {args.domain} Q&A pair set")
-    generate(args.profile)
+        progress.report(
+            f"Step 3/{total}: Generate and verify the {args.domain} Q&A pair set"
+        )
+        generate(args.profile)
+        if args.domain == "crm":
+            progress.report(
+                "Step 4/4: Generate and verify CRM rephrase-group variants"
+            )
+            generate_rephrases(args.profile)
 
     print(f"{args.domain} Q&A pair build passed")
     print(f"domain: {args.domain}")
@@ -556,7 +661,24 @@ def _ensure_crm(domain: str) -> None:
         )
 
 
-def run_dataset_upload(args: argparse.Namespace) -> None:
+def run_judge_build_input(args: argparse.Namespace) -> None:
+    """Join the Q&A release contract + companion into one judge input CSV.
+
+    The §9.3 contract file carries no identifiers and the companion carries no
+    answers, so the judge needs them joined. Reads whichever Q&A release the
+    selected profile points at, so it stays in step with `qa-generate-pairs`.
+
+    `judge` performs the same join on demand — this command exists to do it
+    deliberately, and to rebuild the file after the pairs change.
+    """
+
+    _ensure_crm(args.domain)
+    qa_release = qa_release_dir(args.domain, args.profile)
+    output = qa_release / f"{args.domain}_judge_input.csv"
+    build_judge_input(qa_release, args.domain, output)
+
+
+def run_dataset_upload(args: argparse.Namespace) -> Any:
     """Upload a generated dataset to the Claris Studio platform.
 
     Same two arguments as `build-dataset`: the CSVs come from whatever
@@ -577,24 +699,51 @@ def run_dataset_upload(args: argparse.Namespace) -> None:
     print(f"platform: {settings.redacted}")
     progress = ProgressReporter()
 
-    with StudioClient(settings, dry_run=args.dry_run) as client:
-        outcome = upload_domain(
-            args.domain,
-            args.profile,
-            client=client,
-            replace=args.replace,
-            progress=progress,
-        )
-        if args.dry_run:
-            print(describe_plan(client))
-            print("\n(dry run — nothing was sent)")
-            return
+    def remember_outcome(outcome) -> None:
+        cleanup_planned = getattr(args, "cleanup_after_upload", False)
+        outcome.cleanup_status = "pending" if cleanup_planned else "retained"
+        for table in getattr(outcome, "created_tables", ()):
+            table.cleanup_status = "pending" if cleanup_planned else "retained"
+        args.upload_outcome = outcome
+
+    try:
+        with StudioClient(settings, dry_run=args.dry_run) as client:
+            outcome = upload_domain(
+                args.domain,
+                args.profile,
+                client=client,
+                replace=args.replace,
+                progress=progress,
+                on_outcome=remember_outcome,
+            )
+            # Keep compatibility with test doubles that return an outcome but
+            # do not invoke the early callback themselves.
+            remember_outcome(outcome)
+            if args.dry_run:
+                print(describe_plan(client))
+                print("\n(dry run — nothing was sent)")
+                return outcome
+    except BaseException:
+        partial = getattr(args, "upload_outcome", None)
+        if partial is not None and not args.dry_run:
+            remember_outcome(partial)
+            write_manifest(
+                partial,
+                _platform_manifest_path(
+                    args.domain,
+                    args.profile,
+                    getattr(args, "release_version", None),
+                ),
+            )
+        raise
 
     print()
     print(summarise(outcome, action="Uploaded"))
     manifest = write_manifest(
         outcome,
-        REPO_ROOT / "release" / args.domain / "platform" / f"{args.profile}.json",
+        _platform_manifest_path(
+            args.domain, args.profile, getattr(args, "release_version", None)
+        ),
     )
     print(f"entity ids recorded: {manifest}")
 
@@ -606,6 +755,65 @@ def run_dataset_upload(args: argparse.Namespace) -> None:
             f"upload finished but these tables are not verified: "
             f"{', '.join(unverified)}. Do not evaluate against them."
         )
+    return outcome
+
+
+def run_uploaded_data_cleanup(args: argparse.Namespace) -> Any:
+    """Delete only entity IDs created by this pipeline's upload invocation."""
+
+    from datetime import datetime, timezone
+
+    from studio.client import StudioClient
+    from studio.config import load_studio_settings
+    from studio.upload import (
+        cleanup_uploaded_entities,
+        summarise_cleanup,
+        write_manifest,
+    )
+
+    outcome = getattr(args, "upload_outcome", None)
+    if outcome is None:
+        print("no platform entities were created by this run")
+        return None
+
+    settings = load_studio_settings()
+    print(f"platform: {settings.redacted}")
+    progress = ProgressReporter()
+    try:
+        with StudioClient(settings) as client:
+            cleanup = cleanup_uploaded_entities(
+                outcome, client=client, progress=progress
+            )
+    except BaseException as exc:
+        outcome.cleanup_status = "failed"
+        outcome.cleanup_completed_at = datetime.now(timezone.utc).isoformat()
+        error = f"{type(exc).__name__}: {exc}"
+        if error not in outcome.cleanup_errors:
+            outcome.cleanup_errors.append(error)
+        write_manifest(
+            outcome,
+            _platform_manifest_path(
+                args.domain,
+                args.profile,
+                getattr(args, "release_version", None),
+            ),
+        )
+        raise
+
+    manifest = write_manifest(
+        outcome,
+        _platform_manifest_path(
+            args.domain, args.profile, getattr(args, "release_version", None)
+        ),
+    )
+    print(summarise_cleanup(cleanup))
+    print(f"cleanup recorded: {manifest}")
+    if cleanup.failures:
+        failed = ", ".join(failure.table for failure in cleanup.failures)
+        raise RuntimeError(
+            f"platform cleanup failed for {len(cleanup.failures)} table(s): {failed}"
+        )
+    return cleanup
 
 
 def run_dataset_delete(args: argparse.Namespace) -> None:
@@ -677,52 +885,138 @@ def run_judge(args: argparse.Namespace) -> None:
     # pipeline was invoked with.
     judge_args.domain = args.domain
     judge_args.profile = args.profile
-    exit_code = run_judge_from_args(judge_args)
+    with use_release_version(getattr(args, "release_version", None)):
+        exit_code = run_judge_from_args(judge_args)
     if exit_code != 0:
         raise SystemExit(exit_code)
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
-    """Build locally, refresh the platform dataset, then run a small judge pass.
+    """Build, evaluate, then remove only the platform entities this run created.
 
     This is the convenient end-to-end entry point.  The individual commands
     remain available with their existing behavior; only this wrapper confirms
     the delete and supplies the judge-specific smoke-test flags.
     """
 
-    pipeline_args = argparse.Namespace(domain=args.domain, profile=args.profile)
-
-    print("Pipeline step 1/5: build dataset")
-    run_build_dataset(pipeline_args)
-
-    print("Pipeline step 2/5: build Q&A pairs")
-    run_qa_build(pipeline_args)
-
-    print("Pipeline step 3/5: delete platform dataset")
+    total = 6
+    reporter = PipelineReporter()
+    reporter.start(domain=args.domain, profile=args.profile, total_stages=total)
+    release_version = getattr(args, "release_version", None)
+    pipeline_args = argparse.Namespace(
+        domain=args.domain,
+        profile=args.profile,
+        release_version=release_version,
+    )
     delete_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         yes=True,
         dry_run=False,
+        release_version=release_version,
     )
-    run_dataset_delete(delete_args)
-
-    print("Pipeline step 4/5: upload platform dataset")
     upload_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         replace=False,
         dry_run=False,
+        release_version=release_version,
+        cleanup_after_upload=not getattr(args, "keep_platform_data", False),
     )
-    run_dataset_upload(upload_args)
-
-    print("Pipeline step 5/5: judge")
     judge_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         command_argv=["--allow-uncalibrated", "--limit", "3"],
+        release_version=release_version,
     )
-    run_judge(judge_args)
+    stages = (
+        (
+            PipelineStage(1, total, "dataset", "Build and validate dataset"),
+            run_build_dataset,
+            pipeline_args,
+        ),
+        (
+            PipelineStage(2, total, "qa", "Build and verify Q&A pairs"),
+            run_qa_build,
+            pipeline_args,
+        ),
+        (
+            PipelineStage(
+                3, total, "platform.delete", "Delete existing platform dataset"
+            ),
+            run_dataset_delete,
+            delete_args,
+        ),
+        (
+            PipelineStage(
+                4, total, "platform.upload", "Upload and verify platform dataset"
+            ),
+            run_dataset_upload,
+            upload_args,
+        ),
+        (
+            PipelineStage(5, total, "judge", "Run three-question judge preview"),
+            run_judge,
+            judge_args,
+        ),
+    )
+
+    primary_error: BaseException | None = None
+    primary_traceback = None
+    cleanup_error: BaseException | None = None
+    upload_outcome = None
+
+    with use_release_version(release_version):
+        try:
+            for stage, handler, stage_args in stages:
+                with reporter.stage(stage):
+                    result = handler(stage_args)
+                if stage.number == 4:
+                    upload_outcome = result or getattr(
+                        upload_args, "upload_outcome", None
+                    )
+        except BaseException as exc:
+            primary_error = exc
+            primary_traceback = exc.__traceback__
+            upload_outcome = getattr(upload_args, "upload_outcome", upload_outcome)
+
+        if upload_outcome is not None:
+            cleanup_stage = PipelineStage(
+                6, total, "platform.cleanup", "Delete uploaded platform data"
+            )
+            try:
+                with reporter.stage(cleanup_stage):
+                    if getattr(args, "keep_platform_data", False):
+                        print(
+                            "cleanup skipped: --keep-platform-data retained "
+                            "this run's uploaded entities"
+                        )
+                    else:
+                        run_uploaded_data_cleanup(
+                            argparse.Namespace(
+                                domain=args.domain,
+                                profile=args.profile,
+                                release_version=release_version,
+                                upload_outcome=upload_outcome,
+                            )
+                        )
+            except BaseException as exc:
+                cleanup_error = exc
+
+    if primary_error is not None:
+        if cleanup_error is not None:
+            primary_error.add_note(
+                "Platform cleanup also failed: "
+                f"{type(cleanup_error).__name__}: {cleanup_error}"
+            )
+        reporter.finish(domain=args.domain, profile=args.profile, succeeded=False)
+        raise primary_error.with_traceback(primary_traceback)
+
+    if cleanup_error is not None:
+        reporter.finish(domain=args.domain, profile=args.profile, succeeded=False)
+        raise cleanup_error
+
+    reporter.finish(domain=args.domain, profile=args.profile, succeeded=True)
 
 
 def run_score(args: argparse.Namespace) -> None:
@@ -842,6 +1136,7 @@ COMMANDS: dict[str, CommandHandler] = {
     "check-auth": run_check_auth,
     "dataset-upload": run_dataset_upload,
     "dataset-delete": run_dataset_delete,
+    "judge-build-input": run_judge_build_input,
     "judge": run_judge,
     "run-pipeline": run_pipeline,
     "score": run_score,
@@ -914,6 +1209,15 @@ def build_parser() -> argparse.ArgumentParser:
         "test anyway, as a work in progress. Calibration will still refuse it.",
     )
     parser.add_argument(
+        "--version",
+        dest="release_version",
+        default=None,
+        help=(
+            "Unified release-bundle directory name. Full outputs are written "
+            "under release/<version>/<domain>/. Defaults to the domain config."
+        ),
+    )
+    parser.add_argument(
         "--write-preview",
         action="store_true",
         help="Write generated stage CSV previews for non-release profiles.",
@@ -935,6 +1239,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="dataset-upload / dataset-delete: print the requests that would be "
         "sent and send none of them.",
+    )
+    parser.add_argument(
+        "--keep-platform-data",
+        action="store_true",
+        help=(
+            "run-pipeline: retain entities uploaded by this run for debugging. "
+            "By default they are deleted after judging, including on failure."
+        ),
     )
     validation_source = parser.add_mutually_exclusive_group()
     validation_source.add_argument(
@@ -987,11 +1299,26 @@ def main() -> None:
     if forward_help:
         command_argv.append("--help")
     args.command_argv = command_argv
-    try:
-        COMMANDS[args.command](args)
-    except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        raise SystemExit(1) from exc
+
+    if forward_help:
+        # A --help dispatch produces no artefacts, so it earns no log file.
+        with use_release_version(args.release_version):
+            COMMANDS[args.command](args)
+        return
+
+    log_path = _resolve_command_log_path(args)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8") as log_file:
+        tee_out = _TeeTextStream(sys.stdout, log_file)
+        tee_err = _TeeTextStream(sys.stderr, log_file)
+        with contextlib.redirect_stdout(tee_out), contextlib.redirect_stderr(tee_err):
+            print(f"[log] writing command output to {log_path}")
+            try:
+                with use_release_version(args.release_version):
+                    COMMANDS[args.command](args)
+            except Exception as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

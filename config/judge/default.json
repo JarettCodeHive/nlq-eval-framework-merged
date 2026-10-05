@@ -13,32 +13,12 @@
   "mode": "combined",
   "json_mode": true,
   "cache_enabled": true,
-  "run_output_root": "release/{domain}/eval-runs",
-
-  "release": {
-    "_note": "Which dataset and Q&A build a run scores. Shaped like config/generation/<domain>/release.json and qa_pairs/generator/<domain>/config.json: profile-keyed path maps with {domain}/{dataset_version}/{qa_version} interpolation. qa_config_path and dataset_release_config_path are READ-ONLY pointers into the other modules.",
-    "_version_note": "null = resolve the newest build on disk. Set a string to pin one, e.g. \"dataset_version\": \"dataset-v1.0.0\" keeps scoring against that build after v2.0.0 exists — which is how a regression comparison is run without regenerating anything.",
-    "dataset_version": null,
-    "qa_version": null,
-    "qa_config_path": "qa_pairs/generator/{domain}/config.json",
-    "dataset_release_config_path": "config/generation/{domain}/release.json",
-    "qa_sources": {
-      "dev": "tmp/generated/{domain}/dev/qa_pairs",
-      "full": "release/{domain}/qa-pairs-v{qa_version}"
-    },
-    "dataset_sources": {
-      "dev": "tmp/generated/{domain}/dev/imperfect",
-      "full": "release/{domain}/{dataset_version}"
-    },
-    "input_csv_name": "{domain}_judge_input.csv",
-    "pairs_csv_name": "{domain}_qa_pairs.csv",
-    "companion_csv_name": "{domain}_qa_pairs_companion.csv"
-  },
+  "run_output_root": "release/{release_version}/{domain}/judge",
 
   "calibration": {
-    "_note": "§10.2 acceptance protocol. min_anchors and agreement_pct are fixed by the Execution Scope (>=10 anchors per domain, within +-1 on >=90% per dimension) — they live here to be reviewable without reading Python, not because they are ours to tune.",
-    "_gate_note": "Two gates, both OPT-IN. require_calibration is the SCORING gate: set it true for a domain and an LLM run refuses that domain until a passing marker exists (§10.2). Left false, runs proceed and no flag is needed. --allow-uncalibrated still works and is then a no-op.",
-    "_release_note": "require_calibration_for_release is the RELEASE gate, and is FALSE by project decision: a --release scorecard and its immutable baseline can be produced before the §10.2 calibration session happens. This is a deliberate departure from §10.2's last line, recorded here rather than buried in code. What is NOT configurable is the labelling — every artifact still carries calibrated: false, so a baseline established this way can never be mistaken for a calibrated one.",
+    "_note": "Section 10.2 acceptance protocol. min_anchors and agreement_pct are fixed by the Execution Scope (>=10 anchors per domain, within +-1 on >=90% per dimension) — they live here to be reviewable without reading Python, not because they are ours to tune.",
+    "_gate_note": "Two gates, both OPT-IN. require_calibration is the SCORING gate: set it true for a domain and an LLM run refuses that domain until a passing marker exists. Left false, runs proceed and no flag is needed. --allow-uncalibrated still works and is then a no-op.",
+    "_release_note": "require_calibration_for_release is the RELEASE gate, FALSE by project decision: a --release scorecard and its immutable baseline can be produced before the calibration session happens. A deliberate departure from Section 10.2's last line, recorded here rather than buried in code. What is NOT configurable is the labelling — every artifact still records calibrated state, so a baseline established this way can never be mistaken for a calibrated one.",
     "anchors_path": "judge/anchors/{domain}.json",
     "marker_path": "judge/.calibration/{domain}.passed.json",
     "min_anchors": 10,

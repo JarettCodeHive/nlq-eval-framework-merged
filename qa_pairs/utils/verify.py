@@ -6,7 +6,7 @@ thing exact-match compares downstream), not of Python repr(rows).
 
 The log carries no wall-clock timestamp and no execution time on purpose:
 a clean-room re-run must produce byte-identical logs (HC-7). Provenance is
-dataset_version + git.
+release_version + git.
 """
 
 from __future__ import annotations
@@ -19,13 +19,6 @@ from pathlib import Path
 
 from .output_paths import qa_version
 from .serialization import SerializationError, serialize
-
-# Historical default: this module predates the multi-domain split, and
-# `log_payload`'s `qa_version` field has always meant CRM's Q&A release
-# version. Other domains' verification logs inherit this same value today -
-# a known, low-severity metadata gap (it never affects scoring or hashing),
-# not something papered over with a silent per-domain default here.
-QA_VERSION = qa_version(Path(__file__).resolve().parent.parent, "crm")
 
 
 @dataclass
@@ -114,11 +107,18 @@ def log_payload(
     domain: str,
     **extra,
 ) -> dict:
+    release_version = qa_version(
+        Path(__file__).resolve().parent.parent,
+        domain,
+    )
     return {
         "question_id": question_id,
         "domain": domain,
         "tier": tier,
-        "qa_version": QA_VERSION,
+        "release_version": release_version,
+        # Compatibility aliases for existing audit consumers. Both now carry
+        # the one bundle version and cannot diverge.
+        "qa_version": release_version,
         "dataset_version": dataset_version,
         "profile": profile,
         "reference_sql": sql,

@@ -9,7 +9,7 @@ from generators.crm.config import CRM_CONFIG_PATH
 EXPECTED_COMPONENT_SECTIONS = {
     "release": (
         "domain",
-        "dataset_version",
+        "release_version",
         "schema_source",
         "fixed_values",
         "output_paths",

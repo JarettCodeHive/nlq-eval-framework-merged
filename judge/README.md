@@ -185,10 +185,10 @@ the interpolated score levels 2 and 4) is against that exact revision.
 
 ## Scorecard output
 
-The scorecard package lives at the repo top level (`scorecard/`, per §13.1).
-A run writes to two roots, sharing one `run_id`. The §11 deliverables go to
-`release/<domain>/scorecards/<UTC-timestamp>/` (`report_output_root` in
-`config/scorecard/`):
+The scorecard package code lives at the repo top level (`scorecard/`, per
+§13.1). A run writes to two roots, sharing one `run_id`. The §11 deliverables
+go to `release/<version>/<domain>/scorecard/<UTC-timestamp>/`
+(`report_output_root` in `config/scorecard/`):
 
 - `scorecard_summary.csv` — §11.1 one row per domain + per-tier breakout, with
   `baseline_exact_match_pct` / `delta_pct` / `regression_flag`
@@ -197,7 +197,8 @@ A run writes to two roots, sharing one `run_id`. The §11 deliverables go to
 - `scorecard.md` — GitHub-renderable summary
 - `scorecard.pdf` — stakeholder deliverable (Phase-4 exit-gate item; §11.3)
 
-The run's own artifacts go to `release/<domain>/eval-runs/<UTC-timestamp>/`
+The run's own artifacts go to
+`release/<version>/<domain>/judge/<UTC-timestamp>/`
 (`run_output_root` in `config/judge/`):
 
 - `results.json` — question-level drill-down per §11.2

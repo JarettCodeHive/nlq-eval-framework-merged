@@ -6,6 +6,7 @@ most is what they refuse to do. No network: the Studio client is faked.
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -60,6 +61,9 @@ def fake_platform(monkeypatch, tmp_path):
 
         def __exit__(self, *_a):
             return None
+
+        def delete_entity(self, entity_id):
+            state["deleted"].append(entity_id)
 
     # Patch the class, not the module: studio.upload imports helpers from
     # studio.client, and replacing the whole module breaks those imports.
@@ -166,6 +170,49 @@ def test_upload_exits_non_zero_when_rows_are_not_verified(
     assert "Do not evaluate" in str(excinfo.value)
 
 
+def test_partial_upload_writes_ownership_manifest(fake_platform) -> None:
+    outcome = fake_platform["Outcome"]([fake_platform["Table"]("accounts")])
+
+    def fail_upload(*_args, on_outcome, **_kwargs):
+        on_outcome(outcome)
+        raise RuntimeError("load failed")
+
+    fake_platform["set_upload"](fail_upload)
+
+    with pytest.raises(RuntimeError, match="load failed"):
+        main_module.run_dataset_upload(_args("dataset-upload"))
+
+    assert Path(fake_platform["manifest"]).is_file()
+
+
+def test_run_owned_cleanup_deletes_recorded_ids_and_keeps_manifest(
+    fake_platform, capsys
+) -> None:
+    from studio.upload import TableOutcome, UploadOutcome
+
+    outcome = UploadOutcome(domain="crm", profile="full", csv_dir=Path("dataset"))
+    outcome.tables = [
+        TableOutcome(
+            table="accounts", entity_id=101, created_by_run=True
+        ),
+        TableOutcome(
+            table="contacts", entity_id=102, created_by_run=True
+        ),
+    ]
+    args = argparse.Namespace(
+        domain="crm",
+        profile="full",
+        release_version="v1.0.0",
+        upload_outcome=outcome,
+    )
+
+    main_module.run_uploaded_data_cleanup(args)
+
+    assert fake_platform["deleted"] == [102, 101]
+    assert Path(fake_platform["manifest"]).is_file()
+    assert "2/2 run-owned platform entities" in capsys.readouterr().out
+
+
 def test_upload_is_quiet_when_everything_verified(fake_platform) -> None:
     outcome = fake_platform["Outcome"]([fake_platform["Table"]("accounts")])
     fake_platform["set_upload"](lambda *a, **k: outcome)
@@ -176,9 +223,11 @@ def test_upload_is_quiet_when_everything_verified(fake_platform) -> None:
 def test_upload_passes_replace_through(fake_platform) -> None:
     seen = {}
 
-    def _upload(domain, profile, *, client, replace, progress):
+    def _upload(domain, profile, *, client, replace, progress, on_outcome):
         seen["replace"] = replace
-        return fake_platform["Outcome"]([])
+        outcome = fake_platform["Outcome"]([])
+        on_outcome(outcome)
+        return outcome
 
     fake_platform["set_upload"](_upload)
 

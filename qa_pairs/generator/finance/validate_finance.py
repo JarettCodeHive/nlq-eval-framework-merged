@@ -26,8 +26,8 @@ import sys
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(BASE))
-from utils.duckdb_io import connect_typed  # noqa: E402
+sys.path.insert(0, str(BASE.parent))
+from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 
 FK_CHECKS = [
     (

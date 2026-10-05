@@ -16,9 +16,9 @@ is resolved in `judge/resolve.py`; pass the matching flag to override any of it.
   python -m judge.cli --mode per_dimension                 # 4 judge prompts, no halo effect
   python -m judge.cli --input-csv pairs.csv                # an explicit pair set
 
-Writes release/<domain>/eval-runs/<UTC-timestamp>/ — results.json + the §11
-scorecard files. The root comes from `run_output_root` in config/judge/, so it
-sits alongside the dataset and Q&A release packages.
+Writes `release/<version>/<domain>/judge/<UTC-timestamp>/` — results.json and
+the supporting judge evidence. The scorecard is written to the sibling
+`scorecard/<UTC-timestamp>/` directory.
 """
 
 from __future__ import annotations
@@ -40,7 +40,6 @@ from judge.config import (
     FloodgateOIDCSettings,
     JudgeConfig,
     MissingCredentials,
-    REPO_ROOT,
     load_judge_config,
     load_llm_settings,
     trust_os_ca_store,
@@ -71,6 +70,7 @@ from scorecard.summary import (
     write_question_results_csv,
     write_scorecard_summary_csv,
 )
+from qa_pairs.utils.release_bundle import component_dir
 
 # Non-live Pulse sources (fixtures / offline stand-ins). A --release run against
 # one of these still produces artifacts, but its baseline is marked provisional
@@ -90,8 +90,7 @@ def run_output_dir(domain: str, run_id: str, cfg: JudgeConfig) -> Path:
     launched from a subdirectory still lands in the same place.
     """
 
-    root = cfg.run_output_root.format(domain=domain)
-    return REPO_ROOT / root / run_id
+    return component_dir(domain, "judge") / run_id
 
 
 # Measured against org 4104 on the crm_dataset_v2 full profile.
