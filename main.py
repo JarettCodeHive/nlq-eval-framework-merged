@@ -54,6 +54,9 @@ from qa_pairs.generator.project_management.validate_project_management import (
     validate as validate_project_management_qa_dataset,
 )
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
+from qa_pairs.generator.sales.rephrase import (
+    generate_rephrases as generate_sales_rephrases,
+)
 from qa_pairs.generator.sales.scale_pairs_sales import (
     generate_pairs as generate_sales_pairs,
 )
@@ -587,6 +590,7 @@ QA_GENERATE: dict[str, CommandHandler] = {
 # qa-build (see total/step-numbering below) - this is additive, not a gate.
 QA_REPHRASE: dict[str, CommandHandler] = {
     "crm": generate_rephrases,
+    "sales": generate_sales_rephrases,
 }
 
 

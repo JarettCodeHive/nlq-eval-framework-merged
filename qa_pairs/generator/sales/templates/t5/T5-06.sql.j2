@@ -1,0 +1,17 @@
+WITH per_category AS (
+  SELECT p.category AS entity,
+    SUM(CASE WHEN d.close_date >= DATE '2026-01-01' AND d.close_date < DATE '2026-04-01' THEN q.quantity * q.unit_price * (1 - q.discount_pct / 100.0) ELSE 0 END) AS q1_amount,
+    SUM(CASE WHEN d.close_date >= DATE '2026-04-01' AND d.close_date < DATE '2026-07-01' THEN q.quantity * q.unit_price * (1 - q.discount_pct / 100.0) ELSE 0 END) AS q2_amount
+  FROM deals d
+  INNER JOIN quotations q ON d.deal_id = q.deal_id
+  INNER JOIN products p ON q.product_id = p.product_id
+  WHERE d.stage = 'Won' AND p.category IS NOT NULL
+  GROUP BY p.category
+)
+SELECT entity,
+  ROUND(q1_amount, 2) AS q1_amount,
+  ROUND(q2_amount, 2) AS q2_amount,
+  ROUND(CASE WHEN q1_amount = 0 THEN NULL ELSE (q2_amount - q1_amount) / q1_amount * 100 END, 2) AS pct_change
+FROM per_category
+ORDER BY pct_change DESC, entity ASC
+LIMIT 1;

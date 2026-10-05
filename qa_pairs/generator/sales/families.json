@@ -3,7 +3,9 @@
     "family": "T1-01",
     "tier": "T1",
     "template": "t1/T1-01.sql.j2",
-    "params": ["stage"],
+    "params": [
+      "stage"
+    ],
     "quota": 4,
     "join_path": "-",
     "question": "What is the total deal amount for {stage} deals?",
@@ -18,7 +20,9 @@
     "family": "T1-02",
     "tier": "T1",
     "template": "t1/T1-02.sql.j2",
-    "params": ["lead_status"],
+    "params": [
+      "lead_status"
+    ],
     "quota": 5,
     "join_path": "-",
     "question": "How many leads are in the {lead_status} status?",
@@ -33,7 +37,9 @@
     "family": "T1-03",
     "tier": "T1",
     "template": "t1/T1-03.sql.j2",
-    "params": ["lead_source"],
+    "params": [
+      "lead_source"
+    ],
     "quota": 5,
     "join_path": "-",
     "question": "How many leads came from the {lead_source} source?",
@@ -48,7 +54,9 @@
     "family": "T1-04",
     "tier": "T1",
     "template": "t1/T1-04.sql.j2",
-    "params": ["is_active"],
+    "params": [
+      "is_active"
+    ],
     "quota": 2,
     "join_path": "-",
     "question": "How many products are currently {is_active}?",
@@ -63,7 +71,9 @@
     "family": "T1-05",
     "tier": "T1",
     "template": "t1/T1-05.sql.j2",
-    "params": ["quote_status"],
+    "params": [
+      "quote_status"
+    ],
     "quota": 5,
     "join_path": "-",
     "question": "How many quotation lines are in the {quote_status} status?",
@@ -78,7 +88,9 @@
     "family": "T2-01",
     "tier": "T2",
     "template": "t2/T2-01.sql.j2",
-    "params": ["lead_source"],
+    "params": [
+      "lead_source"
+    ],
     "quota": 5,
     "join_path": "sales_jp_002",
     "question": "How many deals came from {lead_source} leads?",
@@ -93,7 +105,9 @@
     "family": "T2-02",
     "tier": "T2",
     "template": "t2/T2-02.sql.j2",
-    "params": ["stage"],
+    "params": [
+      "stage"
+    ],
     "quota": 4,
     "join_path": "sales_jp_002",
     "question": "Which lead source produced the most {stage} deals?",
@@ -108,7 +122,9 @@
     "family": "T2-03",
     "tier": "T2",
     "template": "t2/T2-03.sql.j2",
-    "params": ["category"],
+    "params": [
+      "category"
+    ],
     "quota": 4,
     "join_path": "sales_jp_004",
     "question": "What is the total quantity of {category} products quoted?",
@@ -123,7 +139,9 @@
     "family": "T2-04",
     "tier": "T2",
     "template": "t2/T2-04.sql.j2",
-    "params": ["stage"],
+    "params": [
+      "stage"
+    ],
     "quota": 4,
     "join_path": "sales_jp_003",
     "question": "How many quotation lines were written for {stage} deals?",
@@ -138,7 +156,9 @@
     "family": "T2-05",
     "tier": "T2",
     "template": "t2/T2-05.sql.j2",
-    "params": ["category"],
+    "params": [
+      "category"
+    ],
     "quota": 4,
     "join_path": "sales_jp_004",
     "question": "What is the quote-status breakdown for {category} products?",
@@ -153,7 +173,9 @@
     "family": "T2-06",
     "tier": "T2",
     "template": "t2/T2-06.sql.j2",
-    "params": ["quote_status"],
+    "params": [
+      "quote_status"
+    ],
     "quota": 5,
     "join_path": "sales_jp_004",
     "question": "For {quote_status} quotation lines, which product category has the highest total quoted line value (quantity times unit price, before discount)?",
@@ -168,7 +190,10 @@
     "family": "T2-07",
     "tier": "T2",
     "template": "t2/T2-07.sql.j2",
-    "params": ["stage", "territory"],
+    "params": [
+      "stage",
+      "territory"
+    ],
     "quota": 6,
     "join_path": "sales_jp_002",
     "question": "How many {stage} deals came from leads in the {territory} territory?",
@@ -183,7 +208,9 @@
     "family": "T2-08",
     "tier": "T2",
     "template": "t2/T2-08.sql.j2",
-    "params": ["category"],
+    "params": [
+      "category"
+    ],
     "quota": 4,
     "join_path": "sales_jp_004",
     "question": "Of {category} products' quotation lines that have been decided (accepted, rejected, or expired), what percentage were accepted?",
@@ -198,7 +225,9 @@
     "family": "T3-01",
     "tier": "T3",
     "template": "t3/T3-01.sql.j2",
-    "params": ["territory"],
+    "params": [
+      "territory"
+    ],
     "quota": 5,
     "join_path": "sales_jp_001",
     "question": "How many leads in the {territory} territory have never become a deal?",
@@ -213,7 +242,9 @@
     "family": "T3-02",
     "tier": "T3",
     "template": "t3/T3-02.sql.j2",
-    "params": ["lead_status"],
+    "params": [
+      "lead_status"
+    ],
     "quota": 5,
     "join_path": "sales_jp_001",
     "question": "How many {lead_status} leads have never become a deal?",
@@ -228,7 +259,9 @@
     "family": "T3-03",
     "tier": "T3",
     "template": "t3/T3-03.sql.j2",
-    "params": ["territory"],
+    "params": [
+      "territory"
+    ],
     "quota": 5,
     "join_path": "sales_jp_007",
     "question": "How many sales targets for reps in the {territory} territory recorded zero total won-deal amount in their target period?",
@@ -243,7 +276,9 @@
     "family": "T4-01",
     "tier": "T4",
     "template": "t4/T4-01.sql.j2",
-    "params": ["stage"],
+    "params": [
+      "stage"
+    ],
     "quota": 4,
     "join_path": "sales_jp_005",
     "question": "For {stage} deals, how does total quoted revenue (quantity times unit price, net of the line discount) break down by product category?",
@@ -258,7 +293,9 @@
     "family": "T4-02",
     "tier": "T4",
     "template": "t4/T4-02.sql.j2",
-    "params": ["category"],
+    "params": [
+      "category"
+    ],
     "quota": 4,
     "join_path": "sales_jp_005",
     "question": "For {category} products, how do quotation-line counts break down by deal stage?",
@@ -273,7 +310,9 @@
     "family": "T4-03",
     "tier": "T4",
     "template": "t4/T4-03.sql.j2",
-    "params": ["lead_source"],
+    "params": [
+      "lead_source"
+    ],
     "quota": 5,
     "join_path": "sales_jp_006",
     "question": "For deals from {lead_source} leads, how does the number of distinct quoted deals break down by product category?",
@@ -288,7 +327,9 @@
     "family": "T4-04",
     "tier": "T4",
     "template": "t4/T4-04.sql.j2",
-    "params": ["territory"],
+    "params": [
+      "territory"
+    ],
     "quota": 5,
     "join_path": "sales_jp_007",
     "question": "For reps in the {territory} territory, how does total won-deal amount break down by target period?",
@@ -303,7 +344,9 @@
     "family": "T5-01",
     "tier": "T5",
     "template": "t5/T5-01.sql.j2",
-    "params": ["stage"],
+    "params": [
+      "stage"
+    ],
     "quota": 4,
     "join_path": "sales_jp_005",
     "question": "Which three product categories generated the most total quoted revenue (quantity times unit price, net of discount) among {stage} deals?",
@@ -318,7 +361,9 @@
     "family": "T5-02",
     "tier": "T5",
     "template": "t5/T5-02.sql.j2",
-    "params": ["territory"],
+    "params": [
+      "territory"
+    ],
     "quota": 5,
     "join_path": "sales_jp_007",
     "question": "Which reps in the {territory} territory fell short of their quota in their most recently completed target period, and by how much?",
@@ -333,7 +378,9 @@
     "family": "T5-03",
     "tier": "T5",
     "template": "t5/T5-03.sql.j2",
-    "params": ["territory"],
+    "params": [
+      "territory"
+    ],
     "quota": 5,
     "join_path": "sales_jp_002",
     "question": "How did total won-deal amount for {territory}-territory reps change from Q1 2026 (2026-01-01 to 2026-04-01) to Q2 2026 (2026-04-01 to 2026-07-01)?",
@@ -343,5 +390,251 @@
     "scoring_mode": "judge_plus_exact",
     "answer_shape": "table",
     "rationale": "Q1 2026 = 2026-01-01..2026-04-01, Q2 2026 = 2026-04-01..2026-07-01 - the two most recent COMPLETE quarters (deal data ends 2026-07-08, so Q3 is excluded). INNER JOIN deals to leads on lead_id, filter to the territory and stage='Won', SUM(deal_amount) per window via a CASE expression, then compute absolute and percentage change and direction."
+  },
+  {
+    "family": "T1-06",
+    "tier": "T1",
+    "template": "t1/T1-06.sql.j2",
+    "params": [
+      "lead_source"
+    ],
+    "quota": 5,
+    "join_path": "-",
+    "question": "What is the average lead score for leads from the {lead_source} source?",
+    "tables": "leads",
+    "fields": "leads.lead_source, leads.score",
+    "judge": "A single average lead score (two decimals) for leads from the named source.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "Filter leads to the given lead_source, ROUND(AVG(score), 2)."
+  },
+  {
+    "family": "T1-07",
+    "tier": "T1",
+    "template": "t1/T1-07.sql.j2",
+    "params": [
+      "territory"
+    ],
+    "quota": 4,
+    "join_path": "-",
+    "question": "What is the average lead score for leads in the {territory} territory?",
+    "tables": "leads",
+    "fields": "leads.territory, leads.score",
+    "judge": "A single average lead score (two decimals) for leads in the named territory.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "Filter leads to the given territory, ROUND(AVG(score), 2)."
+  },
+  {
+    "family": "T1-08",
+    "tier": "T1",
+    "template": "t1/T1-08.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "-",
+    "question": "How many deals currently have no close date recorded (still open)?",
+    "tables": "deals",
+    "fields": "deals.close_date",
+    "judge": "A single count of deals whose close_date is NULL.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "Count deals rows where close_date IS NULL."
+  },
+  {
+    "family": "T1-09",
+    "tier": "T1",
+    "template": "t1/T1-09.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "-",
+    "question": "How many products are missing a list price?",
+    "tables": "products",
+    "fields": "products.list_price",
+    "judge": "A single count of products whose list_price is NULL.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "Count products rows where list_price IS NULL."
+  },
+  {
+    "family": "T2-09",
+    "tier": "T2",
+    "template": "t2/T2-09.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "sales_jp_008",
+    "question": "How many Won deals closed inside their rep's sales target period?",
+    "tables": "targets, deals",
+    "fields": "targets.rep_name, targets.period_start, targets.period_end, deals.rep_name, deals.close_date, deals.stage",
+    "judge": "A single count of Won deals whose close_date falls within a matching rep/period target row.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN targets to deals on rep_name with close_date inside [period_start, period_end) and stage='Won' (sales_jp_008 won_deals_to_targets), count matched deals."
+  },
+  {
+    "family": "T2-10",
+    "tier": "T2",
+    "template": "t2/T2-10.sql.j2",
+    "params": [
+      "lead_source"
+    ],
+    "quota": 3,
+    "join_path": "sales_jp_002",
+    "question": "What is the average deal amount for deals from {lead_source} leads?",
+    "tables": "deals, leads",
+    "fields": "deals.lead_id, deals.deal_amount, leads.lead_id, leads.lead_source",
+    "judge": "A single average deal_amount figure for deals whose source lead came from the named lead source.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN deals to leads on lead_id, filter to the lead_source, ROUND(AVG(deal_amount), 2)."
+  },
+  {
+    "family": "T3-04",
+    "tier": "T3",
+    "template": "t3/T3-04.sql.j2",
+    "params": [
+      "lead_status",
+      "territory"
+    ],
+    "quota": 12,
+    "join_path": "sales_jp_001",
+    "question": "How many {lead_status} leads in the {territory} territory have never become a deal?",
+    "tables": "leads, deals",
+    "fields": "leads.lead_id, leads.lead_status, leads.territory, deals.lead_id",
+    "judge": "A single count of leads in the named status and territory with no associated deal.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "LEFT JOIN leads to deals on lead_id, filter leads to the lead_status and territory, keep rows where deal_id IS NULL, count."
+  },
+  {
+    "family": "T3-05",
+    "tier": "T3",
+    "template": "t3/T3-05.sql.j2",
+    "params": [
+      "lead_source"
+    ],
+    "quota": 5,
+    "join_path": "sales_jp_001",
+    "question": "How many leads from the {lead_source} source have never become a deal?",
+    "tables": "leads, deals",
+    "fields": "leads.lead_id, leads.lead_source, deals.lead_id",
+    "judge": "A single count of leads from the named source with no associated deal.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "LEFT JOIN leads to deals on lead_id, filter leads to the lead_source, keep rows where deal_id IS NULL, count."
+  },
+  {
+    "family": "T4-05",
+    "tier": "T4",
+    "template": "t4/T4-05.sql.j2",
+    "params": [
+      "category"
+    ],
+    "quota": 4,
+    "join_path": "sales_jp_005",
+    "question": "For {category} products, how does total quoted revenue (quantity times unit price, net of discount) break down by deal stage?",
+    "tables": "deals, quotations, products",
+    "fields": "deals.deal_id, deals.stage, quotations.deal_id, quotations.product_id, quotations.quantity, quotations.unit_price, quotations.discount_pct, products.product_id, products.category",
+    "judge": "Deal stages ranked by total net quoted revenue (quantity x unit_price x (1 - discount_pct/100)), restricted to quotation lines on the named product category, highest first, with totals.",
+    "scoring_mode": "table_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN deals -> quotations -> products, filter to the category, GROUP BY stage, ROUND(SUM(quantity*unit_price*(1-discount_pct/100.0)), 2), order desc with stage tie-break."
+  },
+  {
+    "family": "T4-06",
+    "tier": "T4",
+    "template": "t4/T4-06.sql.j2",
+    "params": [
+      "lead_source"
+    ],
+    "quota": 5,
+    "join_path": "sales_jp_006",
+    "question": "For deals from {lead_source} leads, how does total quoted revenue (quantity times unit price, net of discount) break down by product category?",
+    "tables": "leads, deals, quotations, products",
+    "fields": "leads.lead_id, leads.lead_source, deals.lead_id, deals.deal_id, quotations.deal_id, quotations.product_id, quotations.quantity, quotations.unit_price, quotations.discount_pct, products.product_id, products.category",
+    "judge": "Product categories ranked by total net quoted revenue among quotation lines on deals from the named lead source, highest first, with totals.",
+    "scoring_mode": "table_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN leads -> deals -> quotations -> products, filter to the lead_source, GROUP BY category, ROUND(SUM(quantity*unit_price*(1-discount_pct/100.0)), 2), order desc with category tie-break."
+  },
+  {
+    "family": "T4-07",
+    "tier": "T4",
+    "template": "t4/T4-07.sql.j2",
+    "params": [
+      "territory"
+    ],
+    "quota": 5,
+    "join_path": "sales_jp_002+sales_jp_003",
+    "question": "For deals from leads in the {territory} territory, how does quotation-line count break down by deal stage?",
+    "tables": "leads, deals, quotations",
+    "fields": "leads.lead_id, leads.territory, deals.lead_id, deals.deal_id, deals.stage, quotations.deal_id",
+    "judge": "Deal stages ranked by count of quotation lines on deals from leads in the named territory, highest first.",
+    "scoring_mode": "table_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN leads -> deals -> quotations, filter to the territory, GROUP BY stage, count, order desc with stage tie-break."
+  },
+  {
+    "family": "T5-04",
+    "tier": "T5",
+    "template": "t5/T5-04.sql.j2",
+    "params": [
+      "stage"
+    ],
+    "quota": 4,
+    "join_path": "sales_jp_002",
+    "question": "Among {stage} deals, which three lead sources are most represented? List each lead source with its deal count, highest first.",
+    "tables": "deals, leads",
+    "fields": "deals.lead_id, deals.stage, leads.lead_id, leads.lead_source",
+    "judge": "Exactly three lead sources ranked by count of deals in the named stage, highest first, with counts.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN deals to leads on lead_id, filter to the stage, GROUP BY lead_source, count, order desc with lead_source tie-break, LIMIT 3."
+  },
+  {
+    "family": "T5-05",
+    "tier": "T5",
+    "template": "t5/T5-05.sql.j2",
+    "params": [
+      "category"
+    ],
+    "quota": 4,
+    "join_path": "sales_jp_005",
+    "question": "How did total quoted revenue (quantity times unit price, net of discount) for Won deals on {category} products change from Q1 2026 (2026-01-01 to 2026-04-01) to Q2 2026 (2026-04-01 to 2026-07-01)?",
+    "tables": "deals, quotations, products",
+    "fields": "deals.deal_id, deals.stage, deals.close_date, quotations.deal_id, quotations.product_id, quotations.quantity, quotations.unit_price, quotations.discount_pct, products.product_id, products.category",
+    "judge": "Total net quoted revenue for Won deals on the named product category for Q1 2026 and Q2 2026, the absolute and percentage change, and the direction. Q1 and Q2 2026 are the two most recent complete calendar quarters relative to the reference date 2026-08-01.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "table",
+    "rationale": "INNER JOIN deals -> quotations -> products, filter to the category and stage='Won', SUM(quantity*unit_price*(1-discount_pct/100.0)) per window via a CASE expression on close_date, then compute absolute and percentage change and direction."
+  },
+  {
+    "family": "T5-06",
+    "tier": "T5",
+    "template": "t5/T5-06.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "sales_jp_005",
+    "question": "Which product category showed the best quoted-revenue trend for Won deals from Q1 2026 to Q2 2026?",
+    "tables": "deals, quotations, products",
+    "fields": "deals.deal_id, deals.stage, deals.close_date, quotations.deal_id, quotations.product_id, quotations.quantity, quotations.unit_price, quotations.discount_pct, products.product_id, products.category",
+    "judge": "The single product category with the highest percentage change in net quoted revenue for Won deals from Q1 2026 to Q2 2026 - the largest gain, or (if every category declined) the smallest decline.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "table",
+    "rationale": "INNER JOIN deals -> quotations -> products, filter to stage='Won', GROUP BY category computing Q1/Q2 net quoted revenue via CASE on close_date, percentage change, order by pct_change desc with category tie-break, top row."
+  },
+  {
+    "family": "T5-07",
+    "tier": "T5",
+    "template": "t5/T5-07.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "-",
+    "question": "Which three sales reps have closed the most total Won deal amount? List each rep with their total, highest first.",
+    "tables": "deals",
+    "fields": "deals.rep_name, deals.stage, deals.deal_amount",
+    "judge": "Exactly three reps ranked by total deal_amount among Won deals, highest first, with totals.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "Filter deals to stage='Won', GROUP BY rep_name, ROUND(SUM(deal_amount), 2), order desc with rep_name tie-break, LIMIT 3."
   }
 ]
