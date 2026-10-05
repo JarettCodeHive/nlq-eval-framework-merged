@@ -240,3 +240,27 @@ def test_dry_run_delete_needs_no_confirmation(fake_platform, capsys) -> None:
     main_module.run_dataset_delete(_args("dataset-delete", "--dry-run"))
 
     assert "nothing was sent" in capsys.readouterr().out
+
+
+def test_no_top_level_flag_shadows_a_passthrough_subcommand_flag() -> None:
+    """`judge` and `score` parse their own argv, so a top-level flag of the same
+    name is consumed by main.py's parser before it ever reaches them.
+
+    This is not hypothetical: adding `--run` for `anchors-export` silently broke
+    `score --run DOMAIN=RUN_ID`, which combined the most recent runs instead of
+    the pinned ones and gave no error at all.
+    """
+
+    from judge.cli import build_argparser as judge_parser
+    from main import build_parser
+    from scorecard.combine import build_argparser as score_parser
+
+    def flags(parser):
+        return {s for a in parser._actions for s in a.option_strings}
+
+    # --domain/--profile are shared on purpose: main.py forwards them.
+    allowed = {"-h", "--help", "--domain", "--profile"}
+    top = flags(build_parser())
+    for name, parser in (("judge", judge_parser()), ("score", score_parser())):
+        clash = (top & flags(parser)) - allowed
+        assert not clash, f"top-level flag(s) {sorted(clash)} shadow `{name}`'s own"
