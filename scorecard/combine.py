@@ -466,8 +466,8 @@ def summarise(outcome: CombineOutcome) -> str:
     for run in outcome.inputs:
         lines.append(
             f"  {run.domain:20} {run.run_id}  rows={len(run.rows):<5} "
-            f"pulse={run.pulse_mode or '?'}  "
-            f"calibrated={'yes' if run.calibrated else 'NO'}"
+            f"pulse={run.pulse_mode or '?'}"
+            + ("  calibrated" if run.calibrated else "")
         )
     lines.append("per domain:")
     for row in outcome.rows:

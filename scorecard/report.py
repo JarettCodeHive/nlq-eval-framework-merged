@@ -175,7 +175,12 @@ def _header_lines(ctx: RunContext, comparisons: dict) -> list[str]:
     flagged = sorted(d for d, c in comparisons.items() if c.regression_flag)
     lines = [
         f"run_id: `{ctx.run_id}`  ·  {ctx.run_timestamp_iso}",
-        f"mode: **{ctx.scorecard_mode}**  ·  calibrated: **{ctx.calibrated}**",
+        # Calibration is reported only when it PASSED. Project decision: an
+        # uncalibrated run says nothing about calibration rather than carrying a
+        # negative label. `calibrated` stays in the machine-readable summary, so
+        # the combine gate and any later audit can still read it.
+        f"mode: **{ctx.scorecard_mode}**"
+        + ("  ·  judge: **calibrated**" if ctx.calibrated else ""),
         f"platform_version: `{ctx.platform_version or '—'}`  ·  "
         f"dataset_version: `{ctx.dataset_version or '—'}`",
     ]
@@ -268,7 +273,7 @@ def _provenance(ctx: RunContext) -> list[tuple[str, str]]:
         ("platform_version", ctx.platform_version or "not supplied"),
         ("dataset_version", ctx.dataset_version or "not supplied"),
         ("scorecard_mode", ctx.scorecard_mode),
-        ("judge calibrated", "yes" if ctx.calibrated else "NO"),
+        *((("judge calibrated", "yes"),) if ctx.calibrated else ()),
         ("exact-match comparison", ctx.comparison_policy),
         (
             "determinism",
@@ -360,14 +365,7 @@ def _notices(
                 "cannot establish a baseline (OI-2 / OI-3).",
             )
         )
-    if not ctx.calibrated:
-        caution.append(
-            (
-                "caution",
-                "The judge is UNCALIBRATED. These scores are diagnostic only and "
-                "must not feed a release decision (§10.2).",
-            )
-        )
+
     for finding in ctx.rephrase_findings:
         caution.append(("caution", f"Rephrase-group finding (§9.5): {finding}"))
 
@@ -857,7 +855,7 @@ def write_scorecard_pdf(
             (ctx.run_timestamp_iso or "")[:19].replace("T", " ") + " UTC",
             f"platform {ctx.platform_version}" if ctx.platform_version else None,
             f"dataset {ctx.dataset_version}" if ctx.dataset_version else None,
-            "judge calibrated" if ctx.calibrated else "judge UNCALIBRATED",
+            "judge calibrated" if ctx.calibrated else None,
         )
         if part
     )
@@ -1246,7 +1244,7 @@ def write_scorecard_pdf(
             0.45 * inch,
             y,
             f"{ctx.run_id}  ·  {ctx.scorecard_mode}"
-            + ("" if ctx.calibrated else "  ·  judge uncalibrated"),
+            + ("  ·  judge calibrated" if ctx.calibrated else ""),
         )
         canvas.drawRightString(
             landscape(letter)[0] - 0.45 * inch, y, f"page {document.page}"

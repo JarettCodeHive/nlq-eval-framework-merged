@@ -935,11 +935,14 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
 
     provisional_pulse = args.pulse in _STANDIN_PULSE
-    calibration_state = "CALIBRATED" if calibrated else "UNCALIBRATED"
+    # Reported only when it passed — an uncalibrated run is silent on the
+    # subject rather than carrying a negative badge. The machine-readable
+    # summary still records `calibrated`, which is what the combine gate reads.
+    calibration_state = "  [CALIBRATED]" if calibrated else ""
     print(
         f"[judge] judge={args.judge}  mode={args.mode}  "
         f"pulse={pulse_label}  pairs={len(pairs)}  "
-        f"domain={args.domain} [{calibration_state}]  scorecard={scorecard_mode}"
+        f"domain={args.domain}{calibration_state}  scorecard={scorecard_mode}"
     )
     print(f"[judge] provider provenance: {json.dumps(provenance)}")
 
@@ -1160,14 +1163,7 @@ async def _run(args: argparse.Namespace) -> int:
         exit_reason="ok" if not summary["judge_errors"] else "judge_errors",
     )
 
-    if not summary["calibrated"] and args.judge == "llm":
-        print(
-            "\n[judge] NOTE: judge is uncalibrated (§10.2). Every artifact this "
-            "run writes is labelled `calibrated=false`, including any scorecard "
-            "or baseline built from it — that label is not configurable. Grade "
-            f"anchors and run `python main.py calibrate --domain {args.domain}` "
-            "to replace it with a real pass."
-        )
+
     if hasattr(judge, "cache_stats"):
         stats = judge.cache_stats()
         if stats.get("enabled"):

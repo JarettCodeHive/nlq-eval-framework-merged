@@ -287,19 +287,21 @@ def test_calibration_blocks_a_release_only_when_config_asks_it_to(
     assert any("uncalibrated" in b for b in release_blockers(inputs))
 
 
-def test_an_uncalibrated_release_is_still_labelled_uncalibrated(
-    runs, tmp_path: Path
-) -> None:
-    """The gate is configurable; the LABEL is not. A card established without
-    calibration must never be mistakable for a calibrated one after the fact.
+def test_calibration_is_shown_only_when_it_passed(runs, tmp_path: Path) -> None:
+    """Project decision: the card states calibration only as a PASS. An
+    uncalibrated run carries no calibration line at all — the fact survives in
+    the machine-readable summary, which is what `release_blockers` reads when a
+    domain opts the gate back on.
     """
 
-    inputs = [load_run("crm", runs("crm", "r1", calibrated=False).name)]
+    uncalibrated = [load_run("crm", runs("crm", "r1", calibrated=False).name)]
+    out = mod.combine(uncalibrated, release=True, out_dir=tmp_path / "no").out_dir
+    text = (out / "scorecard.md").read_text()
+    assert "calibrated" not in text.lower()
 
-    outcome = mod.combine(inputs, release=True, out_dir=tmp_path / "out")
-
-    assert outcome.mode == "RELEASE"
-    assert "calibrated: **False**" in (outcome.out_dir / "scorecard.md").read_text()
+    calibrated = [load_run("sales", runs("sales", "r2", calibrated=True).name)]
+    out = mod.combine(calibrated, release=True, out_dir=tmp_path / "yes").out_dir
+    assert "judge: **calibrated**" in (out / "scorecard.md").read_text()
 
 
 def test_mixed_platform_versions_block(runs) -> None:

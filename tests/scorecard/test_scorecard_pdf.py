@@ -174,13 +174,19 @@ def test_clarifications_are_flagged_as_a_denominator_exclusion() -> None:
     assert "3 question(s)" in exclusion
 
 
-def test_preview_and_uncalibrated_are_both_called_out() -> None:
+def test_preview_is_called_out_and_calibration_is_not() -> None:
+    """Project decision: calibration is reported only when it PASSED, so an
+    uncalibrated run is silent on the subject instead of carrying a negative
+    notice. PREVIEW is unrelated and still called out."""
+
     rows, comparisons = build_summary_rows(_results(passes=5, fails=5), _ctx())
 
-    alerts = _warnings(_ctx(scorecard_mode="PREVIEW", calibrated=False), rows, comparisons)
+    alerts = _warnings(
+        _ctx(scorecard_mode="PREVIEW", calibrated=False), rows, comparisons
+    )
 
     assert any("PREVIEW" in a for a in alerts)
-    assert any("UNCALIBRATED" in a for a in alerts)
+    assert not any("UNCALIBRATED" in a.upper() for a in alerts)
 
 
 def test_a_non_default_comparison_is_called_out() -> None:
