@@ -1267,6 +1267,10 @@ def build_parser() -> argparse.ArgumentParser:
 # a typo, and silently ignoring it would hide a mis-run release step.
 PASSTHROUGH_COMMANDS: frozenset[str] = frozenset({"judge", "score", "rubric"})
 
+# Commands that drive `PipelineReporter` themselves. Wrapping these again would
+# nest one reporter inside another and double every prefix.
+_SELF_REPORTING_COMMANDS: frozenset[str] = frozenset({"run-pipeline"})
+
 _HELP_FLAGS: frozenset[str] = frozenset({"-h", "--help"})
 
 
@@ -1315,10 +1319,39 @@ def main() -> None:
             print(f"[log] writing command output to {log_path}")
             try:
                 with use_release_version(args.release_version):
-                    COMMANDS[args.command](args)
+                    _dispatch(args)
             except Exception as exc:
                 print(f"ERROR: {exc}", file=sys.stderr)
                 raise SystemExit(1) from exc
+
+
+def _dispatch(args: argparse.Namespace) -> None:
+    """Run one command through the same reporter `run-pipeline` uses.
+
+    A single command used to be a raw tee of stdout and stderr, so the SAME
+    command produced two different log formats depending on how it was invoked:
+    plain text standalone, timestamped and levelled inside `run-pipeline`.
+    Anything reading these — a reviewer, a grep, a CI step — had to handle both,
+    and a standalone run had no levels at all, so a real error was just a line
+    of text.
+
+    `run-pipeline` manages its own reporter across six stages, so it is excluded
+    here rather than wrapped twice.
+    """
+
+    handler = COMMANDS[args.command]
+    if args.command in _SELF_REPORTING_COMMANDS:
+        handler(args)
+        return
+
+    reporter = PipelineReporter()
+    reporter.start(
+        domain=getattr(args, "domain", None) or "shared",
+        profile=getattr(args, "profile", None) or "-",
+        total_stages=1,
+    )
+    with reporter.stage(PipelineStage(1, 1, args.command, args.command)):
+        handler(args)
 
 
 if __name__ == "__main__":

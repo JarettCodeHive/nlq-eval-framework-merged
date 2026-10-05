@@ -11,6 +11,7 @@ Q&A, Studio, and judge packages to one another.
 from __future__ import annotations
 
 import contextlib
+from datetime import datetime, timezone
 import io
 import re
 import sys
@@ -60,6 +61,24 @@ _WARNING_WORDS = re.compile(
     r"(?:^|\b)(?:warning|warn|note|uncalibrated|unconfirmed)(?:\b|$)",
     re.IGNORECASE,
 )
+
+
+# A JSON fragment, a table row, or a key/value dump — anything whose words are
+# field names rather than a sentence about what happened.
+_DATA_LINE = re.compile(
+    r"""^\s*(?:
+          [{}\[\]]                      # a bare JSON brace or bracket
+        | "[^"]+"\s*:                   # a quoted JSON key
+        | [A-Za-z_][A-Za-z0-9_]*\s{2,}: # a key PADDED to a column, i.e. a dump
+    )""",
+    re.VERBOSE,
+)
+
+
+def _looks_like_data(message: str) -> bool:
+    """Whether a line is serialised data rather than a statement to classify."""
+
+    return bool(_DATA_LINE.match(message))
 
 
 @dataclass(frozen=True)
@@ -122,10 +141,19 @@ class _PipelineLogStream(io.TextIOBase):
         if not message:
             return
         level = self._default_level
-        if _ERROR_WORDS.search(message):
-            level = "ERROR"
-        elif _WARNING_WORDS.search(message):
-            level = "WARN"
+        # Keyword inference is a guess about prose, so it must not be applied to
+        # serialised data. A child printing its JSON summary was having
+        #     "fail": 0,
+        # logged as an ERROR — a line reporting ZERO failures — and
+        #     "state": "uncalibrated",
+        # logged as a WARN. A clean run therefore reported 2 errors and 21
+        # warnings, and the level column stopped carrying information. A log
+        # nobody trusts is worse than no log.
+        if not _looks_like_data(message):
+            if _ERROR_WORDS.search(message):
+                level = "ERROR"
+            elif _WARNING_WORDS.search(message):
+                level = "WARN"
         self._reporter.log(level, self._component, message)
 
 
@@ -152,11 +180,20 @@ class PipelineReporter:
         self._lock = threading.Lock()
 
     def log(self, level: str, component: str, message: str) -> None:
-        """Write one or more consistently formatted log lines."""
+        """Write one or more consistently formatted log lines.
+
+        Both clocks are present on purpose. The elapsed column is what you read
+        to see where a run spends its time; the absolute one is what lets a line
+        be matched against everything else the run wrote — judge/run_log.jsonl
+        stamps absolute ISO, and the platform reports job ids against wall-clock.
+        With elapsed alone, correlating a 12-minute upload against 900 job ids
+        meant adding the start time to every line by hand.
+        """
 
         target = self.error_output if level in {"WARN", "ERROR"} else self.output
         elapsed = _elapsed(self.clock() - self.started_at)
-        prefix = f"{elapsed} | {level:<5} | {component:<15} | "
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        prefix = f"{stamp} | {elapsed} | {level:<5} | {component:<15} | "
         lines = str(message).splitlines() or [""]
         with self._lock:
             for line in lines:

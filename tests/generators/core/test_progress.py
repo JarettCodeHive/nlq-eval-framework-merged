@@ -78,3 +78,60 @@ def test_pipeline_reporter_marks_and_reraises_stage_failures() -> None:
     assert "WARN  | platform.upload | WARNING: retry exhausted" in errors.getvalue()
     assert "ERROR | pipeline" in errors.getvalue()
     assert "[4/5] FAILED Upload dataset (00:00:02.000)" in errors.getvalue()
+
+
+def test_a_level_is_not_inferred_from_serialised_data():
+    """Keyword inference is a guess about prose, and must not touch data.
+
+    A child printing its JSON summary had
+
+        "fail": 0,
+
+    logged as an ERROR — a line reporting ZERO failures — and
+
+        "state": "uncalibrated",
+
+    logged as a WARN. A clean end-to-end run reported 2 errors and 21 warnings,
+    so the level column carried no information at all.
+    """
+
+    from generators.core.progress import _looks_like_data
+
+    for data in (
+        '    "fail": 0,',
+        '    "state": "uncalibrated",',
+        "  {",
+        "  },",
+        "exact_match     : FAIL",        # a key padded to a column, i.e. a dump
+        "judge_scores    : factual_=5",
+    ):
+        assert _looks_like_data(data), data
+
+    # Prose still gets classified — these are statements about what happened.
+    for prose in (
+        "ERROR: upload failed for accounts",
+        "dataset build failed: FK integrity gate",
+        "note: PULSE_AUTH_TOKEN expired 20141 min ago",
+        "accounts: verified 24,000 rows",
+        "platform    1/1     0.0s  ok      CRM-T1-01-01",
+    ):
+        assert not _looks_like_data(prose), prose
+
+
+def test_every_log_line_carries_an_absolute_timestamp():
+    """Elapsed alone cannot be correlated with anything else a run writes:
+    judge/run_log.jsonl stamps absolute ISO and the platform reports job ids
+    against wall-clock, so debugging a 12-minute upload meant adding the start
+    time to 900 lines by hand."""
+
+    import io
+    import re
+
+    from generators.core.progress import PipelineReporter
+
+    out = io.StringIO()
+    PipelineReporter(output=out, error_output=out).log("INFO", "judge", "hello")
+    line = out.getvalue().strip()
+
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \| ", line), line
+    assert " | INFO  | judge" in line
