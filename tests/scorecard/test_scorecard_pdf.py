@@ -396,3 +396,36 @@ def test_the_masthead_rule_clears_the_title_descenders(tmp_path: Path) -> None:
     # Vera's descender is ~21% of the em.
     clearance = (baseline - size * 0.21) - max(below)
     assert clearance > 1.5, f"rule is {clearance:.2f}pt from the descenders"
+
+
+def test_table_header_text_is_light_on_the_dark_header_fill(tmp_path: Path) -> None:
+    """A Paragraph carries its own colour, so a TableStyle TEXTCOLOR on the header
+    row does not reach inside one. Converting the findings header from raw strings
+    to Paragraphs silently turned it black on a near-black fill — legible to
+    nobody, and invisible to every test that only checked the text was present.
+    """
+
+    import re
+
+    pypdf = pytest.importorskip("pypdf")
+    out = tmp_path / "card"
+    report.write_scorecard_pdf(out, _results(passes=20, fails=12, clarifications=2), _ctx())
+
+    headers = {"what this run observed about the platform", "verdict", "basis"}
+    seen: dict[str, tuple[float, float, float] | None] = {}
+    for page in pypdf.PdfReader(str(out / "scorecard.pdf")).pages:
+        contents = page.get("/Contents")
+        stream = contents if not isinstance(contents, list) else contents[0]
+        data = stream.get_object().get_data().decode("latin-1", "ignore")
+        fill = None
+        for m in re.finditer(r"([\d.]+) ([\d.]+) ([\d.]+) rg|\((.*?)\) Tj", data):
+            if m.group(1) is not None:
+                fill = tuple(round(float(m.group(i)), 3) for i in (1, 2, 3))
+            elif (m.group(4) or "").strip() in headers:
+                seen[m.group(4).strip()] = fill
+
+    assert seen, "findings table header not found in the document"
+    for label, fill in seen.items():
+        assert fill is not None, f"{label!r} drawn with no fill colour set"
+        # The header fill is #22304a — dark. Header text must be light.
+        assert sum(fill) > 2.0, f"{label!r} drawn dark ({fill}) on a dark header"

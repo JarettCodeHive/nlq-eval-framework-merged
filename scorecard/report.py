@@ -1329,12 +1329,22 @@ def write_scorecard_pdf(
     verdict_cell = ParagraphStyle(
         "verdict", parent=body, fontName=_FONT_BOLD, fontSize=8, leading=10
     )
+    # A Paragraph carries its OWN colour, so the TableStyle's
+    # ("TEXTCOLOR", header row, white) does not reach inside it — the header
+    # text went black on the navy fill the moment these cells stopped being
+    # raw strings. The header style states white explicitly.
+    header_cell = ParagraphStyle(
+        "finding_header",
+        parent=finding_cell,
+        fontName=_FONT_BOLD,
+        textColor=colors.white,
+    )
     gate_table = Table(
         [
             [
-                Paragraph("<b>what this run observed about the platform</b>", finding_cell),
-                Paragraph("<b>verdict</b>", finding_cell),
-                Paragraph("<b>basis</b>", finding_cell),
+                Paragraph("what this run observed about the platform", header_cell),
+                Paragraph("verdict", header_cell),
+                Paragraph("basis", header_cell),
             ]
         ]
         + [
