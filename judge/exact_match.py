@@ -452,11 +452,30 @@ def _consume_number(
     return hits or None
 
 
-# How much precision a platform may drop before it is stating a DIFFERENT number
-# rather than printing the same one shorter. Deliberately tiny: it admits cents
-# dropped from a billion (relative loss ~1e-10) and two decimals dropped from
-# four (~3e-6), and admits nothing else observed.
-_RENDER_PRECISION_TOLERANCE = Decimal("1e-5")
+# The fewest significant digits a platform may print and still be stating the
+# same number rather than characterising it. "50.4" for 50.36 is the value
+# rendered shorter; "23" for 23.21 is a summary of it.
+#
+# This replaced a flat relative tolerance (1e-5), which was the wrong property
+# to measure. The counter-example proves it: 4,182,000 for 4,182,650.00 gives
+# up only 1.6e-4 relative, LESS than the 7.9e-4 given up by "about 50.4%" for
+# 50.36 — so no threshold on relative loss can accept the second and reject the
+# first. Relative loss also has to be retuned for every new magnitude, and was:
+# 1e-5 admitted cents dropped from a billion while rejecting a percentage
+# printed to one decimal place.
+_MIN_RENDERED_SIGNIFICANT_DIGITS = 3
+
+
+def _significant_digits(value: Decimal) -> int:
+    """How many significant digits a parsed token was printed to.
+
+    Decimal already drops leading zeros, so 0.0000123 is three digits, while a
+    printed "0.0" has none — which is what keeps a destroyed small value out.
+    Trailing zeros are kept, because a platform printing "100" chose to assert
+    three digits.
+    """
+
+    return 0 if value == 0 else len(value.as_tuple().digits)
 
 
 def _printed_at_lower_precision(
@@ -464,28 +483,33 @@ def _printed_at_lower_precision(
 ) -> list[int]:
     """Positions where the answer prints this number with fewer decimals.
 
-    Observed twice against the live platform, in both domains:
+    Observed three times against the live platform, across both domains:
 
         expected 1339.1438      printed "1339.14"
         expected 2851503384.42  printed "$2,851,503,384"
+        expected 50.36          printed "about 50.4%"
 
-    Both are the expected value *rendered shorter*, which HC-3 protects — it
+    Each is the expected value *rendered shorter*, which HC-3 protects — it
     fails "numeric variance", and dropping cents from 2.8 billion is not
     variance. Scoring them wrong made the platform look worse than it is, which
-    is the error that costs us credibility rather than theirs.
+    is the error that costs us credibility rather than theirs. The third case
+    also printed its own numerator and denominator, 4,928 of 9,786, which
+    divide to exactly the expected 50.36.
 
     This is NOT a tolerance on the value, and the distinction matters because
     the module docstring promises there isn't one. Two conditions must BOTH
-    hold, and the first is the real gate:
+    hold:
 
       1. the printed token is the expected value correctly rounded to the
          precision the platform itself chose to print — a faithful rendering,
          not merely a nearby number;
-      2. the precision given up is negligible relative to the magnitude.
+      2. it was printed to at least three significant digits, so it identifies
+         the value rather than characterising it.
 
     (1) alone would accept "roughly 23%" for 23.21, since 23 is 23.21 rounded
-    to zero places. (2) is what rejects it. Together they also reject the
-    docstring's own counter-example, 4,182,000 against 4,182,650.00.
+    to zero places; (2) rejects it at two digits. (1) alone also rejects the
+    docstring's own counter-example, 4,182,000 against 4,182,650.00, which is
+    not a rounding of it at any precision.
     """
 
     hits: list[int] = []
@@ -505,8 +529,8 @@ def _printed_at_lower_precision(
             continue
         if round(expected, decimals) != printed:
             continue  # not a faithful rendering of the expected value
-        if abs(expected - printed) / abs(expected) >= _RENDER_PRECISION_TOLERANCE:
-            continue  # too much precision given up to still be the same number
+        if _significant_digits(printed) < _MIN_RENDERED_SIGNIFICANT_DIGITS:
+            continue  # a characterisation of the number, not the number itself
         hits.append(pos)
     return hits
 

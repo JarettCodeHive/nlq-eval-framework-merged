@@ -859,11 +859,18 @@ def test_a_value_printed_at_lower_precision_passes():
 
         CRM-T4-04-17    expected 1339.1438      printed "1339.14"
         SALES-T2-06-22  expected 2894260664.44  printed "$2,894,260,664"
+        CRM-T2-08-40    expected 50.36          printed "about 50.4%"
+        SALES-T2-08-34  expected 20.18          printed "about 20.2%"
 
-    Both are the expected value rendered shorter. HC-3 fails numeric VARIANCE,
+    Each is the expected value rendered shorter. HC-3 fails numeric VARIANCE,
     and dropping cents from 2.8 billion is not variance — it is rendering, the
     same reading that makes 28,731 equal 28731. Failing these made the platform
     look worse than it is.
+
+    The last two matter beyond their own rows: T2-08-40 printed its numerator
+    and denominator too, 4,928 of 9,786, which divide to exactly 50.36. The
+    platform had the right number and we marked it wrong for writing it to one
+    decimal place.
     """
 
     assert (
@@ -873,28 +880,73 @@ def test_a_value_printed_at_lower_precision_passes():
         exact_match("2894260664.44", "at approximately $2,894,260,664")
         is ExactMatchResult.PASS
     )
+    assert (
+        exact_match("50.36", "an on-time rate of about 50.4%") is ExactMatchResult.PASS
+    )
+    assert (
+        exact_match("20.18", "about 20.2% of quotation lines were accepted")
+        is ExactMatchResult.PASS
+    )
+
+
+def test_a_percentage_printed_to_one_decimal_place_is_the_same_number():
+    """This case asserted FAIL until 2026-10-06, and the assertion was wrong.
+
+    "about 23.2%" for 23.21 is the same shape as "about 50.4%" for 50.36 — a
+    two-decimal percentage printed to one place, giving up under a thousandth
+    of its magnitude. Accepting one and rejecting the other was incoherent, and
+    the only reason it survived is that the old rule's threshold happened to sit
+    between two cases nobody had compared side by side.
+
+    The widening is deliberate and bounded: any percentage printed to one
+    decimal place against a two-decimal expected value now passes, which is at
+    most 0.05 of a percentage point. Measured across the four full CRM and
+    Sales runs on disk — 563 comparisons — it changes exactly one verdict.
+    """
+
+    assert exact_match("23.21", "about 23.2% of cases") is ExactMatchResult.PASS
 
 
 @pytest.mark.parametrize(
     ("expected", "answer", "why"),
     [
-        ("23.21", "roughly 23%", "zero places on a percentage loses too much"),
-        ("23.21", "about 23.2%", "one place still loses too much"),
+        ("23.21", "roughly 23%", "two significant digits only characterises it"),
         ("4182650.00", "the total is 4,182,000", "the module docstring's own example"),
         ("1013", "about 1,000 accounts", "rounded to the nearest thousand"),
         ("28725", "28,700 interactions", "rounded to the nearest hundred"),
+        ("0.00001234", "the ratio is 0.0", "every significant digit destroyed"),
+        ("5.5", "about 6", "one significant digit"),
     ],
 )
 def test_precision_leniency_does_not_become_a_tolerance(expected, answer, why):
     """The module promises there is no tolerance parameter, and this must not
     smuggle one in. A printed value has to be a FAITHFUL rounding of the
-    expected one AND give up negligible precision relative to its magnitude.
+    expected one AND carry at least three significant digits.
 
     Faithfulness alone is not enough: 23 *is* 23.21 rounded to zero places, so
-    only the magnitude bound rejects "roughly 23%".
+    only the significant-digit floor rejects "roughly 23%".
     """
 
     assert exact_match(expected, answer) is ExactMatchResult.FAIL, why
+
+
+def test_relative_loss_is_the_wrong_property_to_measure():
+    """Why the rule counts significant digits instead of bounding relative loss.
+
+    The two cases cross over, so no threshold on relative loss can separate
+    them:
+
+        4,182,000 for 4,182,650.00   gives up 1.6e-4   must FAIL
+        "about 50.4%" for 50.36      gives up 7.9e-4   must PASS
+
+    The first gives up LESS and is still wrong, because it is not a rounding of
+    the expected value at any precision. Faithfulness catches it; a tolerance
+    never could, and the old 1e-5 threshold only looked like it worked because
+    it was below both.
+    """
+
+    assert exact_match("4182650.00", "the total is 4,182,000") is ExactMatchResult.FAIL
+    assert exact_match("50.36", "about 50.4%") is ExactMatchResult.PASS
 
 
 def test_lower_precision_still_requires_the_right_label():
