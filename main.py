@@ -77,12 +77,10 @@ from qa_pairs.utils.release_bundle import component_dir
 from qa_pairs.utils.release_bundle import release_root
 from qa_pairs.utils.release_bundle import use_release_version
 
-from judge.build_input import build as build_judge_input
 from judge.cli import build_argparser as build_judge_argparser
 from judge.cli import run_calibrate_from_domain
 from judge.cli import run_check_auth as run_check_auth_for_domain
 from judge.cli import run_from_args as run_judge_from_args
-from judge.resolve import qa_release_dir
 
 CommandHandler = Callable[[argparse.Namespace], Any]
 
@@ -738,23 +736,6 @@ def _ensure_crm(domain: str) -> None:
         )
 
 
-def run_judge_build_input(args: argparse.Namespace) -> None:
-    """Join the Q&A release contract + companion into one judge input CSV.
-
-    The §9.3 contract file carries no identifiers and the companion carries no
-    answers, so the judge needs them joined. Reads whichever Q&A release the
-    selected profile points at, so it stays in step with `qa-generate-pairs`.
-
-    `judge` performs the same join on demand — this command exists to do it
-    deliberately, and to rebuild the file after the pairs change.
-    """
-
-    _ensure_crm(args.domain)
-    qa_release = qa_release_dir(args.domain, args.profile)
-    output = qa_release / f"{args.domain}_judge_input.csv"
-    build_judge_input(qa_release, args.domain, output)
-
-
 def run_dataset_upload(args: argparse.Namespace) -> Any:
     """Upload a generated dataset to the Claris Studio platform.
 
@@ -1213,7 +1194,6 @@ COMMANDS: dict[str, CommandHandler] = {
     "check-auth": run_check_auth,
     "dataset-upload": run_dataset_upload,
     "dataset-delete": run_dataset_delete,
-    "judge-build-input": run_judge_build_input,
     "judge": run_judge,
     "run-pipeline": run_pipeline,
     "score": run_score,
