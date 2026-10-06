@@ -72,6 +72,26 @@ jobs:
       FLOODGATE_NARRATIVE_CERT: ${{ secrets.FLOODGATE_NARRATIVE_CERT }}
       FLOODGATE_NARRATIVE_KEY: ${{ secrets.FLOODGATE_NARRATIVE_KEY }}
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🚀 Build, upload, judge, score — ${{ inputs.domain }}
+          Full evaluation cycle for **${{ inputs.domain }}**: build its dataset,
+          build its Q&A release, upload the dataset to the real Pulse platform,
+          run the LLM judge against Pulse's live responses, and combine the
+          result into a regression scorecard.
+
+          | Setting | Value |
+          |---|---|
+          | Domain | `${{ inputs.domain }}` |
+          | Mode | ${{ inputs.skip_judge && '🧪 dry run (build + upload only, no LLM/Pulse cost)' || '✅ full run (judge + score)' }} |
+          | Scorecard type | ${{ inputs.release && '🏁 official release (requires calibration)' || '👀 preview (not an official baseline)' }} |
+          | Platform version tag | ${{ inputs.platform_version != '' && inputs.platform_version || '(none given - judge records its own)' }} |
+
+          This job never runs on push/PR - it was triggered manually and
+          spends real LLM API cost plus writes to the shared Pulse org.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5

@@ -13,6 +13,17 @@ jobs:
     name: Lint (ruff, black, sqlfluff)
     runs-on: ubuntu-latest
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🔍 Lint (ruff, black, sqlfluff)
+          Checks Python code style (`ruff`, `black`) and SQL syntax (`sqlfluff`
+          on the authoritative CRM reference DDL) across the whole repo.
+
+          **Must pass before any other job starts** - nothing downstream is
+          worth running against code that doesn't even lint.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -38,6 +49,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 📋 Q&A pairs (build CRM + hard-gated pytest)
+          Builds the CRM dataset and Q&A release (full profile), then runs
+          `qa_pairs/tests/` - 63 tests covering the question/answer contract
+          shape, ground-truth re-execution against a fresh DuckDB connection,
+          SQL lint on every `reference_sql`, scoring logic, and rephrase-group
+          consistency.
+
+          Scoped to CRM only because `qa_pairs/tests/conftest.py` itself only
+          reads CRM's release - the other four domains' Track-A coverage lives
+          in the `full-suite` job instead.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -66,6 +92,23 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🗂️ Dataset gates (FK, row-cap, cross-domain uniqueness)
+          Builds all 5 domains' full datasets and Q&A releases, then runs
+          three independent, named checks against the exported files:
+
+          - **FK integrity gate** - no orphan foreign keys in any table
+          - **Row-cap assertion** - no table exceeds the 250,000-row hard cap
+          - **Cross-domain question uniqueness** - no question text repeated
+            across domains
+
+          Each re-checks the files actually written to disk (`--exported`),
+          independent of whatever `build-dataset`'s own internal pipeline
+          already asserted before publishing.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -120,6 +163,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🔁 Manifest hash regeneration (clean-room reproducibility, HC-7)
+          Rebuilds every domain's full dataset **a second time from scratch**
+          and byte-compares it (CSV bytes, row/column counts, SHA-256) against
+          the first build. Proves the "a clean-room re-run from the committed
+          seed produces byte-identical output" guarantee continuously, instead
+          of just assuming it.
+
+          This is the most expensive job here - every domain builds twice -
+          but it's the one check nothing else in this workflow proves, and the
+          spec explicitly requires it.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -160,6 +218,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🧪 Full test suite (generators, judge, scorecard)
+          Runs the complete `pytest tests/` suite - unit and integration tests
+          for every domain's generator, the judge module, and the scorecard
+          module. Catches regressions outside the dataset/Q&A pipeline that
+          the other jobs specifically cover.
+
+          Hard gate as of 2026-10-06 - no `--ignore`, no `continue-on-error`.
+          All 17 previously-known-failing tests were fixed at the root cause
+          (see PR #13 for the breakdown of each one).
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
