@@ -33,13 +33,11 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(scope="module")
-def base_and_distributed() -> (
-    tuple[
-        dict[str, object],
-        dict[str, object],
-        ProjectManagementDistributionApplier,
-    ]
-):
+def base_and_distributed() -> tuple[
+    dict[str, object],
+    dict[str, object],
+    ProjectManagementDistributionApplier,
+]:
     base = ProjectManagementBaseEntityGenerator.for_profile("dev").generate_tables()
     snapshot = {name: table.copy(deep=True) for name, table in base.items()}
     applier = ProjectManagementDistributionApplier.for_profile("dev")

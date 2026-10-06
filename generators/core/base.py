@@ -328,7 +328,9 @@ class GenerationSettings:
         }
         _assert_required_keys(base_config, required_base, "base config")
         _assert_required_keys(domain_config, required_domain, "domain config")
-        if not (domain_config.get("release_version") or domain_config.get("dataset_version")):
+        if not (
+            domain_config.get("release_version") or domain_config.get("dataset_version")
+        ):
             raise ValueError("domain config is missing release_version")
 
         if profile not in base_config["profiles"]:

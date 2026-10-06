@@ -32,10 +32,9 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def imperfect_tables() -> dict:
-    return (
-        ProjectManagementImperfectionInjector.for_profile("dev")
-        .generate_imperfect_tables()
-    )
+    return ProjectManagementImperfectionInjector.for_profile(
+        "dev"
+    ).generate_imperfect_tables()
 
 
 def test_validator_uses_canonical_schema_and_expected_checks() -> None:
@@ -46,9 +45,7 @@ def test_validator_uses_canonical_schema_and_expected_checks() -> None:
     assert set(SEMANTIC_RELATIONSHIP_CHECKS) == {
         "time_entries.task_resource_membership"
     }
-    assert "pragma foreign_key_check" not in " ".join(
-        MANUAL_FK_CHECKS.values()
-    ).lower()
+    assert "pragma foreign_key_check" not in " ".join(MANUAL_FK_CHECKS.values()).lower()
 
 
 def test_generated_fk_validation_passes() -> None:
@@ -85,9 +82,9 @@ def test_constrained_load_rejects_duplicate_composite_key(
 ) -> None:
     validator = ProjectManagementDuckDBFKValidator.for_profile("dev")
     malformed = _copy_tables(imperfect_tables)
-    malformed["task_resources"].loc[1, ["task_id", "resource_id"]] = malformed[
-        "task_resources"
-    ].loc[0, ["task_id", "resource_id"]].to_list()
+    malformed["task_resources"].loc[1, ["task_id", "resource_id"]] = (
+        malformed["task_resources"].loc[0, ["task_id", "resource_id"]].to_list()
+    )
 
     checks = _results_by_name(
         validator._validate_csv_paths(_export_tables(validator, malformed, tmp_path))

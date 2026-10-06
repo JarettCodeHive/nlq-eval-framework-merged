@@ -1,0 +1,6 @@
+SELECT r.role AS entity, ROUND(SUM(te.hours), 2) AS total_hours
+FROM time_entries te
+INNER JOIN resources r ON te.resource_id = r.resource_id
+GROUP BY r.role
+ORDER BY total_hours DESC, entity ASC
+LIMIT 3;

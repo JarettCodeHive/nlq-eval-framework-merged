@@ -14,7 +14,10 @@ from utils.sql import sqlstr
 
 
 def test_money_column_keeps_two_places():
-    assert serialize([(decimal.Decimal("23184584.00"),)], ["total_budget"]) == "23184584.00"
+    assert (
+        serialize([(decimal.Decimal("23184584.00"),)], ["total_budget"])
+        == "23184584.00"
+    )
 
 
 def test_count_is_plain_integer():
@@ -105,7 +108,9 @@ def test_t4_families_use_all_three_tables():
     for fam in sp.FAMILIES:
         if fam["tier"] == "T4":
             assert len(fam["tables"].split(",")) == 3, fam["family"]
-            src = sp.ENV.loader.get_source(sp.ENV, fam["template"])[0].count("INNER JOIN")
+            src = sp.ENV.loader.get_source(sp.ENV, fam["template"])[0].count(
+                "INNER JOIN"
+            )
             assert src == 2, (fam["family"], "expected 2 INNER JOINs")
 
 

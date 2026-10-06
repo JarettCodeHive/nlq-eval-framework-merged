@@ -66,8 +66,6 @@ def test_live_crm_components_own_expected_sections() -> None:
 
     assert actual_sections == EXPECTED_COMPONENT_SECTIONS
     all_sections = [
-        section
-        for sections in actual_sections.values()
-        for section in sections
+        section for sections in actual_sections.values() for section in sections
     ]
     assert len(all_sections) == len(set(all_sections))

@@ -24,4 +24,7 @@ def even_sample(values: list, k: int) -> list:
 def combos(param_values: dict[str, list]) -> list[dict]:
     """Cartesian product of any number of named parameters -> list of ctx dicts."""
     names = list(param_values)
-    return [dict(zip(names, tup)) for tup in itertools.product(*(param_values[n] for n in names))]
+    return [
+        dict(zip(names, tup))
+        for tup in itertools.product(*(param_values[n] for n in names))
+    ]

@@ -1,0 +1,8 @@
+SELECT a.account_subtype AS entity, COUNT(*) AS metric
+FROM transactions t
+INNER JOIN ledger_entries le ON t.transaction_id = le.transaction_id
+INNER JOIN accounts a ON le.account_id = a.account_id
+WHERE a.normal_balance = {{ normal_balance | sqlstr }}
+GROUP BY a.account_subtype
+ORDER BY metric DESC, entity ASC
+LIMIT 3;

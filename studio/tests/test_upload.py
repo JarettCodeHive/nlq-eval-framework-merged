@@ -276,9 +276,7 @@ def test_partial_upload_exposes_created_ids_for_cleanup(crm_repo: Path) -> None:
 
     client.load_rows = fail_on_contacts
     with pytest.raises(RuntimeError, match="load failed"):
-        upload.upload_domain(
-            "crm", "full", client=client, on_outcome=captured.append
-        )
+        upload.upload_domain("crm", "full", client=client, on_outcome=captured.append)
 
     assert len(captured) == 1
     assert [(table.table, table.entity_id) for table in captured[0].created_tables] == [

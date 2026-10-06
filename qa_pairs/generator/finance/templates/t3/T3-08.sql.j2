@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS account_count
+FROM accounts c
+LEFT JOIN accounts p ON c.parent_account_id = p.account_id
+WHERE c.normal_balance = {{ normal_balance | sqlstr }} AND p.account_id IS NULL;

@@ -92,9 +92,7 @@ def test_rejects_byte_identical_near_duplicate_budget(
     malformed = _copy_tables(imperfect)
     base_count = injector.generator.row_count("budgets")
     duplicate = malformed["budgets"].loc[base_count]
-    target = injector.finance_config["imperfection_targets"][
-        "near_duplicate_budgets"
-    ]
+    target = injector.finance_config["imperfection_targets"]["near_duplicate_budgets"]
     source = (
         malformed["budgets"]
         .iloc[:base_count]
@@ -125,24 +123,26 @@ def test_rejects_outlier_ledger_imbalance(
     injector, _, imperfect = validated_tables
     malformed = _copy_tables(imperfect)
     minimum = Decimal(
-        injector.finance_config["imperfection_targets"][
-            "transaction_amount_outliers"
-        ]["minimum_value"]
+        injector.finance_config["imperfection_targets"]["transaction_amount_outliers"][
+            "minimum_value"
+        ]
     )
     outlier_id = int(
-        malformed["transactions"].loc[
+        malformed["transactions"]
+        .loc[
             malformed["transactions"]["total_amount"].map(Decimal) >= minimum,
             "transaction_id",
-        ].iloc[0]
+        ]
+        .iloc[0]
     )
     debit_position = malformed["ledger_entries"].index[
         (malformed["ledger_entries"]["transaction_id"] == outlier_id)
         & malformed["ledger_entries"]["debit_amount"].ne("")
     ][0]
     amount = Decimal(malformed["ledger_entries"].at[debit_position, "debit_amount"])
-    malformed["ledger_entries"].at[debit_position, "debit_amount"] = (
-        f"{amount + Decimal('0.0001'):.4f}"
-    )
+    malformed["ledger_entries"].at[
+        debit_position, "debit_amount"
+    ] = f"{amount + Decimal('0.0001'):.4f}"
 
     with pytest.raises(ValueError, match="ledger totals differ"):
         validate_finance_imperfect_tables(injector.generator, malformed)
@@ -158,9 +158,9 @@ def test_rejects_missing_boundary_transaction(
         malformed["transactions"]["transaction_date"] == boundary
     ][0]
     transaction_id = malformed["transactions"].at[position, "transaction_id"]
-    original = distributed["transactions"].set_index("transaction_id").loc[
-        transaction_id
-    ]
+    original = (
+        distributed["transactions"].set_index("transaction_id").loc[transaction_id]
+    )
     malformed["transactions"].at[position, "transaction_date"] = original[
         "transaction_date"
     ]

@@ -196,9 +196,7 @@ class FinanceDistributedTablesValidator:
                     f"{table_name} row count changed during distribution application"
                 )
 
-            primary_keys = primary_key_fields(
-                self.finance_config["tables"][table_name]
-            )
+            primary_keys = primary_key_fields(self.finance_config["tables"][table_name])
             for key in primary_keys:
                 if not source[key].equals(distributed[key]):
                     raise ValueError(

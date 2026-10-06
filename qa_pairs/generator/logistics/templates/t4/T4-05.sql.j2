@@ -1,0 +1,7 @@
+SELECT c.carrier_type AS entity, COUNT(*) AS metric
+FROM orders o
+INNER JOIN shipments s ON o.order_id = s.order_id
+INNER JOIN carriers c ON s.carrier_id = c.carrier_id
+WHERE o.order_priority = {{ order_priority | sqlstr }} AND c.carrier_type IS NOT NULL
+GROUP BY c.carrier_type
+ORDER BY metric DESC, entity ASC;

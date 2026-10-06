@@ -420,7 +420,9 @@ PAIRS = [
 def write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+        w = csv.DictWriter(
+            fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n"
+        )
         w.writeheader()
         for r in rows:
             w.writerow({k: r[k] for k in fields})
@@ -488,7 +490,9 @@ def generate_seed_fixtures(profile: str) -> None:
         verify.write_payload(log_dir, name, payload)
     write_csv(out_dir / "crm_seed_fixtures.csv", CONTRACT_FIELDS, fixtures)
     write_csv(out_dir / "crm_seed_fixtures_companion.csv", COMPANION_FIELDS, companion)
-    print(f"[{profile}] {len(fixtures)} seed fixtures (review only, NOT part of the 160)")
+    print(
+        f"[{profile}] {len(fixtures)} seed fixtures (review only, NOT part of the 160)"
+    )
 
 
 def main() -> None:

@@ -480,9 +480,11 @@ def _type_text(field: dict[str, Any]) -> str:
 
 def _generation_text(field: dict[str, Any]) -> str:
     parts = [
-        f"Source `{field['synthetic_source']}`"
-        if "synthetic_source" in field
-        else "Deterministic entity identifier"
+        (
+            f"Source `{field['synthetic_source']}`"
+            if "synthetic_source" in field
+            else "Deterministic entity identifier"
+        )
     ]
     if "distribution" in field:
         parts.append(f"distribution `{field['distribution']}`")

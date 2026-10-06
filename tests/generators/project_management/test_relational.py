@@ -30,10 +30,9 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def imperfect_tables() -> dict:
-    return (
-        ProjectManagementImperfectionInjector.for_profile("dev")
-        .generate_imperfect_tables()
-    )
+    return ProjectManagementImperfectionInjector.for_profile(
+        "dev"
+    ).generate_imperfect_tables()
 
 
 def test_generated_relational_validation_passes() -> None:
@@ -41,9 +40,7 @@ def test_generated_relational_validation_passes() -> None:
     results = validator.generate_and_validate()
     checks = _results_by_name(results)
 
-    assert validator.settings.table_order == tuple(
-        PROJECT_MANAGEMENT_COLUMN_CONTRACTS
-    )
+    assert validator.settings.table_order == tuple(PROJECT_MANAGEMENT_COLUMN_CONTRACTS)
     assert results and all(result.passed for result in results)
     assert "tasks.project_id.fk" in checks
     assert "task_resources.unique_pairs" in checks
@@ -174,9 +171,7 @@ def test_milestone_assignment_and_entry_date_failures_are_reported(
     assignment_position = malformed["task_resources"].index[
         malformed["task_resources"]["released_at"] != ""
     ][0]
-    malformed["task_resources"].loc[
-        assignment_position, "released_at"
-    ] = "1900-01-01"
+    malformed["task_resources"].loc[assignment_position, "released_at"] = "1900-01-01"
     malformed["time_entries"].loc[0, "created_at"] = "1900-01-01T00:00:00"
     checks = _results_by_name(
         ProjectManagementRelationalValidator.for_profile("dev").validate_tables(
@@ -221,12 +216,12 @@ def test_left_join_and_open_range_failures_are_reported(
         malformed["tasks"]["project_id"] == source_project
     ][0]
     malformed["tasks"].loc[position, "project_id"] = taskless_id
-    malformed["projects"].loc[
-        malformed["projects"]["end_date"] == "", "end_date"
-    ] = malformed["projects"]["start_date"]
-    malformed["tasks"].loc[
-        malformed["tasks"]["due_date"] == "", "due_date"
-    ] = malformed["tasks"]["start_date"]
+    malformed["projects"].loc[malformed["projects"]["end_date"] == "", "end_date"] = (
+        malformed["projects"]["start_date"]
+    )
+    malformed["tasks"].loc[malformed["tasks"]["due_date"] == "", "due_date"] = (
+        malformed["tasks"]["start_date"]
+    )
     checks = _results_by_name(
         ProjectManagementRelationalValidator.for_profile("dev").validate_tables(
             malformed

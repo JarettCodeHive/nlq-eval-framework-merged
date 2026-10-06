@@ -111,9 +111,7 @@ class LogisticsDistributedTablesValidator:
         """Require order dates to exhibit the configured mixture centers."""
 
         spec = self.settings.distributions["date_clustering"]
-        start = date.fromisoformat(
-            self.rules["date_windows"]["order_activity_start"]
-        )
+        start = date.fromisoformat(self.rules["date_windows"]["order_activity_start"])
         end = self.settings.reference_today - timedelta(days=45)
         span = (end - start).days
         if span <= 0:

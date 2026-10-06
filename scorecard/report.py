@@ -17,6 +17,7 @@ from scorecard.summary import (
     build_summary_rows,
 )
 
+
 def _register_report_fonts() -> tuple[str, str, str]:
     """Embed a Unicode font, returning (regular, bold, italic) family names.
 
@@ -60,9 +61,14 @@ def _register_report_fonts() -> tuple[str, str, str]:
         )
         for bold in (0, 1):
             for italic in (0, 1):
-                addMapping("NLQSans", bold, italic, [
-                    "NLQSans", "NLQSans-Italic", "NLQSans-Bold", "NLQSans-BoldItalic"
-                ][bold * 2 + italic])
+                addMapping(
+                    "NLQSans",
+                    bold,
+                    italic,
+                    ["NLQSans", "NLQSans-Italic", "NLQSans-Bold", "NLQSans-BoldItalic"][
+                        bold * 2 + italic
+                    ],
+                )
         # Patching every ParagraphStyle and TableStyle by hand missed blocks, and
         # anything missed silently falls back to a NON-embedded standard-14 face.
         # These are the three places reportlab resolves an unspecified font, so
@@ -362,17 +368,25 @@ def _provenance(ctx: RunContext) -> list[tuple[str, str]]:
         ("exact-match comparison", ctx.comparison_policy),
         (
             "determinism",
-            "temperature 0 + seed enforced"
-            if ctx.judge_temperature_enforced and ctx.judge_seed_enforced
-            else ", ".join(
-                filter(
-                    None,
-                    [
-                        ""
-                        if ctx.judge_temperature_enforced
-                        else "temperature 0 NOT enforced",
-                        "" if ctx.judge_seed_enforced else "seed never reached provider",
-                    ],
+            (
+                "temperature 0 + seed enforced"
+                if ctx.judge_temperature_enforced and ctx.judge_seed_enforced
+                else ", ".join(
+                    filter(
+                        None,
+                        [
+                            (
+                                ""
+                                if ctx.judge_temperature_enforced
+                                else "temperature 0 NOT enforced"
+                            ),
+                            (
+                                ""
+                                if ctx.judge_seed_enforced
+                                else "seed never reached provider"
+                            ),
+                        ],
+                    )
                 )
             ),
         ),
@@ -495,9 +509,7 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import Paragraph, Table, TableStyle
 
-    cell = ParagraphStyle(
-        "cell", fontName=_FONT, fontSize=8.5, leading=10, alignment=2
-    )
+    cell = ParagraphStyle("cell", fontName=_FONT, fontSize=8.5, leading=10, alignment=2)
 
     header = [_HEADER_LABELS.get(c, c) for c in columns]
     body: list[list[object]] = [header]
@@ -519,9 +531,7 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
             ):
                 chip = _status_fill(row[column])
                 cells.append(
-                    Paragraph(
-                        f'<font color="{chip}">{_CHIP}</font>&nbsp;{text}', cell
-                    )
+                    Paragraph(f'<font color="{chip}">{_CHIP}</font>&nbsp;{text}', cell)
                 )
             else:
                 cells.append(text)
@@ -553,11 +563,14 @@ def _table(rows: list[dict], columns: list[str], *, highlight_pct: bool):
         if row.get("regression_flag") and "regression_flag" in columns:
             column = columns.index("regression_flag")
             style.append(
-                ("TEXTCOLOR", (column, index), (column, index), colors.HexColor("#b42318"))
+                (
+                    "TEXTCOLOR",
+                    (column, index),
+                    (column, index),
+                    colors.HexColor("#b42318"),
+                )
             )
-            style.append(
-                ("FONTNAME", (column, index), (column, index), _FONT_BOLD)
-            )
+            style.append(("FONTNAME", (column, index), (column, index), _FONT_BOLD))
     table.setStyle(TableStyle(style))
     return table
 
@@ -621,9 +634,15 @@ def _outcome_chart(rows: list[dict], *, width: float, height: float):
 
         y = bottom + index * (bar_h + gap) + gap / 2
         drawing.add(
-            String(left - 8, y + bar_h / 2 - 3, _domain_label(row["domain"]),
-                   fontName=_FONT_BOLD, fontSize=8,
-                   fillColor=colors.HexColor(_INK), textAnchor="end")
+            String(
+                left - 8,
+                y + bar_h / 2 - 3,
+                _domain_label(row["domain"]),
+                fontName=_FONT_BOLD,
+                fontSize=8,
+                fillColor=colors.HexColor(_INK),
+                textAnchor="end",
+            )
         )
         x = left
         for key, _label, fill in segments:
@@ -632,23 +651,42 @@ def _outcome_chart(rows: list[dict], *, width: float, height: float):
                 continue
             seg_w = plot_w * count / total
             drawing.add(
-                Rect(x, y, max(0.0, seg_w - 2), bar_h, rx=0, ry=0,
-                     fillColor=colors.HexColor(fill),
-                     strokeColor=colors.HexColor(_SURFACE), strokeWidth=0)
+                Rect(
+                    x,
+                    y,
+                    max(0.0, seg_w - 2),
+                    bar_h,
+                    rx=0,
+                    ry=0,
+                    fillColor=colors.HexColor(fill),
+                    strokeColor=colors.HexColor(_SURFACE),
+                    strokeWidth=0,
+                )
             )
             # Count inside the segment only when it fits; never clipped.
             if seg_w > 24:
                 drawing.add(
-                    String(x + (seg_w - 2) / 2, y + bar_h / 2 - 3, str(count),
-                           fontName=_FONT_BOLD, fontSize=7,
-                           fillColor=colors.white, textAnchor="middle")
+                    String(
+                        x + (seg_w - 2) / 2,
+                        y + bar_h / 2 - 3,
+                        str(count),
+                        fontName=_FONT_BOLD,
+                        fontSize=7,
+                        fillColor=colors.white,
+                        textAnchor="middle",
+                    )
                 )
             # 2px surface gap between fills, per the mark spec — a gap, not a border.
             x += seg_w
         drawing.add(
-            String(left + plot_w + 4, y + bar_h / 2 - 3, f"n={total}",
-                   fontName=_FONT, fontSize=7,
-                   fillColor=colors.HexColor(_INK_MUTED))
+            String(
+                left + plot_w + 4,
+                y + bar_h / 2 - 3,
+                f"n={total}",
+                fontName=_FONT,
+                fontSize=7,
+                fillColor=colors.HexColor(_INK_MUTED),
+            )
         )
 
     # Legend: always present for >=2 series, so identity is never colour-alone —
@@ -677,13 +715,38 @@ def _outcome_chart(rows: list[dict], *, width: float, height: float):
     lx = left
     ly = 10
     for _key, label, fill in [s for s in segments if s[0] in present]:
-        drawing.add(Rect(lx, ly, 7, 7, fillColor=colors.HexColor(fill),
-                         strokeColor=colors.HexColor(fill), strokeWidth=0))
-        drawing.add(String(lx + 11, ly + 1, label, fontName=_FONT, fontSize=6.5,
-                           fillColor=colors.HexColor(_INK_MUTED)))
+        drawing.add(
+            Rect(
+                lx,
+                ly,
+                7,
+                7,
+                fillColor=colors.HexColor(fill),
+                strokeColor=colors.HexColor(fill),
+                strokeWidth=0,
+            )
+        )
+        drawing.add(
+            String(
+                lx + 11,
+                ly + 1,
+                label,
+                fontName=_FONT,
+                fontSize=6.5,
+                fillColor=colors.HexColor(_INK_MUTED),
+            )
+        )
         lx += 11 + len(label) * 3.3 + 14
-    drawing.add(Line(left, bottom - 6, left + plot_w, bottom - 6,
-                     strokeColor=colors.HexColor("#e6e7e4"), strokeWidth=0.5))
+    drawing.add(
+        Line(
+            left,
+            bottom - 6,
+            left + plot_w,
+            bottom - 6,
+            strokeColor=colors.HexColor("#e6e7e4"),
+            strokeWidth=0.5,
+        )
+    )
     return drawing
 
 
@@ -729,28 +792,70 @@ def _dimension_chart(rows: list[dict], domain: str, *, width: float, height: flo
     # Section 10; 2 and 4 are interpolated, so they are ticked but not labelled.
     for score in (1, 2, 3, 4, 5):
         x = left + plot_w * (score - 1) / 4
-        drawing.add(Line(x, bottom, x, bottom + plot_h,
-                         strokeColor=colors.HexColor("#e6e7e4"), strokeWidth=0.5))
-        drawing.add(String(x, bottom - 10, str(score) if score in (1, 3, 5) else "",
-                           fontName=_FONT, fontSize=6.5,
-                           fillColor=colors.HexColor(_INK_MUTED), textAnchor="middle"))
+        drawing.add(
+            Line(
+                x,
+                bottom,
+                x,
+                bottom + plot_h,
+                strokeColor=colors.HexColor("#e6e7e4"),
+                strokeWidth=0.5,
+            )
+        )
+        drawing.add(
+            String(
+                x,
+                bottom - 10,
+                str(score) if score in (1, 3, 5) else "",
+                fontName=_FONT,
+                fontSize=6.5,
+                fillColor=colors.HexColor(_INK_MUTED),
+                textAnchor="middle",
+            )
+        )
 
     for index, (label, value) in enumerate(reversed(values)):
         y = bottom + index * (bar_h + gap) + gap / 2
-        drawing.add(String(left - 6, y + bar_h / 2 - 2.5, label,
-                           fontName=_FONT, fontSize=7.5,
-                           fillColor=colors.HexColor(_INK), textAnchor="end"))
+        drawing.add(
+            String(
+                left - 6,
+                y + bar_h / 2 - 2.5,
+                label,
+                fontName=_FONT,
+                fontSize=7.5,
+                fillColor=colors.HexColor(_INK),
+                textAnchor="end",
+            )
+        )
         if not isinstance(value, (int, float)):
             continue
         # 1 is the floor of the scale, not zero, so the bar starts at 1.
         bar_w = plot_w * (max(1.0, min(5.0, value)) - 1) / 4
         if bar_w >= 1.0:
             fill = colors.HexColor(_status_fill(((value - 1) / 4) * 100))
-            drawing.add(Rect(left, y, bar_w, bar_h, rx=3, ry=3, fillColor=fill,
-                             strokeColor=fill.clone(), strokeWidth=0.5))
-        drawing.add(String(left + plot_w + 6, y + bar_h / 2 - 2.5, f"{value:.2f}",
-                           fontName=_FONT_BOLD, fontSize=7.5,
-                           fillColor=colors.HexColor(_INK)))
+            drawing.add(
+                Rect(
+                    left,
+                    y,
+                    bar_w,
+                    bar_h,
+                    rx=3,
+                    ry=3,
+                    fillColor=fill,
+                    strokeColor=fill.clone(),
+                    strokeWidth=0.5,
+                )
+            )
+        drawing.add(
+            String(
+                left + plot_w + 6,
+                y + bar_h / 2 - 2.5,
+                f"{value:.2f}",
+                fontName=_FONT_BOLD,
+                fontSize=7.5,
+                fillColor=colors.HexColor(_INK),
+            )
+        )
     return drawing
 
 
@@ -791,28 +896,51 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
     for pct in (0, 25, 50, 75, 100):
         x = left + plot_w * pct / 100.0
         drawing.add(
-            Line(x, bottom, x, bottom + plot_h,
-                 strokeColor=colors.HexColor("#e6e7e4"), strokeWidth=0.5)
+            Line(
+                x,
+                bottom,
+                x,
+                bottom + plot_h,
+                strokeColor=colors.HexColor("#e6e7e4"),
+                strokeWidth=0.5,
+            )
         )
         drawing.add(
-            String(x, bottom - 11, f"{pct}",
-                   fontName=_FONT, fontSize=6.5,
-                   fillColor=colors.HexColor(_INK_MUTED), textAnchor="middle")
+            String(
+                x,
+                bottom - 11,
+                f"{pct}",
+                fontName=_FONT,
+                fontSize=6.5,
+                fillColor=colors.HexColor(_INK_MUTED),
+                textAnchor="middle",
+            )
         )
 
     for index, row in enumerate(reversed(tiers)):
         pct = row.get("exact_match_pct")
         y = bottom + index * (bar_h + gap) + gap / 2
         drawing.add(
-            String(left - 6, y + bar_h / 2 - 2.5, str(row["tier"]),
-                   fontName=_FONT_BOLD, fontSize=7.5,
-                   fillColor=colors.HexColor(_INK), textAnchor="end")
+            String(
+                left - 6,
+                y + bar_h / 2 - 2.5,
+                str(row["tier"]),
+                fontName=_FONT_BOLD,
+                fontSize=7.5,
+                fillColor=colors.HexColor(_INK),
+                textAnchor="end",
+            )
         )
         if not isinstance(pct, (int, float)):
             drawing.add(
-                String(left + 4, y + bar_h / 2 - 2.5, "no eligible questions",
-                       fontName=_FONT_ITALIC, fontSize=7,
-                       fillColor=colors.HexColor(_INK_MUTED))
+                String(
+                    left + 4,
+                    y + bar_h / 2 - 2.5,
+                    "no eligible questions",
+                    fontName=_FONT_ITALIC,
+                    fontSize=7,
+                    fillColor=colors.HexColor(_INK_MUTED),
+                )
             )
             continue
 
@@ -823,30 +951,54 @@ def _tier_chart(rows: list[dict], domain: str, *, width: float, height: float):
         # already says 0.0%, so the absence is the honest mark.
         if bar_w >= 1.0:
             drawing.add(
-                Rect(left, y, bar_w, bar_h, rx=3, ry=3, fillColor=fill,
-                     strokeColor=fill.clone(), strokeWidth=0.5)
+                Rect(
+                    left,
+                    y,
+                    bar_w,
+                    bar_h,
+                    rx=3,
+                    ry=3,
+                    fillColor=fill,
+                    strokeColor=fill.clone(),
+                    strokeWidth=0.5,
+                )
             )
         # Direct label: the number and the count, in ink. Selective by
         # construction — five bars, five labels, no axis clutter needed.
         drawing.add(
-            String(left + plot_w + 6, y + bar_h / 2 - 2.5,
-                   f"{pct:.1f}%  ({row.get('exact_match_pass')}/"
-                   f"{row.get('questions_total')})",
-                   fontName=_FONT, fontSize=7,
-                   fillColor=colors.HexColor(_INK))
+            String(
+                left + plot_w + 6,
+                y + bar_h / 2 - 2.5,
+                f"{pct:.1f}%  ({row.get('exact_match_pass')}/"
+                f"{row.get('questions_total')})",
+                fontName=_FONT,
+                fontSize=7,
+                fillColor=colors.HexColor(_INK),
+            )
         )
 
     gate_x = left + plot_w * ACCURACY_GATE_PCT / 100.0
     drawing.add(
-        Line(gate_x, bottom - 3, gate_x, bottom + plot_h + 3,
-             strokeColor=colors.HexColor(_INK), strokeWidth=1,
-             strokeDashArray=[2, 2])
+        Line(
+            gate_x,
+            bottom - 3,
+            gate_x,
+            bottom + plot_h + 3,
+            strokeColor=colors.HexColor(_INK),
+            strokeWidth=1,
+            strokeDashArray=[2, 2],
+        )
     )
     drawing.add(
-        String(gate_x, bottom + plot_h + 6,
-               f"{ACCURACY_GATE_PCT:.0f}% gate (Section 14.2)",
-               fontName=_FONT_BOLD, fontSize=6.5,
-               fillColor=colors.HexColor(_INK), textAnchor="middle")
+        String(
+            gate_x,
+            bottom + plot_h + 6,
+            f"{ACCURACY_GATE_PCT:.0f}% gate (Section 14.2)",
+            fontName=_FONT_BOLD,
+            fontSize=6.5,
+            fillColor=colors.HexColor(_INK),
+            textAnchor="middle",
+        )
     )
     return drawing
 
@@ -897,9 +1049,11 @@ def platform_findings(
             (
                 "Change against the established baseline",
                 "REGRESSION" if regressed else "NO REGRESSION",
-                f"{', '.join(_domain_label(d) for d in regressed)} dropped ≥5 pp"
-                if regressed
-                else "no domain dropped 5 pp or more",
+                (
+                    f"{', '.join(_domain_label(d) for d in regressed)} dropped ≥5 pp"
+                    if regressed
+                    else "no domain dropped 5 pp or more"
+                ),
             )
         )
 
@@ -908,9 +1062,11 @@ def platform_findings(
         (
             "Platform answered every question",
             "YES" if not errors else "NO",
-            "no request failed"
-            if not errors
-            else f"{errors} question(s) the platform could not answer at all",
+            (
+                "no request failed"
+                if not errors
+                else f"{errors} question(s) the platform could not answer at all"
+            ),
         )
     )
 
@@ -930,10 +1086,12 @@ def platform_findings(
         (
             "NULL / outer-join handling (Section 9.2, T3)",
             "PASS" if not nulls else "FAIL",
-            "outer-join questions preserved the rows an outer join preserves"
-            if not nulls
-            else f"{nulls} question(s) answered an outer-join question with an "
-            "inner join, silently dropping unmatched rows",
+            (
+                "outer-join questions preserved the rows an outer join preserves"
+                if not nulls
+                else f"{nulls} question(s) answered an outer-join question with an "
+                "inner join, silently dropping unmatched rows"
+            ),
         )
     )
 
@@ -1021,7 +1179,9 @@ def write_scorecard_pdf(
     styles = getSampleStyleSheet()
     for _name in ("Normal", "BodyText", "Title", "Heading1", "Heading2", "Heading3"):
         if _name in styles:
-            styles[_name].fontName = _FONT_BOLD if "Heading" in _name or _name == "Title" else _FONT
+            styles[_name].fontName = (
+                _FONT_BOLD if "Heading" in _name or _name == "Title" else _FONT
+            )
     body = ParagraphStyle(
         "body",
         parent=styles["BodyText"],
@@ -1156,7 +1316,9 @@ def write_scorecard_pdf(
             pct = row.get("exact_match_pct")
             numeric = isinstance(pct, (int, float))
             gate_word = (
-                "—" if not numeric else ("MEETS GATE" if pct >= ACCURACY_GATE_PCT else "BELOW GATE")
+                "—"
+                if not numeric
+                else ("MEETS GATE" if pct >= ACCURACY_GATE_PCT else "BELOW GATE")
             )
             delta = row.get("delta_pct")
             tiles.append(
@@ -1172,8 +1334,12 @@ def write_scorecard_pdf(
                         ],
                         [
                             Paragraph(
-                                f"<font size=26 color='{_INK}'>"
-                                f"{pct:.1f}%</font>" if numeric else "—",
+                                (
+                                    f"<font size=26 color='{_INK}'>"
+                                    f"{pct:.1f}%</font>"
+                                    if numeric
+                                    else "—"
+                                ),
                                 ParagraphStyle("hero", parent=body, leading=30),
                             )
                         ],
@@ -1209,7 +1375,13 @@ def write_scorecard_pdf(
                     [
                         ("FONTNAME", (0, 0), (-1, -1), _FONT),
                         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9ced6")),
-                        ("LINEBEFORE", (0, 0), (0, -1), 3, colors.HexColor(_status_fill(pct))),
+                        (
+                            "LINEBEFORE",
+                            (0, 0),
+                            (0, -1),
+                            3,
+                            colors.HexColor(_status_fill(pct)),
+                        ),
                         ("LEFTPADDING", (0, 0), (-1, -1), 9),
                         ("RIGHTPADDING", (0, 0), (-1, -1), 9),
                         ("TOPPADDING", (0, 0), (-1, 0), 7),
@@ -1284,7 +1456,12 @@ def write_scorecard_pdf(
         ]
         for index, (severity, _text) in enumerate(notices):
             notice_style.append(
-                ("BACKGROUND", (0, index), (0, index), colors.HexColor(severity_chip[severity]))
+                (
+                    "BACKGROUND",
+                    (0, index),
+                    (0, index),
+                    colors.HexColor(severity_chip[severity]),
+                )
             )
         notice_table.setStyle(TableStyle(notice_style))
         story.append(notice_table)
@@ -1304,7 +1481,12 @@ def write_scorecard_pdf(
                 ("FONTNAME", (0, 0), (0, -1), _FONT_BOLD),
                 ("FONTSIZE", (0, 0), (-1, -1), 8.5),
                 ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#42506b")),
-                ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#f6f7f9")]),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 0),
+                    (-1, -1),
+                    [colors.white, colors.HexColor("#f6f7f9")],
+                ),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("TOPPADDING", (0, 0), (-1, -1), 2),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
@@ -1344,9 +1526,7 @@ def write_scorecard_pdf(
         + [
             [
                 Paragraph(c, finding_cell),
-                Paragraph(
-                    f'<font color="{_verdict_hex(v)}">{v}</font>', verdict_cell
-                ),
+                Paragraph(f'<font color="{_verdict_hex(v)}">{v}</font>', verdict_cell),
                 Paragraph(note, finding_cell),
             ]
             for c, v, note in checks
@@ -1408,9 +1588,7 @@ def write_scorecard_pdf(
         story.append(
             KeepTogether(
                 [
-                    Paragraph(
-                        f"Judge dimensions — {_domain_label(domain)}", section
-                    ),
+                    Paragraph(f"Judge dimensions — {_domain_label(domain)}", section),
                     chart,
                 ]
             )
@@ -1489,7 +1667,9 @@ def write_scorecard_pdf(
     story.append(
         KeepTogether(
             [
-                Paragraph("Deterministic accuracy (HC-3, zero numeric tolerance)", section),
+                Paragraph(
+                    "Deterministic accuracy (HC-3, zero numeric tolerance)", section
+                ),
                 _table(rows, _EXACT_COLUMNS, highlight_pct=True),
             ]
         )
@@ -1511,12 +1691,12 @@ def write_scorecard_pdf(
             Spacer(1, 0.12 * inch),
             Paragraph(
                 "<i>Exact-match and judge scores are reported side by side and never "
-            "combined into a composite (Section 11.3) — they measure different things. "
-            "Baseline comparison and the regression flag are domain-level; tier "
-            "rows are diagnostic. <b>n/a</b> counts pairs with no deterministic "
-            "core and <b>clarified</b> counts questions the platform declined to "
-            "answer; both sit outside the percentage, so a rise in either is not a "
-            "rise in accuracy (Section 14.2 condition 4). <b>null-handling</b> is the "
+                "combined into a composite (Section 11.3) — they measure different things. "
+                "Baseline comparison and the regression flag are domain-level; tier "
+                "rows are diagnostic. <b>n/a</b> counts pairs with no deterministic "
+                "core and <b>clarified</b> counts questions the platform declined to "
+                "answer; both sit outside the percentage, so a rise in either is not a "
+                "rise in accuracy (Section 14.2 condition 4). <b>null-handling</b> is the "
                 "Section 9.2 T3 diagnostic and is never part of either score.</i>",
                 body,
             ),

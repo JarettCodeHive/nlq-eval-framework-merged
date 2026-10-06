@@ -77,7 +77,9 @@ def _env_int(name: str, default: int | None = None) -> int | None:
     try:
         return int(raw)
     except ValueError as exc:
-        raise MissingStudioCredentials(f"{name} must be an integer; got {raw!r}") from exc
+        raise MissingStudioCredentials(
+            f"{name} must be an integer; got {raw!r}"
+        ) from exc
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -98,8 +100,10 @@ def load_studio_settings(env_file=None) -> StudioSettings:
     load_env(env_file)
 
     base_url = (
-        os.getenv("STUDIO_BASE_URL") or os.getenv("PULSE_BASE_URL") or ""
-    ).strip().rstrip("/")
+        (os.getenv("STUDIO_BASE_URL") or os.getenv("PULSE_BASE_URL") or "")
+        .strip()
+        .rstrip("/")
+    )
     auth_token = (
         os.getenv("STUDIO_AUTH_TOKEN") or os.getenv("PULSE_AUTH_TOKEN") or ""
     ).strip()

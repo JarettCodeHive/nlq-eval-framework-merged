@@ -1,0 +1,3 @@
+SELECT ROUND(AVG(score), 2) AS average_lead_score
+FROM leads
+WHERE territory = {{ territory | sqlstr }};

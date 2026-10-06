@@ -34,9 +34,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def imperfect_tables() -> dict:
-    return FinanceImperfectionInjector.for_profile(
-        "dev"
-    ).generate_imperfect_tables()
+    return FinanceImperfectionInjector.for_profile("dev").generate_imperfect_tables()
 
 
 def test_config_contains_all_required_finance_join_paths() -> None:
@@ -44,9 +42,7 @@ def test_config_contains_all_required_finance_join_paths() -> None:
 
     assert [path["id"] for path in paths] == EXPECTED_JOIN_PATH_IDS
     assert paths[0]["required_result"] == "non_empty_with_unmatched_parent_rows"
-    assert paths[4]["required_result"] == (
-        "non_empty_with_matched_and_unmatched_rows"
-    )
+    assert paths[4]["required_result"] == ("non_empty_with_matched_and_unmatched_rows")
     assert paths[5]["required_result"] == "complete_unique_lookup_coverage"
     assert paths[9]["required_result"] == (
         "non_empty_with_matched_and_unmatched_parent_rows"
@@ -55,8 +51,7 @@ def test_config_contains_all_required_finance_join_paths() -> None:
 
 def test_registered_sql_covers_complex_finance_paths() -> None:
     paths = {
-        path["id"]: path
-        for path in load_finance_config()["join_path_requirements"]
+        path["id"]: path for path in load_finance_config()["join_path_requirements"]
     }
 
     assert set(REGISTERED_JOIN_SQL) == {
@@ -73,8 +68,7 @@ def test_registered_sql_covers_complex_finance_paths() -> None:
 
 def test_simple_paths_use_configured_join_behavior() -> None:
     paths = {
-        path["id"]: path
-        for path in load_finance_config()["join_path_requirements"]
+        path["id"]: path for path in load_finance_config()["join_path_requirements"]
     }
 
     assert "LEFT JOIN ledger_entries" in _join_count_sql(paths["finance_jp_001"])
@@ -92,15 +86,11 @@ def test_cardinality_sql_covers_both_ledger_directions() -> None:
     }
     assert (
         "COUNT(DISTINCT account_id) > 1"
-        in MANY_TO_MANY_CARDINALITY_SQL[
-            "ledger_entries.transaction_many_accounts"
-        ]
+        in MANY_TO_MANY_CARDINALITY_SQL["ledger_entries.transaction_many_accounts"]
     )
     assert (
         "COUNT(DISTINCT transaction_id) > 1"
-        in MANY_TO_MANY_CARDINALITY_SQL[
-            "ledger_entries.account_many_transactions"
-        ]
+        in MANY_TO_MANY_CARDINALITY_SQL["ledger_entries.account_many_transactions"]
     )
 
 

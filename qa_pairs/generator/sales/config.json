@@ -18,7 +18,7 @@
       "full": "release/{release_version}/{domain}/qa_pairs"
     }
   },
-  "tier_quota": {"T1": 21, "T2": 36, "T3": 15, "T4": 18, "T5": 14},
+  "tier_quota": {"T1": 32, "T2": 40, "T3": 32, "T4": 32, "T5": 24},
   "tables": ["leads", "deals", "products", "quotations", "targets"],
   "scoring": {
     "numeric_tolerance": "0",

@@ -71,9 +71,7 @@ class FinanceReproducibilityValidator:
             )
 
         with TemporaryDirectory(prefix="finance-reproducibility-a-") as first_dir:
-            with TemporaryDirectory(
-                prefix="finance-reproducibility-b-"
-            ) as second_dir:
+            with TemporaryDirectory(prefix="finance-reproducibility-b-") as second_dir:
                 first = self._build_snapshot(Path(first_dir))
                 second = self._build_snapshot(Path(second_dir))
         return self.compare_snapshots(first, second)
@@ -93,9 +91,9 @@ class FinanceReproducibilityValidator:
         """Compare ordered artifacts, full manifests, and validation outcomes."""
 
         expected_names = self._expected_artifact_names()
-        if len(first.artifacts) != len(expected_names) or len(
-            second.artifacts
-        ) != len(expected_names):
+        if len(first.artifacts) != len(expected_names) or len(second.artifacts) != len(
+            expected_names
+        ):
             return [
                 failed(
                     "reproducibility.file_count",
@@ -177,8 +175,7 @@ class FinanceReproducibilityValidator:
             manifest_path,
         ]
         artifacts = tuple(
-            _fingerprint(path, is_csv=path.suffix == ".csv")
-            for path in artifact_paths
+            _fingerprint(path, is_csv=path.suffix == ".csv") for path in artifact_paths
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         return FinanceReleaseSnapshot(

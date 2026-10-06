@@ -62,7 +62,9 @@ def _cell(value, kind: str) -> str:
     if isinstance(value, float):
         if kind in ("money", "percent"):
             return str(
-                decimal.Decimal(repr(value)).quantize(_TWOPLACES, rounding=decimal.ROUND_HALF_UP)
+                decimal.Decimal(repr(value)).quantize(
+                    _TWOPLACES, rounding=decimal.ROUND_HALF_UP
+                )
             )
         if value.is_integer():
             return str(int(value))

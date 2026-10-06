@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS order_count
+FROM orders o
+LEFT JOIN shipments s ON o.order_id = s.order_id
+WHERE o.status = {{ order_status | sqlstr }} AND s.shipment_id IS NULL;

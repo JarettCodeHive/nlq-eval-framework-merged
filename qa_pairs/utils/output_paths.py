@@ -25,7 +25,9 @@ def qa_version(qa_root: Path, generator_dir: str) -> str:
 
     config = load_qa_config(qa_root, generator_dir)
     release_config = json.loads(
-        (qa_root.parent / config["dataset"]["release_config_path"]).read_text(encoding="utf-8")
+        (qa_root.parent / config["dataset"]["release_config_path"]).read_text(
+            encoding="utf-8"
+        )
     )
     return active_release_version(release_config)
 
@@ -52,5 +54,7 @@ def resolve_qa_output_dir(qa_root: Path, profile: str, generator_dir: str) -> Pa
         profile=profile,
     )
     if profile == "full":
-        return component_dir(config["domain"], "qa_pairs", version, repo_root=qa_root.parent)
+        return component_dir(
+            config["domain"], "qa_pairs", version, repo_root=qa_root.parent
+        )
     return qa_root.parent / relative_path

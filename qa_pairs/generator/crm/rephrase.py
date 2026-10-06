@@ -37,7 +37,9 @@ from qa_pairs.utils import build_stamp, verify  # noqa: E402
 from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 from qa_pairs.utils.output_paths import resolve_qa_output_dir  # noqa: E402
 
-ID_PREFIX = json.loads((BASE / "generator" / "crm" / "config.json").read_text())["id_prefix"]
+ID_PREFIX = json.loads((BASE / "generator" / "crm" / "config.json").read_text())[
+    "id_prefix"
+]
 
 
 def _gid(group: str) -> str:
@@ -109,19 +111,28 @@ GROUPS = {
         "T2-05",
         {"is_active": "true"},
         "Lexical",
-        ["For active contacts, what is the split between inbound and outbound " "interactions?"],
+        [
+            "For active contacts, what is the split between inbound and outbound "
+            "interactions?"
+        ],
     ),
     "RG-08": (
         "T3-03",
         {"title": "Business Analyst"},
         "Rephrase",
-        ["Of the contacts titled Business Analyst, how many have we never " "interacted with?"],
+        [
+            "Of the contacts titled Business Analyst, how many have we never "
+            "interacted with?"
+        ],
     ),
     "RG-09": (
         "T2-01",
         {"region": "Central"},
         "Rephrase",
-        ["How many support cases were opened by accounts located in the Central " "region?"],
+        [
+            "How many support cases were opened by accounts located in the Central "
+            "region?"
+        ],
     ),
     "RG-10": (
         "T2-03",
@@ -139,13 +150,19 @@ GROUPS = {
         "T2-08",
         {"industry": "Education"},
         "Rephrase",
-        ["For education-industry accounts, what share of support cases met the " "SLA deadline?"],
+        [
+            "For education-industry accounts, what share of support cases met the "
+            "SLA deadline?"
+        ],
     ),
     "RG-13": (
         "T4-01",
         {"region": "Central"},
         "Rephrase",
-        ["For Central-region accounts, give the engagement total for each " "interaction channel."],
+        [
+            "For Central-region accounts, give the engagement total for each "
+            "interaction channel."
+        ],
     ),
     "RG-14": (
         "T5-03",
@@ -242,7 +259,9 @@ def generate_rephrases(profile: str) -> None:
 
     qa = resolve_qa_output_dir(BASE, profile, "crm")
     companion = _read(qa / "crm_qa_pairs_companion.csv")
-    contract = {r["natural_language_question"]: r for r in _read(qa / "crm_qa_pairs.csv")}
+    contract = {
+        r["natural_language_question"]: r for r in _read(qa / "crm_qa_pairs.csv")
+    }
     by_family_param = {(r["family"], r["param_values"]): r for r in companion}
 
     con = connect_typed(BASE / "dataset" / f"crm_{profile}.duckdb")
@@ -295,7 +314,9 @@ def generate_rephrases(profile: str) -> None:
                     ),
                 )
             )
-            variants.append({**{k: base[k] for k in CONTRACT}, "natural_language_question": q})
+            variants.append(
+                {**{k: base[k] for k in CONTRACT}, "natural_language_question": q}
+            )
             full_variants.append(
                 {
                     **base,
@@ -321,7 +342,8 @@ def generate_rephrases(profile: str) -> None:
     bad = [
         gid
         for gid in GROUPS
-        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)}) != 1
+        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)})
+        != 1
     ]
     if bad:
         raise SystemExit(f"rephrase hash mismatch (nothing written): {bad}")
@@ -391,7 +413,9 @@ def _write_plan(path: Path) -> None:
 def _write(path: Path, fields: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+        w = csv.DictWriter(
+            fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n"
+        )
         w.writeheader()
         w.writerows(rows)
 

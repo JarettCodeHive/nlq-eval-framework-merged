@@ -50,8 +50,7 @@ class ProjectManagementDatasetPipeline:
     ) -> None:
         if generator.settings.domain != "project_management":
             raise ValueError(
-                "ProjectManagementDatasetPipeline only supports "
-                "project_management"
+                "ProjectManagementDatasetPipeline only supports " "project_management"
             )
         self.generator = generator
         self.settings = generator.settings

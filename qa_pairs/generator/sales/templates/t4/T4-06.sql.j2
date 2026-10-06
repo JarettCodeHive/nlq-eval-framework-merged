@@ -1,0 +1,8 @@
+SELECT p.category AS entity, ROUND(SUM(q.quantity * q.unit_price * (1 - q.discount_pct / 100.0)), 2) AS net_revenue
+FROM leads l
+INNER JOIN deals d ON l.lead_id = d.lead_id
+INNER JOIN quotations q ON d.deal_id = q.deal_id
+INNER JOIN products p ON q.product_id = p.product_id
+WHERE l.lead_source = {{ lead_source | sqlstr }}
+GROUP BY p.category
+ORDER BY net_revenue DESC, entity ASC;

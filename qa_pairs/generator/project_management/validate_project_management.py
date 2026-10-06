@@ -33,7 +33,13 @@ from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 
 FK_CHECKS = [
     ("tasks.project_id -> projects", "tasks", "project_id", "projects", "project_id"),
-    ("task_resources.task_id -> tasks", "task_resources", "task_id", "tasks", "task_id"),
+    (
+        "task_resources.task_id -> tasks",
+        "task_resources",
+        "task_id",
+        "tasks",
+        "task_id",
+    ),
     (
         "task_resources.resource_id -> resources",
         "task_resources",
@@ -41,7 +47,13 @@ FK_CHECKS = [
         "resources",
         "resource_id",
     ),
-    ("milestones.project_id -> projects", "milestones", "project_id", "projects", "project_id"),
+    (
+        "milestones.project_id -> projects",
+        "milestones",
+        "project_id",
+        "projects",
+        "project_id",
+    ),
     ("time_entries.task_id -> tasks", "time_entries", "task_id", "tasks", "task_id"),
     (
         "time_entries.resource_id -> resources",
@@ -166,9 +178,13 @@ def validate(profile: str) -> None:
         print(f"  {mark} {label}: {n:,}")
 
     manifest = BASE / "dataset" / f"manifest_project_management_{profile}.json"
-    print(f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}")
+    print(
+        f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}"
+    )
 
-    print(f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}")
+    print(
+        f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}"
+    )
     con.close()
     if failures:
         raise ValueError(f"{failures} Q&A dataset validation check(s) failed")

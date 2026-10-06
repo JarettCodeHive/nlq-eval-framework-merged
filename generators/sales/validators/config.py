@@ -366,9 +366,8 @@ def _validate_business_mappings(config: dict[str, Any]) -> None:
         raise ValueError("Sales attained stage is not a configured deal stage")
     if quota["period_boundary"] != "start_inclusive_end_exclusive":
         raise ValueError("Sales quota period boundary is invalid")
-    if (
-        mappings["lead_conversion"]["deal_bearing_status"]
-        not in (values["lead_statuses"])
+    if mappings["lead_conversion"]["deal_bearing_status"] not in (
+        values["lead_statuses"]
     ):
         raise ValueError("Sales deal-bearing lead status is not configured")
     bridge = mappings["quotation_many_to_many"]

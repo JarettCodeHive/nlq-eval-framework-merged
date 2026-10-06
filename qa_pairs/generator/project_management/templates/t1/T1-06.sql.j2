@@ -1,0 +1,3 @@
+SELECT COUNT(*) AS task_count
+FROM tasks
+WHERE task_type = {{ task_type | sqlstr }};

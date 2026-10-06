@@ -77,9 +77,9 @@ def test_key_fk_required_and_row_count_failures_are_reported(
     imperfect_tables: dict,
 ) -> None:
     malformed = _copy_tables(imperfect_tables)
-    malformed["ledger_entries"].loc[1, "entry_id"] = malformed[
-        "ledger_entries"
-    ].loc[0, "entry_id"]
+    malformed["ledger_entries"].loc[1, "entry_id"] = malformed["ledger_entries"].loc[
+        0, "entry_id"
+    ]
     malformed["ledger_entries"].loc[2, "account_id"] = 999999
     malformed["accounts"].loc[0, "account_name"] = ""
     malformed["fx_rates"] = malformed["fx_rates"].iloc[:-1]
@@ -121,9 +121,9 @@ def test_ledger_balance_reversal_and_side_failures_are_reported(
     malformed["ledger_entries"].loc[debit_positions[0], "credit_amount"] = "1.0000"
     debit_position = debit_positions[1]
     amount = Decimal(malformed["ledger_entries"].loc[debit_position, "debit_amount"])
-    malformed["ledger_entries"].loc[debit_position, "debit_amount"] = (
-        f"{amount + Decimal('0.0001'):.4f}"
-    )
+    malformed["ledger_entries"].loc[
+        debit_position, "debit_amount"
+    ] = f"{amount + Decimal('0.0001'):.4f}"
     reversed_ids = set(
         malformed["transactions"].loc[
             malformed["transactions"]["reversed"], "transaction_id"
@@ -194,9 +194,7 @@ def test_boundary_and_chronology_failures_are_reported(
     boundary_position = malformed["transactions"].index[
         malformed["transactions"]["transaction_date"] == "1900-01-01"
     ][0]
-    malformed["transactions"].loc[boundary_position, "transaction_date"] = (
-        "2026-08-01"
-    )
+    malformed["transactions"].loc[boundary_position, "transaction_date"] = "2026-08-01"
     malformed["transactions"].loc[0, "posted_at"] = "1900-01-01T00:00:00"
     malformed["ledger_entries"].loc[0, "created_at"] = "2099-01-01T00:00:00"
     checks = _results_by_name(

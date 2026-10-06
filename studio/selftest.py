@@ -80,7 +80,9 @@ def _preflight_token(settings) -> bool:
         print("  token  : no readable `exp` claim — cannot check freshness")
         return True
 
-    minutes = (expiry - datetime.datetime.now(datetime.timezone.utc)).total_seconds() / 60
+    minutes = (
+        expiry - datetime.datetime.now(datetime.timezone.utc)
+    ).total_seconds() / 60
     if minutes > 0:
         print(f"  token  : valid for {minutes:.0f} min")
         return True
@@ -193,8 +195,10 @@ def run(*, keep: bool = False) -> int:
         found = client.find_entity_id(TEST_TABLE)
         print(f"    find_entity_id({TEST_TABLE!r}) -> {found}")
         if found != entity_id:
-            print(f"    WARNING: expected {entity_id}. Either the list response "
-                  "shape differs from the create response, or creation is async.")
+            print(
+                f"    WARNING: expected {entity_id}. Either the list response "
+                "shape differs from the create response, or creation is async."
+            )
 
         # 6. Schema context, the last call the UI import makes.
         _step(6, "POST /org/{org}/context — attach the schema context")
@@ -220,15 +224,21 @@ def run(*, keep: bool = False) -> int:
             try:
                 client.delete_entity(entity_id)
                 gone = client.find_entity_id(TEST_TABLE)
-                print(f"    deleted; find_entity_id -> {gone} "
-                      f"({'confirmed gone' if gone is None else 'STILL PRESENT'})")
+                print(
+                    f"    deleted; find_entity_id -> {gone} "
+                    f"({'confirmed gone' if gone is None else 'STILL PRESENT'})"
+                )
             except Exception as exc:  # noqa: BLE001
                 print(f"    CLEANUP FAILED: {type(exc).__name__}: {exc}")
-                print(f"    Remove entity {entity_id} by hand: "
-                      f"DELETE {client.org_path}/entity/{entity_id}")
+                print(
+                    f"    Remove entity {entity_id} by hand: "
+                    f"DELETE {client.org_path}/entity/{entity_id}"
+                )
         elif entity_id is not None:
-            print(f"\n[7] --keep: entity {entity_id} ({TEST_TABLE}) left in place. "
-                  "Delete it when you are done.")
+            print(
+                f"\n[7] --keep: entity {entity_id} ({TEST_TABLE}) left in place. "
+                "Delete it when you are done."
+            )
         client.close()
 
 

@@ -54,9 +54,9 @@ def test_crm_qa_build_runs_complete_release_steps_in_order(
         "generate_seed_fixtures",
         lambda selected: calls.append(("fixtures", selected)),
     )
-    monkeypatch.setattr(
-        main_module,
-        "generate_rephrases",
+    monkeypatch.setitem(
+        main_module.QA_REPHRASE,
+        "crm",
         lambda selected: calls.append(("rephrases", selected)),
     )
     args = build_parser().parse_args(

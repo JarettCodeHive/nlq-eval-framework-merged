@@ -26,28 +26,52 @@ from qa_pairs.generator.crm.generate_crm import build as stage_crm_qa_dataset
 from qa_pairs.generator.crm.rephrase import generate_rephrases
 from qa_pairs.generator.crm.scale_pairs import generate_pairs as generate_crm_pairs
 from qa_pairs.generator.crm.validate_crm import validate as validate_crm_qa_dataset
-from qa_pairs.generator.finance.generate_finance import build as stage_finance_qa_dataset
+from qa_pairs.generator.finance.generate_finance import (
+    build as stage_finance_qa_dataset,
+)
+from qa_pairs.generator.finance.rephrase import (
+    generate_rephrases as generate_finance_rephrases,
+)
 from qa_pairs.generator.finance.scale_pairs_finance import (
     generate_pairs as generate_finance_pairs,
 )
-from qa_pairs.generator.finance.validate_finance import validate as validate_finance_qa_dataset
-from qa_pairs.generator.logistics.generate_logistics import build as stage_logistics_qa_dataset
+from qa_pairs.generator.finance.validate_finance import (
+    validate as validate_finance_qa_dataset,
+)
+from qa_pairs.generator.logistics.generate_logistics import (
+    build as stage_logistics_qa_dataset,
+)
+from qa_pairs.generator.logistics.rephrase import (
+    generate_rephrases as generate_logistics_rephrases,
+)
 from qa_pairs.generator.logistics.scale_pairs_logistics import (
     generate_pairs as generate_logistics_pairs,
 )
-from qa_pairs.generator.logistics.validate_logistics import validate as validate_logistics_qa_dataset
+from qa_pairs.generator.logistics.validate_logistics import (
+    validate as validate_logistics_qa_dataset,
+)
 from qa_pairs.generator.project_management.generate_project_management import (
     build as stage_project_management_qa_dataset,
 )
 from qa_pairs.generator.project_management.scale_pairs_project_management import (
     generate_pairs as generate_project_management_pairs,
 )
+from qa_pairs.generator.project_management.rephrase import (
+    generate_rephrases as generate_project_management_rephrases,
+)
 from qa_pairs.generator.project_management.validate_project_management import (
     validate as validate_project_management_qa_dataset,
 )
 from qa_pairs.generator.sales.generate_sales import build as stage_sales_qa_dataset
-from qa_pairs.generator.sales.scale_pairs_sales import generate_pairs as generate_sales_pairs
-from qa_pairs.generator.sales.validate_sales import validate as validate_sales_qa_dataset
+from qa_pairs.generator.sales.rephrase import (
+    generate_rephrases as generate_sales_rephrases,
+)
+from qa_pairs.generator.sales.scale_pairs_sales import (
+    generate_pairs as generate_sales_pairs,
+)
+from qa_pairs.generator.sales.validate_sales import (
+    validate as validate_sales_qa_dataset,
+)
 from qa_pairs.utils.release_bundle import default_release_version
 from qa_pairs.utils.release_bundle import component_dir
 from qa_pairs.utils.release_bundle import release_root
@@ -70,12 +94,15 @@ def _platform_manifest_path(
 ) -> Path:
     """Audit record shared by upload and post-run cleanup."""
 
-    return component_dir(
-        domain,
-        "platform",
-        version or default_release_version(domain),
-        repo_root=REPO_ROOT,
-    ) / f"{profile}.json"
+    return (
+        component_dir(
+            domain,
+            "platform",
+            version or default_release_version(domain),
+            repo_root=REPO_ROOT,
+        )
+        / f"{profile}.json"
+    )
 
 
 # Commands that are not scoped to one domain (score aggregates several domains;
@@ -138,13 +165,20 @@ def _resolve_command_log_path(args: argparse.Namespace) -> Path:
         try:
             version = args.release_version or default_release_version(domain)
             return (
-                component_dir(domain, "logs", version, repo_root=REPO_ROOT)
-                / filename
+                component_dir(domain, "logs", version, repo_root=REPO_ROOT) / filename
             )
         except ValueError:
             pass  # unknown domain or missing release config - fall back below
 
-    return REPO_ROOT / "tmp" / "generated" / domain / (profile or "shared") / "logs" / filename
+    return (
+        REPO_ROOT
+        / "tmp"
+        / "generated"
+        / domain
+        / (profile or "shared")
+        / "logs"
+        / filename
+    )
 
 
 class _TeeTextStream(io.TextIOBase):
@@ -592,6 +626,15 @@ QA_GENERATE: dict[str, CommandHandler] = {
     "logistics": generate_logistics_pairs,
     "project_management": generate_project_management_pairs,
 }
+# A domain without a rephrase-group generator yet simply skips that step in
+# qa-build (see total/step-numbering below) - this is additive, not a gate.
+QA_REPHRASE: dict[str, CommandHandler] = {
+    "crm": generate_rephrases,
+    "sales": generate_sales_rephrases,
+    "finance": generate_finance_rephrases,
+    "logistics": generate_logistics_rephrases,
+    "project_management": generate_project_management_rephrases,
+}
 
 
 def _qa_domain_fn(mapping: dict[str, CommandHandler], domain: str) -> CommandHandler:
@@ -615,8 +658,9 @@ def run_qa_build(args: argparse.Namespace) -> None:
     stage = _qa_domain_fn(QA_STAGE, args.domain)
     validate = _qa_domain_fn(QA_VALIDATE, args.domain)
     generate = _qa_domain_fn(QA_GENERATE, args.domain)
+    rephrase = QA_REPHRASE.get(args.domain)
     progress = ProgressReporter()
-    total = 4 if args.domain == "crm" else 3
+    total = 4 if rephrase else 3
 
     with use_release_version(getattr(args, "release_version", None)):
         progress.report(
@@ -631,11 +675,11 @@ def run_qa_build(args: argparse.Namespace) -> None:
             f"Step 3/{total}: Generate and verify the {args.domain} Q&A pair set"
         )
         generate(args.profile)
-        if args.domain == "crm":
+        if rephrase:
             progress.report(
-                "Step 4/4: Generate and verify CRM rephrase-group variants"
+                f"Step 4/{total}: Generate and verify {args.domain} rephrase-group variants"
             )
-            generate_rephrases(args.profile)
+            rephrase(args.profile)
 
     print(f"{args.domain} Q&A pair build passed")
     print(f"domain: {args.domain}")
@@ -662,10 +706,9 @@ def run_qa_generate_pairs(args: argparse.Namespace) -> None:
 
 
 def run_qa_generate_rephrases(args: argparse.Namespace) -> None:
-    """Generate verified rephrase groups for the CRM Q&A pair set."""
+    """Generate verified rephrase groups for a domain's Q&A pair set."""
 
-    _ensure_crm(args.domain)
-    generate_rephrases(args.profile)
+    _qa_domain_fn(QA_REPHRASE, args.domain)(args.profile)
 
 
 def _write_preview_tables(

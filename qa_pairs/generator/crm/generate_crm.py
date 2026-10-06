@@ -67,7 +67,12 @@ def load_duckdb(con, csv_dir: Path, ddl_path: Path) -> list[dict]:
         rows = con.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0]
         cols = len(con.execute(f"PRAGMA table_info('{name}')").fetchall())
         files.append(
-            {"name": f"{name}.csv", "sha256": sha256(csv_path), "rows": rows, "columns": cols}
+            {
+                "name": f"{name}.csv",
+                "sha256": sha256(csv_path),
+                "rows": rows,
+                "columns": cols,
+            }
         )
     return files
 

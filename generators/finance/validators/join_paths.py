@@ -243,9 +243,7 @@ class FinanceJoinPathValidator:
     def generate_and_validate(self) -> list[IntegrityCheckResult]:
         """Generate final Finance data and validate joins through temporary CSVs."""
 
-        tables = FinanceImperfectionInjector(
-            self.generator
-        ).generate_imperfect_tables()
+        tables = FinanceImperfectionInjector(self.generator).generate_imperfect_tables()
         FinanceRelationalValidator(self.generator).validate_or_raise(tables)
         with TemporaryDirectory(prefix="finance-join-validation-") as temp_dir:
             directory = Path(temp_dir)

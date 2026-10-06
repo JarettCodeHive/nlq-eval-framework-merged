@@ -404,9 +404,11 @@ class ProjectManagementDistributionApplier:
         windows = {
             (int(row.task_id), int(row.resource_id)): (
                 date.fromisoformat(row.assigned_at),
-                date.fromisoformat(row.released_at)
-                if row.released_at
-                else tasks[int(row.task_id)],
+                (
+                    date.fromisoformat(row.released_at)
+                    if row.released_at
+                    else tasks[int(row.task_id)]
+                ),
             )
             for row in tables["task_resources"].itertuples(index=False)
         }

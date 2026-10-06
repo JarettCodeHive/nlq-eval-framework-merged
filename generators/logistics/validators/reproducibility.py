@@ -72,9 +72,7 @@ class LogisticsReproducibilityValidator:
                 f"got profile={self.settings.profile}"
             )
 
-        with TemporaryDirectory(
-            prefix="logistics-reproducibility-a-"
-        ) as first_dir:
+        with TemporaryDirectory(prefix="logistics-reproducibility-a-") as first_dir:
             with TemporaryDirectory(
                 prefix="logistics-reproducibility-b-"
             ) as second_dir:
@@ -97,9 +95,9 @@ class LogisticsReproducibilityValidator:
         """Compare ordered artifacts, full manifests, and validation outcomes."""
 
         expected_names = self._expected_artifact_names()
-        if len(first.artifacts) != len(expected_names) or len(
-            second.artifacts
-        ) != len(expected_names):
+        if len(first.artifacts) != len(expected_names) or len(second.artifacts) != len(
+            expected_names
+        ):
             return [
                 failed(
                     "reproducibility.file_count",
@@ -173,9 +171,7 @@ class LogisticsReproducibilityValidator:
 
         LogisticsCSVExporter(clean_generator).export_full_profile_csvs()
         LogisticsSchemaSQLGenerator(clean_generator).write_release_schema()
-        LogisticsDataDictionaryGenerator(
-            clean_generator
-        ).write_release_dictionary()
+        LogisticsDataDictionaryGenerator(clean_generator).write_release_dictionary()
         manifest_path = LogisticsManifestGenerator(clean_generator).write_manifest()
 
         artifact_paths = [
@@ -185,8 +181,7 @@ class LogisticsReproducibilityValidator:
             manifest_path,
         ]
         artifacts = tuple(
-            _fingerprint(path, is_csv=path.suffix == ".csv")
-            for path in artifact_paths
+            _fingerprint(path, is_csv=path.suffix == ".csv") for path in artifact_paths
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         return LogisticsReleaseSnapshot(

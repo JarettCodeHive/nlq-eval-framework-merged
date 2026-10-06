@@ -3,7 +3,9 @@
     "family": "T1-01",
     "tier": "T1",
     "template": "t1/T1-01.sql.j2",
-    "params": ["service_level"],
+    "params": [
+      "service_level"
+    ],
     "quota": 3,
     "join_path": "-",
     "question": "How many carriers offer {service_level} service?",
@@ -18,7 +20,9 @@
     "family": "T1-02",
     "tier": "T1",
     "template": "t1/T1-02.sql.j2",
-    "params": ["carrier_type"],
+    "params": [
+      "carrier_type"
+    ],
     "quota": 4,
     "join_path": "-",
     "question": "How many carriers are classified as {carrier_type} carriers?",
@@ -33,7 +37,9 @@
     "family": "T1-03",
     "tier": "T1",
     "template": "t1/T1-03.sql.j2",
-    "params": ["region"],
+    "params": [
+      "region"
+    ],
     "quota": 4,
     "join_path": "-",
     "question": "How many warehouses are located in the {region} region?",
@@ -48,7 +54,9 @@
     "family": "T1-04",
     "tier": "T1",
     "template": "t1/T1-04.sql.j2",
-    "params": ["order_priority"],
+    "params": [
+      "order_priority"
+    ],
     "quota": 4,
     "join_path": "-",
     "question": "How many orders have {order_priority} priority?",
@@ -63,7 +71,9 @@
     "family": "T1-05",
     "tier": "T1",
     "template": "t1/T1-05.sql.j2",
-    "params": ["shipment_status"],
+    "params": [
+      "shipment_status"
+    ],
     "quota": 1,
     "join_path": "-",
     "question": "How many shipments have status {shipment_status}?",
@@ -78,7 +88,9 @@
     "family": "T2-01",
     "tier": "T2",
     "template": "t2/T2-01.sql.j2",
-    "params": ["order_status"],
+    "params": [
+      "order_status"
+    ],
     "quota": 5,
     "join_path": "logistics_jp_001",
     "question": "How many shipments belong to {order_status} orders?",
@@ -93,7 +105,9 @@
     "family": "T2-02",
     "tier": "T2",
     "template": "t2/T2-02.sql.j2",
-    "params": ["service_level"],
+    "params": [
+      "service_level"
+    ],
     "quota": 3,
     "join_path": "logistics_jp_002",
     "question": "How many shipments were carried under {service_level} service?",
@@ -108,7 +122,9 @@
     "family": "T2-03",
     "tier": "T2",
     "template": "t2/T2-03.sql.j2",
-    "params": ["carrier_type"],
+    "params": [
+      "carrier_type"
+    ],
     "quota": 5,
     "join_path": "logistics_jp_002",
     "question": "What is the total shipping cost (USD) for shipments carried by {carrier_type} carriers?",
@@ -123,7 +139,9 @@
     "family": "T2-04",
     "tier": "T2",
     "template": "t2/T2-04.sql.j2",
-    "params": ["region"],
+    "params": [
+      "region"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_003",
     "question": "How many inventory records exist in {region}-region warehouses?",
@@ -138,7 +156,9 @@
     "family": "T2-05",
     "tier": "T2",
     "template": "t2/T2-05.sql.j2",
-    "params": ["region"],
+    "params": [
+      "region"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_005",
     "question": "How many orders are assigned to a valid warehouse in the {region} region?",
@@ -153,7 +173,9 @@
     "family": "T2-06",
     "tier": "T2",
     "template": "t2/T2-06.sql.j2",
-    "params": ["shipment_status"],
+    "params": [
+      "shipment_status"
+    ],
     "quota": 3,
     "join_path": "logistics_jp_001",
     "question": "How many distinct orders have at least one shipment with status {shipment_status}?",
@@ -168,7 +190,9 @@
     "family": "T3-01",
     "tier": "T3",
     "template": "t3/T3-01.sql.j2",
-    "params": ["order_status"],
+    "params": [
+      "order_status"
+    ],
     "quota": 5,
     "join_path": "logistics_jp_004",
     "question": "How many {order_status} orders have no valid warehouse assignment (a NULL or orphaned warehouse_id)?",
@@ -183,7 +207,9 @@
     "family": "T3-02",
     "tier": "T3",
     "template": "t3/T3-02.sql.j2",
-    "params": ["order_priority"],
+    "params": [
+      "order_priority"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_004",
     "question": "How many {order_priority}-priority orders have no valid warehouse assignment (a NULL or orphaned warehouse_id)?",
@@ -198,7 +224,9 @@
     "family": "T3-03",
     "tier": "T3",
     "template": "t3/T3-03.sql.j2",
-    "params": ["order_priority"],
+    "params": [
+      "order_priority"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_001",
     "question": "How many {order_priority}-priority orders have never been shipped (no shipment record)?",
@@ -213,7 +241,9 @@
     "family": "T3-04",
     "tier": "T3",
     "template": "t3/T3-04.sql.j2",
-    "params": ["unshippable_status"],
+    "params": [
+      "unshippable_status"
+    ],
     "quota": 2,
     "join_path": "logistics_jp_001",
     "question": "How many {unshippable_status} orders have never been shipped (no shipment record)?",
@@ -243,7 +273,9 @@
     "family": "T4-01",
     "tier": "T4",
     "template": "t4/T4-01.sql.j2",
-    "params": ["order_status"],
+    "params": [
+      "order_status"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_006",
     "question": "For {order_status} orders, how does shipment count break down by carrier type?",
@@ -258,7 +290,9 @@
     "family": "T4-02",
     "tier": "T4",
     "template": "t4/T4-02.sql.j2",
-    "params": ["carrier_type"],
+    "params": [
+      "carrier_type"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_006",
     "question": "For shipments carried by {carrier_type} carriers, how does shipment count break down by order status?",
@@ -273,7 +307,9 @@
     "family": "T4-03",
     "tier": "T4",
     "template": "t4/T4-03.sql.j2",
-    "params": ["region"],
+    "params": [
+      "region"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_003",
     "question": "For warehouses in the {region} region, how does total quantity on hand break down by product category?",
@@ -288,7 +324,9 @@
     "family": "T4-04",
     "tier": "T4",
     "template": "t4/T4-04.sql.j2",
-    "params": ["region"],
+    "params": [
+      "region"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_005",
     "question": "For orders assigned to a valid warehouse in the {region} region, how does order count break down by order status?",
@@ -303,7 +341,9 @@
     "family": "T5-01",
     "tier": "T5",
     "template": "t5/T5-01.sql.j2",
-    "params": ["order_status"],
+    "params": [
+      "order_status"
+    ],
     "quota": 5,
     "join_path": "logistics_jp_006",
     "question": "Which three carrier types handled the most shipments for {order_status} orders?",
@@ -318,7 +358,9 @@
     "family": "T5-02",
     "tier": "T5",
     "template": "t5/T5-02.sql.j2",
-    "params": ["region"],
+    "params": [
+      "region"
+    ],
     "quota": 4,
     "join_path": "logistics_jp_005",
     "question": "How did total order value (USD) for orders assigned to a warehouse in the {region} region change from Q1 2026 (2026-01-01 to 2026-04-01) to Q2 2026 (2026-04-01 to 2026-07-01)?",
@@ -343,5 +385,336 @@
     "scoring_mode": "judge_plus_exact",
     "answer_shape": "table",
     "rationale": "INNER JOIN orders to warehouses on warehouse_id (logistics_jp_005), GROUP BY region, ROUND(SUM(total_amount), 2), then divide by the grand total across all regions for the percentage share, order desc with region tie-break, top row."
+  },
+  {
+    "family": "T1-06",
+    "tier": "T1",
+    "template": "t1/T1-06.sql.j2",
+    "params": [
+      "order_status",
+      "order_priority"
+    ],
+    "quota": 16,
+    "join_path": "-",
+    "question": "How many {order_status} orders have {order_priority} priority?",
+    "tables": "orders",
+    "fields": "orders.status, orders.order_priority",
+    "judge": "A single count of orders matching the named status and priority.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "Filter orders to the given status and order_priority and count rows."
+  },
+  {
+    "family": "T2-07",
+    "tier": "T2",
+    "template": "t2/T2-07.sql.j2",
+    "params": [
+      "carrier_type"
+    ],
+    "quota": 5,
+    "join_path": "logistics_jp_002",
+    "question": "What is the average transit time (in days from ship date to delivery date) for shipments carried by {carrier_type} carriers?",
+    "tables": "shipments, carriers",
+    "fields": "shipments.carrier_id, shipments.ship_date, shipments.delivery_date, carriers.carrier_id, carriers.carrier_type",
+    "judge": "A single average transit-time figure in days for shipments carried by carriers of the named type.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN shipments to carriers on carrier_id (logistics_jp_002), filter to the carrier_type, restrict to shipments with both ship_date and delivery_date populated, AVG(DATE_DIFF('day', ship_date, delivery_date)) rounded to 2 places."
+  },
+  {
+    "family": "T2-08",
+    "tier": "T2",
+    "template": "t2/T2-08.sql.j2",
+    "params": [
+      "service_level"
+    ],
+    "quota": 3,
+    "join_path": "logistics_jp_002",
+    "question": "What is the average transit time (in days from ship date to delivery date) for {service_level} shipments?",
+    "tables": "shipments, carriers",
+    "fields": "shipments.carrier_id, shipments.ship_date, shipments.delivery_date, carriers.carrier_id, carriers.service_level",
+    "judge": "A single average transit-time figure in days for shipments carried under the named service level.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN shipments to carriers on carrier_id (logistics_jp_002), filter to the service_level, restrict to shipments with both ship_date and delivery_date populated, AVG(DATE_DIFF('day', ship_date, delivery_date)) rounded to 2 places."
+  },
+  {
+    "family": "T2-09",
+    "tier": "T2",
+    "template": "t2/T2-09.sql.j2",
+    "params": [
+      "region"
+    ],
+    "quota": 4,
+    "join_path": "logistics_jp_003",
+    "question": "How many inventory records in {region}-region warehouses are below their reorder point (at stockout risk)?",
+    "tables": "inventory, warehouses",
+    "fields": "inventory.warehouse_id, inventory.reorder_point, inventory.quantity_on_hand, warehouses.warehouse_id, warehouses.region",
+    "judge": "A single count of inventory records in the named region whose quantity_on_hand is below their declared reorder_point.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN inventory to warehouses on warehouse_id (logistics_jp_003), filter to the region, count rows where reorder_point IS NOT NULL AND quantity_on_hand < reorder_point."
+  },
+  {
+    "family": "T2-10",
+    "tier": "T2",
+    "template": "t2/T2-10.sql.j2",
+    "params": [
+      "order_priority"
+    ],
+    "quota": 4,
+    "join_path": "logistics_jp_001",
+    "question": "What is the total shipping cost (USD) for shipments on {order_priority}-priority orders?",
+    "tables": "shipments, orders",
+    "fields": "shipments.order_id, shipments.shipping_cost, orders.order_id, orders.order_priority",
+    "judge": "A single total shipping_cost figure (USD) for shipments belonging to orders of the named priority.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN shipments to orders on order_id (logistics_jp_001), filter to the order_priority, ROUND(SUM(shipping_cost), 2) over non-NULL shipping_cost rows."
+  },
+  {
+    "family": "T3-06",
+    "tier": "T3",
+    "template": "t3/T3-06.sql.j2",
+    "params": [
+      "order_status"
+    ],
+    "quota": 5,
+    "join_path": "logistics_jp_001",
+    "question": "Of all {order_status} orders, how many lack any shipment record?",
+    "tables": "orders, shipments",
+    "fields": "orders.order_id, orders.status, shipments.order_id",
+    "judge": "A single count of orders in the named status with no shipments row.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "LEFT JOIN orders to shipments on order_id (logistics_jp_001), filter orders to the status, keep rows where shipment_id IS NULL, count. Delivered/Shipped/Returned orders always have shipment evidence by construction, so this reads 0 for those statuses - a legitimate fact, not a blocked result."
+  },
+  {
+    "family": "T3-07",
+    "tier": "T3",
+    "template": "t3/T3-07.sql.j2",
+    "params": [
+      "region"
+    ],
+    "quota": 4,
+    "join_path": "logistics_jp_003",
+    "question": "How many inventory records in {region}-region warehouses have no declared reorder point on file?",
+    "tables": "inventory, warehouses",
+    "fields": "inventory.warehouse_id, inventory.reorder_point, warehouses.warehouse_id, warehouses.region",
+    "judge": "A single count of inventory records in the named region whose reorder_point is NULL.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN inventory to warehouses on warehouse_id (logistics_jp_003), filter to the region, count rows where reorder_point IS NULL."
+  },
+  {
+    "family": "T3-08",
+    "tier": "T3",
+    "template": "t3/T3-08.sql.j2",
+    "params": [
+      "carrier_type"
+    ],
+    "quota": 4,
+    "join_path": "logistics_jp_002",
+    "question": "How many shipments carried by {carrier_type} carriers have not yet recorded a delivery date?",
+    "tables": "shipments, carriers",
+    "fields": "shipments.carrier_id, shipments.delivery_date, carriers.carrier_id, carriers.carrier_type",
+    "judge": "A single count of shipments carried by carriers of the named type whose delivery_date is NULL.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "INNER JOIN shipments to carriers on carrier_id (logistics_jp_002), filter to the carrier_type, count rows where delivery_date IS NULL."
+  },
+  {
+    "family": "T3-09",
+    "tier": "T3",
+    "template": "t3/T3-09.sql.j2",
+    "params": [
+      "order_status"
+    ],
+    "quota": 3,
+    "join_path": "logistics_jp_004",
+    "question": "How many {order_status} orders reference a warehouse_id that does not match any real warehouse record?",
+    "tables": "orders, warehouses",
+    "fields": "orders.order_id, orders.status, orders.warehouse_id, warehouses.warehouse_id",
+    "judge": "A single count of orders in the named status whose warehouse_id is non-NULL but does not exist in warehouses.",
+    "scoring_mode": "scalar_exact",
+    "answer_shape": "scalar",
+    "rationale": "Filter orders to the status, keep rows where warehouse_id IS NOT NULL and no matching row exists in warehouses (orphaned FK, logistics_jp_004's declared-orphan case as opposed to a simple NULL), count."
+  },
+  {
+    "family": "T4-05",
+    "tier": "T4",
+    "template": "t4/T4-05.sql.j2",
+    "params": [
+      "order_priority"
+    ],
+    "quota": 4,
+    "join_path": "logistics_jp_006",
+    "question": "For {order_priority}-priority orders, how does shipment count break down by carrier type?",
+    "tables": "orders, shipments, carriers",
+    "fields": "orders.order_id, orders.order_priority, shipments.order_id, shipments.carrier_id, carriers.carrier_id, carriers.carrier_type",
+    "judge": "Carrier types ranked by count of shipments on orders of the named priority, highest first.",
+    "scoring_mode": "table_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN orders -> shipments -> carriers (logistics_jp_006), filter to the order_priority, GROUP BY carrier_type, count, order desc with carrier_type tie-break."
+  },
+  {
+    "family": "T4-06",
+    "tier": "T4",
+    "template": "t4/T4-06.sql.j2",
+    "params": [
+      "product_category"
+    ],
+    "quota": 4,
+    "join_path": "logistics_jp_003",
+    "question": "For {product_category} inventory, how does total quantity on hand break down by warehouse region?",
+    "tables": "inventory, warehouses",
+    "fields": "inventory.warehouse_id, inventory.product_category, inventory.quantity_on_hand, warehouses.warehouse_id, warehouses.region",
+    "judge": "Warehouse regions ranked by total quantity_on_hand for inventory in the named product category, highest first.",
+    "scoring_mode": "table_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN inventory to warehouses on warehouse_id (logistics_jp_003), filter to the product_category, GROUP BY region, SUM(quantity_on_hand), order desc with region tie-break."
+  },
+  {
+    "family": "T4-07",
+    "tier": "T4",
+    "template": "t4/T4-07.sql.j2",
+    "params": [
+      "order_status"
+    ],
+    "quota": 5,
+    "join_path": "logistics_jp_005",
+    "question": "For {order_status} orders assigned to a valid warehouse, how does order count break down by warehouse region?",
+    "tables": "orders, warehouses",
+    "fields": "orders.warehouse_id, orders.status, warehouses.warehouse_id, warehouses.region",
+    "judge": "Warehouse regions ranked by count of orders in the named status with a valid warehouse assignment, highest first.",
+    "scoring_mode": "table_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN orders to warehouses on warehouse_id (logistics_jp_005), filter to the status, GROUP BY region, count, order desc with region tie-break."
+  },
+  {
+    "family": "T4-08",
+    "tier": "T4",
+    "template": "t4/T4-08.sql.j2",
+    "params": [
+      "order_priority"
+    ],
+    "quota": 3,
+    "join_path": "logistics_jp_006",
+    "question": "For {order_priority}-priority orders, how does shipment count break down by carrier service level?",
+    "tables": "orders, shipments, carriers",
+    "fields": "orders.order_id, orders.order_priority, shipments.order_id, shipments.carrier_id, carriers.carrier_id, carriers.service_level",
+    "judge": "Carrier service levels ranked by count of shipments on orders of the named priority, highest first.",
+    "scoring_mode": "table_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN orders -> shipments -> carriers (logistics_jp_006), filter to the order_priority, GROUP BY service_level, count, order desc with service_level tie-break."
+  },
+  {
+    "family": "T5-04",
+    "tier": "T5",
+    "template": "t5/T5-04.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "logistics_jp_002",
+    "question": "Across all shipments, which three carrier types have the slowest average transit time (ship date to delivery date)? List each carrier type with its average transit time in days, slowest first.",
+    "tables": "shipments, carriers",
+    "fields": "shipments.carrier_id, shipments.ship_date, shipments.delivery_date, carriers.carrier_id, carriers.carrier_type",
+    "judge": "Exactly three carrier types ranked by average transit time in days among shipments with both dates populated, slowest first, with each average.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN shipments to carriers on carrier_id (logistics_jp_002), restrict to shipments with both ship_date and delivery_date populated, GROUP BY carrier_type, AVG(DATE_DIFF('day', ship_date, delivery_date)) rounded to 2 places, order desc (slowest first) with carrier_type tie-break, LIMIT 3."
+  },
+  {
+    "family": "T5-05",
+    "tier": "T5",
+    "template": "t5/T5-05.sql.j2",
+    "params": [
+      "carrier_type"
+    ],
+    "quota": 5,
+    "join_path": "logistics_jp_002",
+    "question": "How did total shipping cost (USD) for shipments carried by {carrier_type} carriers change from Q1 2026 (2026-01-01 to 2026-04-01) to Q2 2026 (2026-04-01 to 2026-07-01), based on ship date?",
+    "tables": "shipments, carriers",
+    "fields": "shipments.carrier_id, shipments.ship_date, shipments.shipping_cost, carriers.carrier_id, carriers.carrier_type",
+    "judge": "Total shipping_cost for Q1 2026 and Q2 2026 (by ship_date) for the named carrier type, the absolute and percentage change, and the direction.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "table",
+    "rationale": "INNER JOIN shipments to carriers on carrier_id (logistics_jp_002), filter to the carrier_type, SUM(shipping_cost) per quarter via a CASE expression on ship_date, then compute absolute and percentage change and direction."
+  },
+  {
+    "family": "T5-06",
+    "tier": "T5",
+    "template": "t5/T5-06.sql.j2",
+    "params": [
+      "region"
+    ],
+    "quota": 4,
+    "join_path": "logistics_jp_003",
+    "question": "For {region}-region warehouses, which three product categories hold the most total inventory quantity on hand? List each category with its quantity, highest first.",
+    "tables": "inventory, warehouses",
+    "fields": "inventory.warehouse_id, inventory.product_category, inventory.quantity_on_hand, warehouses.warehouse_id, warehouses.region",
+    "judge": "Exactly three product categories ranked by total quantity_on_hand for inventory in the named region, highest first, with each total.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN inventory to warehouses on warehouse_id (logistics_jp_003), filter to the region, GROUP BY product_category, SUM(quantity_on_hand), order desc with product_category tie-break, LIMIT 3."
+  },
+  {
+    "family": "T5-07",
+    "tier": "T5",
+    "template": "t5/T5-07.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "logistics_jp_003",
+    "question": "Across all regions, which three regions have the most inventory items at stockout risk (quantity on hand below reorder point)? List each region with its count, highest first.",
+    "tables": "inventory, warehouses",
+    "fields": "inventory.warehouse_id, inventory.reorder_point, inventory.quantity_on_hand, warehouses.warehouse_id, warehouses.region",
+    "judge": "Exactly three regions ranked by count of inventory records with quantity_on_hand below reorder_point, highest first, with each count.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN inventory to warehouses on warehouse_id (logistics_jp_003), restrict to reorder_point IS NOT NULL AND quantity_on_hand < reorder_point, GROUP BY region, count, order desc with region tie-break, LIMIT 3."
+  },
+  {
+    "family": "T5-08",
+    "tier": "T5",
+    "template": "t5/T5-08.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "-",
+    "question": "Which carrier type has the lowest average base rate, and what is it?",
+    "tables": "carriers",
+    "fields": "carriers.carrier_type, carriers.base_rate",
+    "judge": "A single carrier type and its average base_rate, the lowest among all carrier types with a non-NULL base_rate.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "table",
+    "rationale": "Filter carriers to base_rate IS NOT NULL, GROUP BY carrier_type, AVG(base_rate) rounded to 2 places, order asc (lowest first) with carrier_type tie-break, LIMIT 1."
+  },
+  {
+    "family": "T5-09",
+    "tier": "T5",
+    "template": "t5/T5-09.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "logistics_jp_003",
+    "question": "Which three regions hold the most total inventory quantity on hand across all product categories? List each region with its quantity, highest first.",
+    "tables": "inventory, warehouses",
+    "fields": "inventory.warehouse_id, inventory.quantity_on_hand, warehouses.warehouse_id, warehouses.region",
+    "judge": "Exactly three regions ranked by total quantity_on_hand across all inventory, highest first, with each total.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "ordered_list",
+    "rationale": "INNER JOIN inventory to warehouses on warehouse_id (logistics_jp_003), GROUP BY region, SUM(quantity_on_hand), order desc with region tie-break, LIMIT 3."
+  },
+  {
+    "family": "T5-10",
+    "tier": "T5",
+    "template": "t5/T5-10.sql.j2",
+    "params": [],
+    "quota": 1,
+    "join_path": "-",
+    "question": "Which product category has the highest total inventory quantity on hand across all warehouses, and how much?",
+    "tables": "inventory",
+    "fields": "inventory.product_category, inventory.quantity_on_hand",
+    "judge": "A single product category and its total quantity_on_hand, the highest among all product categories.",
+    "scoring_mode": "judge_plus_exact",
+    "answer_shape": "table",
+    "rationale": "Filter inventory to product_category IS NOT NULL, GROUP BY product_category, SUM(quantity_on_hand), order desc with product_category tie-break, LIMIT 1."
   }
 ]

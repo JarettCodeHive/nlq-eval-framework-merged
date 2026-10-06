@@ -121,9 +121,7 @@ def merge(domain: str, base_id: str, new_id: str) -> Path:
     base_rows = {r["question_id"]: r for r in base["rows"]}
     new_rows = {r["question_id"]: r for r in new["rows"]}
 
-    qa = existing_component_path(
-        domain, "qa_pairs", f"{domain}_judge_input.csv"
-    )
+    qa = existing_component_path(domain, "qa_pairs", f"{domain}_judge_input.csv")
     refs: dict[str, str] = {}
     if qa.is_file():
         with qa.open(newline="", encoding="utf-8") as fh:

@@ -68,14 +68,14 @@ def print_imperfection_summary(
     warehouse_ids = set(warehouses["warehouse_id"])
     duplicate_rows = len(shipments) - injector.generator.row_count("shipments")
     orphan_count = int(
-        orders["warehouse_id"].map(
-            lambda value: value != "" and value not in warehouse_ids
-        ).sum()
+        orders["warehouse_id"]
+        .map(lambda value: value != "" and value not in warehouse_ids)
+        .sum()
     )
     outlier_minimum = float(
-        injector.logistics_config["imperfection_targets"][
-            "order_total_outliers"
-        ]["minimum_value"]
+        injector.logistics_config["imperfection_targets"]["order_total_outliers"][
+            "minimum_value"
+        ]
     )
     boundaries = set(injector.config["boundary_dates"])
 

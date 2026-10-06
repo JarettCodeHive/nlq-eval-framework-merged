@@ -75,7 +75,8 @@ def fake_platform(monkeypatch, tmp_path):
     monkeypatch.setattr("studio.upload._resolve_csv_dir", lambda d, p: tmp_path)
     monkeypatch.setattr("studio.upload.describe_plan", lambda c: "PLAN")
     monkeypatch.setattr(
-        "studio.upload.summarise", lambda o, action: f"{action} {len(o.tables)} table(s)"
+        "studio.upload.summarise",
+        lambda o, action: f"{action} {len(o.tables)} table(s)",
     )
 
     def _write_manifest(outcome, path):
@@ -192,12 +193,8 @@ def test_run_owned_cleanup_deletes_recorded_ids_and_keeps_manifest(
 
     outcome = UploadOutcome(domain="crm", profile="full", csv_dir=Path("dataset"))
     outcome.tables = [
-        TableOutcome(
-            table="accounts", entity_id=101, created_by_run=True
-        ),
-        TableOutcome(
-            table="contacts", entity_id=102, created_by_run=True
-        ),
+        TableOutcome(table="accounts", entity_id=101, created_by_run=True),
+        TableOutcome(table="contacts", entity_id=102, created_by_run=True),
     ]
     args = argparse.Namespace(
         domain="crm",

@@ -24,23 +24,22 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def dev_stages() -> dict:
-    return ProjectManagementCSVExporter.for_profile(
-        "dev"
-    ).generate_validated_stages()
+    return ProjectManagementCSVExporter.for_profile("dev").generate_validated_stages()
 
 
 def test_exporter_uses_versioned_full_output() -> None:
     exporter = ProjectManagementCSVExporter.for_profile("full")
 
     assert exporter.settings.is_release_profile
-    assert exporter.output_dir == Path("release/v1.0.0/project_management/dataset").resolve()
+    assert (
+        exporter.output_dir
+        == Path("release/v1.0.0/project_management/dataset").resolve()
+    )
 
 
 def test_profile_specific_export_methods_reject_wrong_profile() -> None:
     with pytest.raises(ValueError, match="requires the full profile"):
-        ProjectManagementCSVExporter.for_profile(
-            "dev"
-        ).export_full_profile_csvs()
+        ProjectManagementCSVExporter.for_profile("dev").export_full_profile_csvs()
     with pytest.raises(ValueError, match="only for dev"):
         ProjectManagementCSVExporter.for_profile("full").export_dev_previews()
 

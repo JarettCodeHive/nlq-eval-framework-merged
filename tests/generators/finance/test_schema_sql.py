@@ -71,9 +71,10 @@ def test_finance_schema_sql_preserves_keys_and_checks() -> None:
     }
     checks = constraints["checks"]
     assert compact_sql("CHECK (total_amount > 0)") in checks["transactions"]
-    assert compact_sql(
-        "CHECK ((debit_amount IS NULL) != (credit_amount IS NULL))"
-    ) in checks["ledger_entries"]
+    assert (
+        compact_sql("CHECK ((debit_amount IS NULL) != (credit_amount IS NULL))")
+        in checks["ledger_entries"]
+    )
     assert compact_sql("CHECK (rate IS NULL OR rate > 0)") in checks["fx_rates"]
 
 

@@ -63,7 +63,9 @@ def test_question_id_and_tier_are_internally_consistent(pairs):
             assert r["question_id"].split("-")[1] == r["tier"], r["question_id"]
         else:
             assert _VARIANT_QID.match(r["question_id"]), r["question_id"]
-        assert r["question_id"] not in seen, f"duplicate question_id: {r['question_id']}"
+        assert (
+            r["question_id"] not in seen
+        ), f"duplicate question_id: {r['question_id']}"
         seen.add(r["question_id"])
 
 
@@ -227,4 +229,7 @@ def test_scalar_answers_carry_no_currency_or_thousands_separator(pairs):
         a = r["expected_answer"]
         if "|" in a or ";" in a:  # multi-value -> judge-scored, skip
             continue
-        assert "$" not in a and "," not in a and "%" not in a, (a, r["natural_language_question"])
+        assert "$" not in a and "," not in a and "%" not in a, (
+            a,
+            r["natural_language_question"],
+        )

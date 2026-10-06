@@ -74,9 +74,7 @@ def _ctx(**overrides) -> RunContext:
 def _text(tmp_path: Path, results: list, ctx: RunContext, **kwargs) -> str:
     pypdf = pytest.importorskip("pypdf")
     path = write_scorecard_pdf(tmp_path, results, ctx, **kwargs)
-    return "\n".join(
-        page.extract_text() for page in pypdf.PdfReader(str(path)).pages
-    )
+    return "\n".join(page.extract_text() for page in pypdf.PdfReader(str(path)).pages)
 
 
 # --- the bug: snake_case identifiers were being mangled -----------------------
@@ -254,8 +252,12 @@ def test_the_new_sections_reach_the_pdf(tmp_path: Path) -> None:
     # The card measures the PLATFORM. Our own delivery readiness — an
     # independent reviewer, clean-room regeneration, pair counts against the
     # §9.1 quota — belongs in the §14.1 QA audit report, a separate artefact.
-    for ours in ("Independent reviewer", "Clean-room", "§9.1 quota",
-                 "Cross-domain question uniqueness"):
+    for ours in (
+        "Independent reviewer",
+        "Clean-room",
+        "§9.1 quota",
+        "Cross-domain question uniqueness",
+    ):
         assert ours not in text, f"framework self-assessment leaked in: {ours}"
 
 
@@ -409,7 +411,9 @@ def test_table_header_text_is_light_on_the_dark_header_fill(tmp_path: Path) -> N
 
     pypdf = pytest.importorskip("pypdf")
     out = tmp_path / "card"
-    report.write_scorecard_pdf(out, _results(passes=20, fails=12, clarifications=2), _ctx())
+    report.write_scorecard_pdf(
+        out, _results(passes=20, fails=12, clarifications=2), _ctx()
+    )
 
     headers = {"what this run observed about the platform", "verdict", "basis"}
     seen: dict[str, tuple[float, float, float] | None] = {}

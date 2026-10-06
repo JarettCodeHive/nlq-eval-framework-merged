@@ -80,9 +80,9 @@ def test_duplicate_variation_failure_is_reported(
         malformed["time_entries"].at[duplicate_position, "billable"]
     )
     checks = _results_by_name(
-        ProjectManagementImperfectionRateValidator.for_profile(
-            "dev"
-        ).validate_tables(malformed, distributed)
+        ProjectManagementImperfectionRateValidator.for_profile("dev").validate_tables(
+            malformed, distributed
+        )
     )
 
     assert checks["time_entries.near_duplicate_rate"].passed
@@ -98,18 +98,18 @@ def test_null_eligibility_and_outlier_scale_failures_are_reported(
         malformed["projects"]["end_date"].eq("")
     ][0]
     malformed["projects"].at[null_project, "status"] = "Completed"
-    target = ProjectManagementImperfectionRateValidator.for_profile(
-        "dev"
-    ).targets["task_estimate_outliers"]
+    target = ProjectManagementImperfectionRateValidator.for_profile("dev").targets[
+        "task_estimate_outliers"
+    ]
     minimum = Decimal(str(target["minimum_value"]))
     outlier = malformed["tasks"].index[
         malformed["tasks"]["estimate_hours"].map(Decimal).ge(minimum)
     ][0]
     malformed["tasks"].at[outlier, "estimate_hours"] = "500.0"
     checks = _results_by_name(
-        ProjectManagementImperfectionRateValidator.for_profile(
-            "dev"
-        ).validate_tables(malformed, distributed)
+        ProjectManagementImperfectionRateValidator.for_profile("dev").validate_tables(
+            malformed, distributed
+        )
     )
 
     assert not checks["projects.end_date.eligible_status"].passed
@@ -121,23 +121,21 @@ def test_boundary_and_scope_failures_are_reported(
 ) -> None:
     distributed, imperfect = distributed_and_imperfect
     malformed = _copy_tables(imperfect)
-    boundary = ProjectManagementImperfectionRateValidator.for_profile(
-        "dev"
-    ).config["boundary_dates"][0]
+    boundary = ProjectManagementImperfectionRateValidator.for_profile("dev").config[
+        "boundary_dates"
+    ][0]
     malformed["projects"].loc[
         malformed["projects"]["start_date"].eq(boundary), "start_date"
     ] = "2025-01-01"
     malformed["resources"].at[0, "resource_name"] = "Unexpected Replacement"
     checks = _results_by_name(
-        ProjectManagementImperfectionRateValidator.for_profile(
-            "dev"
-        ).validate_tables(malformed, distributed)
+        ProjectManagementImperfectionRateValidator.for_profile("dev").validate_tables(
+            malformed, distributed
+        )
     )
 
     assert not checks["projects.start_date.boundary_values"].passed
-    assert not checks[
-        "project_management.imperfection_scope.unapproved_fields"
-    ].passed
+    assert not checks["project_management.imperfection_scope.unapproved_fields"].passed
 
 
 def test_relational_invariant_failure_is_reported(
@@ -147,9 +145,9 @@ def test_relational_invariant_failure_is_reported(
     malformed = _copy_tables(imperfect)
     malformed["task_resources"].at[0, "allocation_pct"] = "99.99"
     checks = _results_by_name(
-        ProjectManagementImperfectionRateValidator.for_profile(
-            "dev"
-        ).validate_tables(malformed, distributed)
+        ProjectManagementImperfectionRateValidator.for_profile("dev").validate_tables(
+            malformed, distributed
+        )
     )
 
     assert not checks["project_management.relational_date_invariants"].passed

@@ -47,11 +47,7 @@ def test_versioned_release_detection_uses_configured_domain() -> None:
         sales,
         domain="finance",
         output_path=(
-            PROJECT_ROOT
-            / "release"
-            / sales.release_version
-            / "finance"
-            / "dataset"
+            PROJECT_ROOT / "release" / sales.release_version / "finance" / "dataset"
         ),
     )
 
@@ -112,7 +108,7 @@ def test_component_config_produces_same_settings_as_monolithic_config(
             key: crm_config[key]
             for key in (
                 "domain",
-                    "release_version",
+                "release_version",
                 "schema_source",
                 "fixed_values",
                 "output_paths",

@@ -35,10 +35,9 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def imperfect_tables() -> dict:
-    return (
-        ProjectManagementImperfectionInjector.for_profile("dev")
-        .generate_imperfect_tables()
-    )
+    return ProjectManagementImperfectionInjector.for_profile(
+        "dev"
+    ).generate_imperfect_tables()
 
 
 def test_config_and_registered_sql_cover_required_paths() -> None:
@@ -107,9 +106,7 @@ def test_complete_membership_detects_undeclared_pair(
         ]
     )
     replacement = next(
-        value
-        for value in modified["resources"]["resource_id"]
-        if value not in assigned
+        value for value in modified["resources"]["resource_id"] if value not in assigned
     )
     modified["time_entries"].loc[0, "resource_id"] = replacement
 

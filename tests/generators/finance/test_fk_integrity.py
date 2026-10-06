@@ -40,16 +40,17 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def imperfect_tables() -> dict:
-    return FinanceImperfectionInjector.for_profile(
-        "dev"
-    ).generate_imperfect_tables()
+    return FinanceImperfectionInjector.for_profile("dev").generate_imperfect_tables()
 
 
 def test_finance_duckdb_validator_uses_canonical_schema() -> None:
     validator = FinanceDuckDBFKValidator.for_profile("full")
 
     assert validator.settings.table_order == EXPECTED_TABLE_ORDER
-    assert validator.settings.output_path == Path("release/v1.0.0/finance/dataset").resolve()
+    assert (
+        validator.settings.output_path
+        == Path("release/v1.0.0/finance/dataset").resolve()
+    )
     assert validator.settings.schema_source.name == "finance_ddl.sql"
 
 

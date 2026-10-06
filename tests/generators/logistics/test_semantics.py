@@ -33,9 +33,7 @@ def test_semantic_contract_freezes_required_logistics_decisions() -> None:
 def test_ddl_enforces_decimal_quantity_and_currency_invariants() -> None:
     checks = ddl_constraints(DDL_PATH)["checks"]
     all_checks = {
-        compact_sql(check)
-        for table_checks in checks.values()
-        for check in table_checks
+        compact_sql(check) for table_checks in checks.values() for check in table_checks
     }
 
     expected_fragments = (

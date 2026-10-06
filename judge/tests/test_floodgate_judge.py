@@ -571,6 +571,7 @@ def test_oidc_without_the_appleconnect_cli_says_what_to_do_instead(clean_env):
     with pytest.raises(MissingCredentials, match="FLOODGATE_NARRATIVE_CERT"):
         load_llm_settings()
 
+
 def test_floodgate_model_takes_precedence_over_the_default_config(clean_env):
     # `sales` declares no model of its own, so the environment (tier 2) is what
     # outranks default.json (tier 3).

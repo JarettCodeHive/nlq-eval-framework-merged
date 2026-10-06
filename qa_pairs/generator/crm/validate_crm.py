@@ -26,10 +26,23 @@ BASE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(BASE.parent))
 from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 
-TABLES = ["accounts", "campaigns", "contacts", "contact_campaigns", "interactions", "support_cases"]
+TABLES = [
+    "accounts",
+    "campaigns",
+    "contacts",
+    "contact_campaigns",
+    "interactions",
+    "support_cases",
+]
 
 FK_CHECKS = [
-    ("contacts.account_id -> accounts", "contacts", "account_id", "accounts", "account_id"),
+    (
+        "contacts.account_id -> accounts",
+        "contacts",
+        "account_id",
+        "accounts",
+        "account_id",
+    ),
     (
         "contact_campaigns.contact_id -> contacts",
         "contact_campaigns",
@@ -44,8 +57,20 @@ FK_CHECKS = [
         "campaigns",
         "campaign_id",
     ),
-    ("interactions.contact_id -> contacts", "interactions", "contact_id", "contacts", "contact_id"),
-    ("interactions.account_id -> accounts", "interactions", "account_id", "accounts", "account_id"),
+    (
+        "interactions.contact_id -> contacts",
+        "interactions",
+        "contact_id",
+        "contacts",
+        "contact_id",
+    ),
+    (
+        "interactions.account_id -> accounts",
+        "interactions",
+        "account_id",
+        "accounts",
+        "account_id",
+    ),
     (
         "interactions.campaign_id -> campaigns",
         "interactions",
@@ -144,9 +169,13 @@ def validate(profile: str) -> None:
         print(f"  {mark} {label}: {n:,}")
 
     manifest = BASE / "dataset" / f"manifest_{profile}.json"
-    print(f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}")
+    print(
+        f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}"
+    )
 
-    print(f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}")
+    print(
+        f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}"
+    )
     con.close()
     if failures:
         raise ValueError(f"{failures} Q&A dataset validation check(s) failed")

@@ -31,7 +31,9 @@ from generators.crm.validators.join_paths import CRMJoinPathValidator
 from generators.crm.validators.relational import CRMRelationalValidator
 from generators.crm.validators.reproducibility import CRMReproducibilityValidator
 from generators.crm.validators.row_caps import CRMRowCapValidator
-from generators.finance.config import settings_for_profile as finance_settings_for_profile
+from generators.finance.config import (
+    settings_for_profile as finance_settings_for_profile,
+)
 from generators.finance.data_dictionary import FinanceDataDictionaryGenerator
 from generators.finance.distributions import FinanceDistributionApplier
 from generators.finance.export import FinanceCSVExporter

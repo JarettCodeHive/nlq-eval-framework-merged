@@ -35,8 +35,7 @@ class StubJudge(JudgeClient):
         self.calls += 1
         return JudgeVerdict(
             dimension_rationales={
-                dimension: f"stub rationale for {dimension}"
-                for dimension in DIMENSIONS
+                dimension: f"stub rationale for {dimension}" for dimension in DIMENSIONS
             },
             prompt_version="stub",
             model_version=self.model_version,

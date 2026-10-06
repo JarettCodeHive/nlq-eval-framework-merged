@@ -39,7 +39,10 @@ def _try(client: StudioClient, method: str, path: str, **kwargs) -> tuple[bool, 
 
     try:
         response = client._client.request(
-            method, path, json=None, params=kwargs.get("params"),
+            method,
+            path,
+            json=None,
+            params=kwargs.get("params"),
             headers=client._headers(),
         )
     except Exception as exc:  # noqa: BLE001 — network faults are a result too
@@ -69,7 +72,11 @@ def list_all_entities(client: StudioClient) -> list[dict]:
             f"{client.org_path}/entity",
             params={
                 "query": encode_query(
-                    {"$limit": 100, "$skip": (page - 1) * 100, "$select": [{"Name": {}}]}
+                    {
+                        "$limit": 100,
+                        "$skip": (page - 1) * 100,
+                        "$select": [{"Name": {}}],
+                    }
                 )
             },
             summary=f"list entities page {page}",

@@ -194,9 +194,7 @@ def combined_release_version(domains: Sequence[str]) -> str:
 def eval_runs_root(domain: str) -> Path:
     """Canonical location where `judge` writes runs for one domain."""
 
-    return component_dir(
-        domain, "judge", _release_version(domain), repo_root=REPO_ROOT
-    )
+    return component_dir(domain, "judge", _release_version(domain), repo_root=REPO_ROOT)
 
 
 def _eval_run_roots(domain: str) -> tuple[Path, Path]:
@@ -238,9 +236,7 @@ def load_run(domain: str, run_id: str) -> RunInput:
     return RunInput(domain=domain, run_id=run_id, path=path, payload=payload)
 
 
-def collect(
-    domains: list[str], pinned: dict[str, str] | None = None
-) -> list[RunInput]:
+def collect(domains: list[str], pinned: dict[str, str] | None = None) -> list[RunInput]:
     """Load one run per domain — the pinned id, else the most recent.
 
     "Most recent" is the lexically largest run id, which is a UTC timestamp, so
@@ -296,9 +292,7 @@ def _requires_calibration_for_release(domain: str) -> bool:
         return False
 
 
-def release_blockers(
-    inputs: list[RunInput], platform_version: str = ""
-) -> list[str]:
+def release_blockers(inputs: list[RunInput], platform_version: str = "") -> list[str]:
     """Why these runs may not establish or be compared to a baseline.
 
     A combined RELEASE scorecard asserts that several runs describe ONE platform
@@ -461,9 +455,7 @@ def combine(
         calibrated=all(r.calibrated for r in inputs),
         # One subset input makes the whole card a subset for quota purposes.
         partial_run=any(r.partial_run for r in inputs),
-        comparison_policy=(
-            inputs[0].comparison_policy or RunContext.comparison_policy
-        ),
+        comparison_policy=(inputs[0].comparison_policy or RunContext.comparison_policy),
         comparison_is_default=all(r.comparison_is_default for r in inputs),
         judge_temperature_enforced=all(r.temperature_enforced for r in inputs),
         judge_seed_enforced=all(r.seed_enforced for r in inputs),

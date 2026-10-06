@@ -30,9 +30,11 @@ def _normalized_default(value: str | None) -> str | None:
 def _table_bodies(text: str, start_pattern: str) -> dict[str, str]:
     matches = list(re.finditer(start_pattern, text, re.MULTILINE))
     return {
-        match.group(1): text[match.end() : matches[index + 1].start()]
-        if index + 1 < len(matches)
-        else text[match.end() :]
+        match.group(1): (
+            text[match.end() : matches[index + 1].start()]
+            if index + 1 < len(matches)
+            else text[match.end() :]
+        )
         for index, match in enumerate(matches)
     }
 
@@ -135,9 +137,9 @@ def test_ddl_dbml_and_header_contracts_are_aligned() -> None:
 def test_ddl_executes_in_duckdb_with_expected_tables() -> None:
     with duckdb.connect(database=":memory:") as connection:
         connection.execute(DDL.read_text(encoding="utf-8"))
-        assert [row[0] for row in connection.execute("SHOW TABLES").fetchall()] == sorted(
-            TABLE_ORDER
-        )
+        assert [
+            row[0] for row in connection.execute("SHOW TABLES").fetchall()
+        ] == sorted(TABLE_ORDER)
 
 
 def test_currency_contract_is_strictly_usd_only() -> None:
@@ -147,9 +149,7 @@ def test_currency_contract_is_strictly_usd_only() -> None:
     assert len(re.findall(r"CHECK \(currency_code = 'USD'\)", ddl)) == len(
         CURRENCY_TABLES
     )
-    assert len(re.findall(r"note: 'Fixed value: USD'", dbml)) == len(
-        CURRENCY_TABLES
-    )
+    assert len(re.findall(r"note: 'Fixed value: USD'", dbml)) == len(CURRENCY_TABLES)
 
     with duckdb.connect(database=":memory:") as connection:
         connection.execute(ddl)

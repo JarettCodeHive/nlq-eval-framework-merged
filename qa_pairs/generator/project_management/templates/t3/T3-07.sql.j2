@@ -1,0 +1,4 @@
+SELECT COUNT(*) AS milestone_count
+FROM milestones m
+INNER JOIN projects p ON m.project_id = p.project_id
+WHERE p.priority = {{ project_priority | sqlstr }} AND m.actual_date IS NULL;

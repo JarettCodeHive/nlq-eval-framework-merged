@@ -24,9 +24,7 @@ CONTRACT_HEADER = (
     "reference_fields,judge_reference,derivation_rationale\n"
 )
 CONTRACT_ROW = "How many accounts?,72,SELECT 72,accounts,id,There are 72.,count\n"
-COMPANION_HEADER = (
-    "question_id,tier,family,scoring_mode,natural_language_question\n"
-)
+COMPANION_HEADER = "question_id,tier,family,scoring_mode,natural_language_question\n"
 COMPANION_ROW = "CRM-T1-01-01,T1,count,exact,How many accounts?\n"
 
 
@@ -80,7 +78,9 @@ def _qa_package(repo: Path, version: str, *, joined: bool = False) -> Path:
         COMPANION_HEADER + COMPANION_ROW, encoding="utf-8"
     )
     if joined:
-        (directory / "crm_judge_input.csv").write_text("question_id\n", encoding="utf-8")
+        (directory / "crm_judge_input.csv").write_text(
+            "question_id\n", encoding="utf-8"
+        )
     return directory
 
 
@@ -164,10 +164,7 @@ def test_dataset_version_label_is_the_unified_release_version(tmp_path: Path) ->
     repo = _repo(tmp_path)
     _qa_package(repo, "v1.0.0")
 
-    assert (
-        dataset_version_label("crm", "full", repo_root=repo)
-        == "v1.0.0"
-    )
+    assert dataset_version_label("crm", "full", repo_root=repo) == "v1.0.0"
     assert dataset_version_label("crm", "dev", repo_root=repo) == "v1.0.0+dev"
 
 

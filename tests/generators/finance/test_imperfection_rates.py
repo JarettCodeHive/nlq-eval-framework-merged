@@ -131,9 +131,7 @@ def test_outlier_validation_detects_count_range_and_scale_failures(
     outlier_position = malformed["transactions"].index[
         malformed["transactions"]["total_amount"].map(Decimal).ge(minimum)
     ][0]
-    malformed["transactions"].at[outlier_position, "total_amount"] = (
-        "100000001.0"
-    )
+    malformed["transactions"].at[outlier_position, "total_amount"] = "100000001.0"
 
     checks = _results_by_name(
         validator.validate_tables(malformed, source_tables=distributed)
@@ -161,9 +159,7 @@ def test_boundary_validation_detects_missing_value(
     )
 
     assert not checks["transactions.transaction_date.boundary_values"].passed
-    assert not checks[
-        "transactions.transaction_date.boundary_occurrences"
-    ].passed
+    assert not checks["transactions.transaction_date.boundary_occurrences"].passed
 
 
 def test_scope_validation_detects_unapproved_field_change(
@@ -190,9 +186,9 @@ def test_invariant_validation_detects_ledger_imbalance(
     debit_rows = malformed["ledger_entries"]["debit_amount"].astype(str).ne("")
     position = malformed["ledger_entries"].index[debit_rows][0]
     amount = Decimal(str(malformed["ledger_entries"].at[position, "debit_amount"]))
-    malformed["ledger_entries"].at[position, "debit_amount"] = (
-        f"{amount + Decimal('0.0001'):.4f}"
-    )
+    malformed["ledger_entries"].at[
+        position, "debit_amount"
+    ] = f"{amount + Decimal('0.0001'):.4f}"
 
     checks = _results_by_name(
         validator.validate_tables(malformed, source_tables=distributed)

@@ -245,7 +245,9 @@ class LogisticsImperfectTablesValidator:
                     raise ValueError("An order-total outlier exceeds its maximum")
                 outliers.append(amount)
             elif amount > clean_maximum:
-                raise ValueError("An order total falls between clean and outlier ranges")
+                raise ValueError(
+                    "An order total falls between clean and outlier ranges"
+                )
         if len(outliers) != expected:
             raise ValueError(
                 "Order-total outlier count differs from configured rate: "
@@ -299,7 +301,9 @@ class LogisticsImperfectTablesValidator:
                 ship_date is None or delivery_date < ship_date
             ):
                 raise ValueError("Shipment delivery chronology is invalid")
-            if ship_date is not None and created > datetime.combine(ship_date, time.max):
+            if ship_date is not None and created > datetime.combine(
+                ship_date, time.max
+            ):
                 raise ValueError("Shipment creation follows its first event date")
             _validate_status_dates(row.status, ship_date, delivery_date)
 
