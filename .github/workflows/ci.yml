@@ -13,6 +13,17 @@ jobs:
     name: Lint (ruff, black, sqlfluff)
     runs-on: ubuntu-latest
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🔍 Lint (ruff, black, sqlfluff)
+          Checks Python code style (`ruff`, `black`) and SQL syntax (`sqlfluff`
+          on the authoritative CRM reference DDL) across the whole repo.
+
+          **Must pass before any other job starts** - nothing downstream is
+          worth running against code that doesn't even lint.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -38,6 +49,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 📋 Q&A pairs (build CRM + hard-gated pytest)
+          Builds the CRM dataset and Q&A release (full profile), then runs
+          `qa_pairs/tests/` - 63 tests covering the question/answer contract
+          shape, ground-truth re-execution against a fresh DuckDB connection,
+          SQL lint on every `reference_sql`, scoring logic, and rephrase-group
+          consistency.
+
+          Scoped to CRM only because `qa_pairs/tests/conftest.py` itself only
+          reads CRM's release - the other four domains' Track-A coverage lives
+          in the `full-suite` job instead.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -61,11 +87,28 @@ jobs:
       - name: pytest qa_pairs/tests/
         run: python -m pytest qa_pairs/tests/ -q
 
-  cross-domain-uniqueness:
-    name: Cross-domain question uniqueness (Spec v3.0 S9.4/S13.2)
+  dataset-gates:
+    name: Dataset gates (FK, row-cap, cross-domain uniqueness)
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🗂️ Dataset gates (FK, row-cap, cross-domain uniqueness)
+          Builds all 5 domains' full datasets and Q&A releases, then runs
+          three independent, named checks against the exported files:
+
+          - **FK integrity gate** - no orphan foreign keys in any table
+          - **Row-cap assertion** - no table exceeds the 250,000-row hard cap
+          - **Cross-domain question uniqueness** - no question text repeated
+            across domains
+
+          Each re-checks the files actually written to disk (`--exported`),
+          independent of whatever `build-dataset`'s own internal pipeline
+          already asserted before publishing.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -76,9 +119,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Every domain's full release, since the uniqueness requirement is
-      # "no question appears in more than one domain" - checking fewer
-      # than all five can't prove that.
+      # Every domain's full release - the uniqueness requirement is "no
+      # question appears in more than one domain," which can't be proven by
+      # checking fewer than all five, and the FK/row-cap gates below re-check
+      # every domain's exported artifacts independently of whatever
+      # build-dataset already asserted internally during this same build.
       - name: Build all five domains' full Q&A releases
         run: |
           for domain in crm sales finance logistics project_management; do
@@ -86,14 +131,53 @@ jobs:
             python main.py qa-build --domain "$domain" --profile full
           done
 
+      # Spec Section 13.2 / 7.6: named, independently-reported FK integrity
+      # gate. This re-validates the already-exported CSVs on disk (--exported),
+      # separate from whatever build-dataset's own internal pipeline already
+      # asserted before publishing - belt and suspenders, and now a gate any
+      # reader of the Actions UI can see pass or fail by name instead of only
+      # as a side effect of another step's exit code.
+      - name: FK integrity gate (all domains)
+        run: |
+          set -e
+          for domain in crm sales finance logistics project_management; do
+            echo "=== FK integrity: $domain ==="
+            python main.py validate-fk --domain "$domain" --profile full --exported
+          done
+
+      # Spec Section 13.2 / 7.3: named row-cap assertion gate, same rationale
+      # as the FK gate above - independently re-checks the exported CSVs.
+      - name: Row-cap assertion (all domains)
+        run: |
+          set -e
+          for domain in crm sales finance logistics project_management; do
+            echo "=== Row cap: $domain ==="
+            python main.py validate-row-caps --domain "$domain" --profile full --exported
+          done
+
       - name: Check cross-domain question uniqueness
         run: python scripts/check_cross_domain_uniqueness.py
 
-  full-suite:
-    name: Full test suite (generators, judge, scorecard - informational)
+  reproducibility:
+    name: Manifest hash regeneration (clean-room reproducibility, HC-7)
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🔁 Manifest hash regeneration (clean-room reproducibility, HC-7)
+          Rebuilds every domain's full dataset **a second time from scratch**
+          and byte-compares it (CSV bytes, row/column counts, SHA-256) against
+          the first build. Proves the "a clean-room re-run from the committed
+          seed produces byte-identical output" guarantee continuously, instead
+          of just assuming it.
+
+          This is the most expensive job here - every domain builds twice -
+          but it's the one check nothing else in this workflow proves, and the
+          spec explicitly requires it.
+          SUMMARY
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -104,19 +188,63 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # --ignore is required, not optional: this one file raises an
-      # ImportError (missing scripts.capture_finance_implementation_baseline)
-      # that aborts collection for the entire run, not just this file.
-      #
-      # continue-on-error is deliberate: as of 2026-10-05 there are 17
-      # known pre-existing failures unrelated to any single PR -
-      # 8 compare against baseline JSON files that were never committed
-      # (tests/generators/crm/test_config_compatibility_baseline.py,
-      # tests/generators/test_sales_implementation_baseline.py), and
-      # ~9 assert "Q&A commands stay CRM-only" even though sales/finance/
-      # logistics/project_management are now intentionally wired in
-      # (tests/generators/test_dataset_cli.py). This job stays informational
-      # until those are fixed - check the summary rather than the red X.
-      - name: pytest tests/ (soft gate)
-        continue-on-error: true
-        run: python -m pytest tests/ -q --ignore=tests/generators/test_finance_implementation_baseline.py
+      # HC-7 / Section 7.7: "A clean-room re-run from the committed seed must
+      # produce byte-identical CSV output." validate-reproducibility does a
+      # real clean-room rebuild per domain and byte-compares it (CSV bytes,
+      # row/column counts, SHA-256) against the already-published release -
+      # not a lighter dataframe-hash shortcut. This is the automated version
+      # of the manual "double-run diff" passes previously only run ad hoc;
+      # it is its own job (not folded into dataset-gates) because every
+      # domain rebuilds its full dataset a second time internally here, which
+      # roughly doubles that domain's build cost on top of dataset-gates'
+      # own build - expensive, but this is exactly the check the spec names
+      # and nothing else in this workflow proves it.
+      - name: Build all five domains' full releases
+        run: |
+          for domain in crm sales finance logistics project_management; do
+            python main.py build-dataset --domain "$domain" --profile full
+          done
+
+      - name: Clean-room reproducibility (all domains)
+        run: |
+          set -e
+          for domain in crm sales finance logistics project_management; do
+            echo "=== Reproducibility: $domain ==="
+            python main.py validate-reproducibility --domain "$domain" --profile full
+          done
+
+  full-suite:
+    name: Full test suite (generators, judge, scorecard)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🧪 Full test suite (generators, judge, scorecard)
+          Runs the complete `pytest tests/` suite - unit and integration tests
+          for every domain's generator, the judge module, and the scorecard
+          module. Catches regressions outside the dataset/Q&A pipeline that
+          the other jobs specifically cover.
+
+          Hard gate as of 2026-10-06 - no `--ignore`, no `continue-on-error`.
+          All 17 previously-known-failing tests were fixed at the root cause
+          (see PR #13 for the breakdown of each one).
+          SUMMARY
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Hard gate as of 2026-10-06: all 17 previously-known-failing tests
+      # were fixed at the root cause (see the commit that removed this
+      # comment's predecessor for the full breakdown), so this no longer
+      # needs --ignore or continue-on-error.
+      - name: pytest tests/
+        run: python -m pytest tests/ -q

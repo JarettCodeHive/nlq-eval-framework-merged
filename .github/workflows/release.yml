@@ -1,0 +1,156 @@
+name: release
+
+# CD / release flow - the full evaluation cycle for one domain: build the
+# dataset, build the Q&A release, upload it to the real Pulse platform, run
+# the LLM judge against live Pulse responses, and combine the result into a
+# regression scorecard.
+#
+# Deliberately NOT triggered on push/PR. This spends real LLM API cost,
+# writes to a real shared Pulse org, and a human should decide "yes, score
+# this now" rather than it firing on every merge. Trigger it by hand from the
+# Actions tab ("Run workflow"), which already gates it to repo collaborators
+# with write access - no separate approval step is configured here, but this
+# workflow can be pointed at a GitHub Environment with required reviewers if
+# that's wanted later (see the commented `environment:` line below).
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions)
+# before this can run at all:
+#   PULSE_BASE_URL, PULSE_AUTH_TOKEN, PULSE_ORG_ID
+#     - platform credentials; see docs/judge_runbook.md for how to pull a
+#       fresh PULSE_AUTH_TOKEN from Chrome DevTools against the Pulse QA app.
+#   FLOODGATE_NARRATIVE_CERT, FLOODGATE_NARRATIVE_KEY
+#     - judge-provider (Floodgate/Anthropic) credentials for server/CI use.
+#       The local dev flow instead uses the `appleconnect` CLI's OIDC token,
+#       which only exists on a signed-in Mac - judge/floodgate_judge.py's own
+#       error message is explicit that server/CI needs these two instead.
+#
+# A `release`-flagged run additionally requires the domain to be calibrated
+# (judge/calibration.py) - as of 2026-10-06 no domain has a usable
+# human-graded anchor set, so every run today should leave "Official release
+# scorecard" unchecked and go through the preview path.
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Domain to evaluate"
+        required: true
+        type: choice
+        options:
+          - crm
+          - sales
+          - finance
+          - logistics
+          - project_management
+      release:
+        description: "Official release scorecard (requires a calibrated domain - leave unchecked today)"
+        required: true
+        type: boolean
+        default: false
+      platform_version:
+        description: "Platform version tag for this run (Section 11.1) - leave blank to let the judge record its own"
+        required: false
+        type: string
+      skip_judge:
+        description: "Stop after dataset-upload (dry run of build+upload only, no LLM/Pulse scoring cost)"
+        required: true
+        type: boolean
+        default: false
+
+# environment: production   # uncomment once a GitHub Environment with
+#                            # required reviewers exists, to add a manual
+#                            # approval gate before this job starts.
+
+jobs:
+  evaluate:
+    name: Build, upload, judge, score - ${{ inputs.domain }}
+    runs-on: ubuntu-latest
+    env:
+      PULSE_BASE_URL: ${{ secrets.PULSE_BASE_URL }}
+      PULSE_AUTH_TOKEN: ${{ secrets.PULSE_AUTH_TOKEN }}
+      PULSE_ORG_ID: ${{ secrets.PULSE_ORG_ID }}
+      FLOODGATE_NARRATIVE_CERT: ${{ secrets.FLOODGATE_NARRATIVE_CERT }}
+      FLOODGATE_NARRATIVE_KEY: ${{ secrets.FLOODGATE_NARRATIVE_KEY }}
+    steps:
+      - name: What this job does
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### 🚀 Build, upload, judge, score — ${{ inputs.domain }}
+          Full evaluation cycle for **${{ inputs.domain }}**: build its dataset,
+          build its Q&A release, upload the dataset to the real Pulse platform,
+          run the LLM judge against Pulse's live responses, and combine the
+          result into a regression scorecard.
+
+          | Setting | Value |
+          |---|---|
+          | Domain | `${{ inputs.domain }}` |
+          | Mode | ${{ inputs.skip_judge && '🧪 dry run (build + upload only, no LLM/Pulse cost)' || '✅ full run (judge + score)' }} |
+          | Scorecard type | ${{ inputs.release && '🏁 official release (requires calibration)' || '👀 preview (not an official baseline)' }} |
+          | Platform version tag | ${{ inputs.platform_version != '' && inputs.platform_version || '(none given - judge records its own)' }} |
+
+          This job never runs on push/PR - it was triggered manually and
+          spends real LLM API cost plus writes to the shared Pulse org.
+          SUMMARY
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Preflight both credentials
+        run: python main.py check-auth --domain "${{ inputs.domain }}"
+
+      - name: Build dataset (full profile)
+        run: python main.py build-dataset --domain "${{ inputs.domain }}" --profile full
+
+      - name: Build Q&A release (full profile)
+        run: python main.py qa-build --domain "${{ inputs.domain }}" --profile full
+
+      - name: Upload dataset to Pulse
+        run: python main.py dataset-upload --domain "${{ inputs.domain }}" --profile full --yes
+
+      - name: Stop here (dry run)
+        if: ${{ inputs.skip_judge }}
+        run: echo "skip_judge was checked - stopping after upload, no judge/score run."
+
+      - name: Run LLM judge against live Pulse
+        if: ${{ !inputs.skip_judge }}
+        run: |
+          python main.py judge \
+            --domain "${{ inputs.domain }}" \
+            --profile full \
+            --pulse live \
+            --allow-uncalibrated \
+            ${{ inputs.release && '--release' || '' }} \
+            ${{ inputs.platform_version != '' && format('--platform-version {0}', inputs.platform_version) || '' }}
+
+      - name: Combine into regression scorecard
+        if: ${{ !inputs.skip_judge }}
+        run: |
+          python main.py score \
+            --domains "${{ inputs.domain }}" \
+            ${{ inputs.release && '--release' || '' }} \
+            ${{ inputs.platform_version != '' && format('--platform-version {0}', inputs.platform_version) || '' }}
+
+      # release/ is gitignored repo-wide (nothing in this flow is committed
+      # to git - see the CI/CD gap writeup) - the workflow artifact is the
+      # only durable record of this run unless someone downloads and files
+      # it elsewhere. Default GitHub retention applies (90 days unless the
+      # repo changes it).
+      - name: Upload run artifacts (scorecard, judge logs, Pulse raw responses)
+        if: ${{ !inputs.skip_judge }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.domain }}-release-evaluation-${{ github.run_id }}
+          path: |
+            release/**/scorecard/**
+            release/**/judge/**
+            release/**/platform/**
+            release/**/logs/**
+          if-no-files-found: warn
+          retention-days: 90
