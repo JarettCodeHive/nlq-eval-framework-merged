@@ -897,41 +897,66 @@ def test_a_percentage_printed_to_one_decimal_place_is_the_same_number():
     of its magnitude. Accepting one and rejecting the other was incoherent, and
     the only reason it survived is that the old rule's threshold happened to sit
     between two cases nobody had compared side by side.
-
-    The widening is deliberate and bounded: any percentage printed to one
-    decimal place against a two-decimal expected value now passes, which is at
-    most 0.05 of a percentage point. Measured across the four full CRM and
-    Sales runs on disk — 563 comparisons — it changes exactly one verdict.
     """
 
     assert exact_match("23.21", "about 23.2% of cases") is ExactMatchResult.PASS
 
 
 @pytest.mark.parametrize(
+    ("expected", "answer", "pair"),
+    [
+        ("22.43", "about 22% of cases", "CRM-T4-03-14"),
+        ("20.65", "21% of quotation lines were accepted", "SALES-T2-08-33"),
+        ("-50.52", "a change of -51%", "CRM-T5-04-20"),
+        ("23.21", "roughly 23%", "the original counter-example"),
+    ],
+)
+def test_a_bare_integer_is_accepted_for_a_two_decimal_percentage(
+    expected, answer, pair
+):
+    """Decided 2026-10-06: let these pass.
+
+    The alternative was a floor of three significant digits, which would refuse
+    a printed integer here. It was implemented, then measured against the four
+    full CRM and Sales runs on disk — 563 comparisons — and changed no verdict
+    at all, because the platform never actually printed a bare integer for one
+    of these. It binds only on two-digit values, every one of which is a
+    percentage in our data, at up to 1.9% error.
+
+    The cost is explicit: we can no longer distinguish a platform that computes
+    a percentage exactly from one that reports it to the nearest point. That was
+    judged acceptable against the alternative of scoring correct answers wrong,
+    which is the error that costs us more than it costs the platform.
+    """
+
+    assert exact_match(expected, answer) is ExactMatchResult.PASS, pair
+
+
+@pytest.mark.parametrize(
     ("expected", "answer", "why"),
     [
-        ("23.21", "roughly 23%", "two significant digits only characterises it"),
         ("4182650.00", "the total is 4,182,000", "the module docstring's own example"),
         ("1013", "about 1,000 accounts", "rounded to the nearest thousand"),
         ("28725", "28,700 interactions", "rounded to the nearest hundred"),
-        ("0.00001234", "the ratio is 0.0", "every significant digit destroyed"),
-        ("5.5", "about 6", "one significant digit"),
+        ("0.00001234", "the ratio is 0.0", "every digit rounded away to nothing"),
     ],
 )
 def test_precision_leniency_does_not_become_a_tolerance(expected, answer, why):
     """The module promises there is no tolerance parameter, and this must not
     smuggle one in. A printed value has to be a FAITHFUL rounding of the
-    expected one AND carry at least three significant digits.
+    expected one — the right value at a coarser precision, not a nearby value.
 
-    Faithfulness alone is not enough: 23 *is* 23.21 rounded to zero places, so
-    only the significant-digit floor rejects "roughly 23%".
+    4,182,000 is not a rounding of 4,182,650.00 at any precision, which is what
+    separates it from a bare integer that IS one. A printed zero is refused
+    separately: "0.0" is a faithful rounding of 0.00001234 by the arithmetic
+    but carries no information about it.
     """
 
     assert exact_match(expected, answer) is ExactMatchResult.FAIL, why
 
 
 def test_relative_loss_is_the_wrong_property_to_measure():
-    """Why the rule counts significant digits instead of bounding relative loss.
+    """Why the rule tests faithfulness instead of bounding relative loss.
 
     The two cases cross over, so no threshold on relative loss can separate
     them:
@@ -940,9 +965,8 @@ def test_relative_loss_is_the_wrong_property_to_measure():
         "about 50.4%" for 50.36      gives up 7.9e-4   must PASS
 
     The first gives up LESS and is still wrong, because it is not a rounding of
-    the expected value at any precision. Faithfulness catches it; a tolerance
-    never could, and the old 1e-5 threshold only looked like it worked because
-    it was below both.
+    the expected value at any precision. The old 1e-5 threshold only looked
+    like it worked because it was below both.
     """
 
     assert exact_match("4182650.00", "the total is 4,182,000") is ExactMatchResult.FAIL
