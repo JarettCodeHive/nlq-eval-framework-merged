@@ -6,6 +6,7 @@ import argparse
 
 import pytest
 
+import main as main_module
 from generators.domain_registry import DATASET_DOMAINS
 from generators.domain_registry import dataset_domain
 from main import COMMANDS
@@ -108,7 +109,12 @@ def test_build_dataset_dispatches_selected_profile(
 ) -> None:
     calls: list[str] = []
 
+    class _Settings:
+        release_version = "v-test"
+
     class _Pipeline:
+        settings = _Settings()
+
         def run(self) -> str:
             calls.append("run")
             return f"tmp/generated/{domain}/dev/imperfect"
@@ -130,6 +136,7 @@ def test_build_dataset_dispatches_selected_profile(
     output = capsys.readouterr().out
     assert f"{display_name} dataset build passed" in output
     assert "profile: dev" in output
+    assert "release_version: v-test" in output
     assert f"tmp/generated/{domain}/dev/imperfect" in output
 
 
@@ -203,12 +210,33 @@ def test_finance_imperfections_run_through_root_handler(
     assert "transaction_boundary_dates: 4" in output
 
 
-@pytest.mark.parametrize("domain", ("sales", "finance", "logistics"))
-def test_qa_commands_remain_crm_only(domain: str) -> None:
-    with pytest.raises(
-        NotImplementedError, match="Q&A commands currently support only crm"
-    ):
-        run_qa_generate_pairs(_args("qa-generate-pairs", domain=domain))
+@pytest.mark.parametrize(
+    "domain", ("sales", "finance", "logistics", "project_management")
+)
+def test_qa_generate_pairs_dispatches_to_any_configured_domain(
+    domain: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QA commands were intentionally opened up beyond CRM (QA_GENERATE is a
+    dict keyed by domain, same shape as QA_STAGE/QA_VALIDATE/QA_REPHRASE) -
+    this replaces the old test_qa_commands_remain_crm_only, which asserted
+    the now-superseded CRM-only restriction and started failing the moment
+    sales/finance/logistics/project_management were deliberately wired in."""
+
+    calls: list[str] = []
+    monkeypatch.setitem(
+        main_module.QA_GENERATE,
+        domain,
+        lambda selected: calls.append(selected),
+    )
+
+    run_qa_generate_pairs(_args("qa-generate-pairs", domain=domain))
+
+    assert calls == ["dev"]
+
+
+def test_qa_generate_pairs_rejects_an_unconfigured_domain() -> None:
+    with pytest.raises(NotImplementedError, match="Q&A commands currently support"):
+        run_qa_generate_pairs(_args("qa-generate-pairs", domain="human_resources"))
 
 
 def _args(command: str, domain: str = "sales") -> argparse.Namespace:

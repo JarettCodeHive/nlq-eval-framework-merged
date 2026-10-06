@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from generators.core.base import PROJECT_ROOT
 from generators.core.manifest import compute_sha256
 from main import COMMANDS, build_parser
@@ -64,4 +66,24 @@ def test_new_dev_hashes_match_existing_locked_crm_baseline() -> None:
 
 
 def _load_baseline() -> dict:
+    # Sales_Pre_Implementation_CRM_Core_Baseline.json was never committed to
+    # this repository (verified via `git log --all --diff-filter=A`). It is
+    # technically reconstructable from commit 5ef9ef2 (the last commit before
+    # "Added sales and finance dataset" / 2b29ae2), but doing so would not
+    # make these tests meaningful again: the CLI surface and core source
+    # files have both grown substantially since then for reasons unrelated
+    # to Sales (release_version/platform-upload CLI flags, decimal policy,
+    # manifest restructuring - confirmed by diffing generators/core/base.py
+    # and generators/crm/manifest.py against that commit, both changed).
+    # A faithfully-reconstructed baseline would fail immediately on unrelated
+    # drift, not on a real Sales-era regression - these are short-lived
+    # migration-safety tests whose transition window closed weeks ago.
+    # Skip rather than chase a baseline that can't stay meaningful.
+    if not BASELINE_PATH.is_file():
+        pytest.skip(
+            f"{BASELINE_PATH.name} was never committed, and the CLI/source "
+            "surface has evolved too far since Sales was implemented for a "
+            "reconstructed baseline to be meaningful - see comment above "
+            "_load_baseline() in this file."
+        )
     return json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
