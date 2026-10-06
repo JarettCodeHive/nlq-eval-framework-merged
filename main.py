@@ -74,6 +74,7 @@ from qa_pairs.generator.sales.validate_sales import (
 )
 from qa_pairs.utils.release_bundle import default_release_version
 from qa_pairs.utils.release_bundle import component_dir
+from qa_pairs.utils.release_bundle import release_root
 from qa_pairs.utils.release_bundle import use_release_version
 
 from judge.build_input import build as build_judge_input
@@ -104,10 +105,34 @@ def _platform_manifest_path(
     )
 
 
-# Commands that are not scoped to one domain/release (score aggregates
-# several domains; rubric just renders a template), so they log to a stable
-# local path instead of a release component directory.
+# Commands that are not scoped to one domain (score aggregates several domains;
+# rubric just renders a template), so they log at the release root next to the
+# combined scorecard rather than inside any one domain's bundle.
 _UNSCOPED_LOG_COMMANDS: frozenset[str] = frozenset({"score", "rubric"})
+
+
+def _agreed_release_version() -> str | None:
+    """The one version every configured domain is on, or None if they differ.
+
+    A cross-domain command has no domain to read a version from, and guessing
+    one — `release_root` would answer with CRM's — files the record of a run
+    under a version that may describe none of its inputs. When the domains
+    agree there is nothing to guess; when they disagree the caller falls back
+    to a path that claims no version at all.
+    """
+
+    config_root = REPO_ROOT / "config" / "generation"
+    if not config_root.is_dir():
+        return None
+    versions = set()
+    for release in sorted(config_root.glob("*/release.json")):
+        try:
+            versions.add(
+                default_release_version(release.parent.name, repo_root=REPO_ROOT)
+            )
+        except ValueError:
+            continue  # a malformed config must not stop the command logging
+    return versions.pop() if len(versions) == 1 else None
 
 
 def _resolve_command_log_path(args: argparse.Namespace) -> Path:
@@ -125,6 +150,14 @@ def _resolve_command_log_path(args: argparse.Namespace) -> Path:
     filename = f"{args.command}_{timestamp}.log"
 
     if args.command in _UNSCOPED_LOG_COMMANDS:
+        # Mirrors where the combined scorecard goes — release/<version>/scorecard/
+        # — so one invocation's deliverable and its log stay in one bundle.
+        version = args.release_version or _agreed_release_version()
+        if version:
+            try:
+                return release_root(version, repo_root=REPO_ROOT) / "logs" / filename
+            except ValueError:
+                pass  # an invalid --version is the command's error to report
         return REPO_ROOT / "logs" / filename
 
     domain = getattr(args, "domain", None) or "shared"

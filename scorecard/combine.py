@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -156,6 +157,38 @@ def _release_version(domain: str) -> str:
             # generation config. The repository default remains deterministic.
             version = "v1.0.0"
     return version
+
+
+def combined_release_version(domains: Sequence[str]) -> str:
+    """The release version a combined scorecard belongs under.
+
+    Each domain resolves its own version, so a combined report has no single
+    version unless its inputs agree. `release_root` would otherwise answer with
+    `default_domain="crm"`, which silently files a sales-only report under
+    CRM's version — a directory whose name describes none of its contents, and
+    which still answers when CRM is not among the combined domains at all.
+
+    An explicit `--version` wins, because that is the operator stating which
+    bundle this belongs to. Without one, disagreement is refused rather than
+    guessed: picking either version would mislabel the other domain's runs.
+    """
+
+    selected = selected_release_version()
+    if selected:
+        return selected
+    if not domains:
+        raise CombineError("no domains to resolve a release version from")
+
+    resolved = {domain: _release_version(domain) for domain in domains}
+    distinct = sorted(set(resolved.values()))
+    if len(distinct) > 1:
+        detail = ", ".join(f"{d}={v}" for d, v in sorted(resolved.items()))
+        raise CombineError(
+            f"the combined domains are on different release versions ({detail}), "
+            f"so this report has no single version to be filed under. Pass "
+            f"--version to say which bundle it belongs to."
+        )
+    return distinct[0]
 
 
 def eval_runs_root(domain: str) -> Path:
@@ -389,7 +422,11 @@ def combine(
 
     moment = now or datetime.now(timezone.utc)
     run_id = f"combined-{moment.strftime('%Y%m%dT%H%M%SZ')}"
-    target = out_dir or combined_report_dir(run_id)
+    # The version comes from the domains actually combined, not from whichever
+    # domain `release_root` happens to default to.
+    target = out_dir or combined_report_dir(
+        run_id, combined_release_version([r.domain for r in inputs])
+    )
 
     blockers = release_blockers(inputs, supplied) if release else []
     mode = "RELEASE" if release and not blockers else "PREVIEW"

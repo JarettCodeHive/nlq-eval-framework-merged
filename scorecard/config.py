@@ -39,12 +39,18 @@ def report_output_dir(domain: str, run_id: str) -> Path:
     return component_dir(domain, "scorecard") / run_id
 
 
-def combined_report_dir(run_id: str) -> Path:
+def combined_report_dir(run_id: str, version: str | None = None) -> Path:
     """Where a multi-domain scorecard is written.
 
     Deliberately not under `release/<version>/<domain>/` — a scorecard covering
     five domains filed under one of them would misrepresent what it is, and the
     baseline it establishes is cross-domain by definition (§14.1).
+
+    `version` must be the version of the runs being combined, which the caller
+    resolves from those domains. Leaving it out falls back to
+    `release_root`'s own default, and that default is `default_domain="crm"` —
+    so a report built from sales at v1.0.1 was filed under v1.0.0 because CRM
+    said so, giving the directory a version that described none of its contents.
     """
 
-    return release_root(repo_root=REPO_ROOT) / "scorecard" / run_id
+    return release_root(version, repo_root=REPO_ROOT) / "scorecard" / run_id

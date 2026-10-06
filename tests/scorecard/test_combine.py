@@ -503,3 +503,67 @@ def test_a_combine_time_tag_is_disclosed_on_the_card(runs, tmp_path: Path) -> No
     text = (out / "scorecard.md").read_text()
 
     assert "supplied at combine time" in text
+
+
+# --- which release version a combined report belongs under ---------------------
+
+
+def _release_config(tmp_path: Path, domain: str, version: str) -> None:
+    directory = tmp_path / "config" / "generation" / domain
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "release.json").write_text(
+        json.dumps({"domain": domain, "release_version": version}), encoding="utf-8"
+    )
+
+
+def test_the_combined_version_comes_from_the_domains_combined(
+    runs, tmp_path: Path
+) -> None:
+    _release_config(tmp_path, "crm", "v1.0.0")
+    _release_config(tmp_path, "sales", "v1.0.0")
+
+    assert mod.combined_release_version(["crm", "sales"]) == "v1.0.0"
+    # ...and CRM is not consulted when it is not one of them.
+    _release_config(tmp_path, "crm", "v9.9.9")
+    assert mod.combined_release_version(["sales"]) == "v1.0.0"
+
+
+def test_domains_on_different_versions_are_refused_not_guessed(
+    runs, tmp_path: Path
+) -> None:
+    """`release_root` answers with `default_domain="crm"`, so a report built
+    from sales at v1.0.1 was filed under release/v1.0.0/scorecard/ because CRM
+    said so — a directory whose version described none of its contents."""
+
+    _release_config(tmp_path, "crm", "v1.0.0")
+    _release_config(tmp_path, "sales", "v1.0.1")
+
+    with pytest.raises(mod.CombineError) as caught:
+        mod.combined_release_version(["crm", "sales"])
+
+    message = str(caught.value)
+    assert "different release versions" in message
+    assert "crm=v1.0.0" in message and "sales=v1.0.1" in message
+    assert "--version" in message  # the error says how to resolve it
+
+
+def test_an_explicit_version_settles_a_disagreement(runs, tmp_path: Path) -> None:
+    """The operator naming a bundle outranks the configs, which is the whole
+    point of passing --version."""
+
+    from qa_pairs.utils.release_bundle import use_release_version
+
+    _release_config(tmp_path, "crm", "v1.0.0")
+    _release_config(tmp_path, "sales", "v1.0.1")
+
+    with use_release_version("v2.0.0"):
+        assert mod.combined_release_version(["crm", "sales"]) == "v2.0.0"
+
+
+def test_the_report_directory_carries_the_version_it_is_given() -> None:
+    from scorecard.config import combined_report_dir
+
+    target = combined_report_dir("combined-X", "v1.0.1")
+    assert target.parent.parent.name == "v1.0.1"
+    assert target.parent.name == "scorecard"
+    assert target.name == "combined-X"

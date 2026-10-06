@@ -452,40 +452,44 @@ def _consume_number(
     return hits or None
 
 
-# How much precision a platform may drop before it is stating a DIFFERENT number
-# rather than printing the same one shorter. Deliberately tiny: it admits cents
-# dropped from a billion (relative loss ~1e-10) and two decimals dropped from
-# four (~3e-6), and admits nothing else observed.
-_RENDER_PRECISION_TOLERANCE = Decimal("1e-5")
-
-
 def _printed_at_lower_precision(
     index: _ActualIndex, field: ExpectedField, used: set[int]
 ) -> list[int]:
     """Positions where the answer prints this number with fewer decimals.
 
-    Observed twice against the live platform, in both domains:
+    Observed repeatedly against the live platform, across both domains:
 
         expected 1339.1438      printed "1339.14"
         expected 2851503384.42  printed "$2,851,503,384"
+        expected 50.36          printed "about 50.4%"
 
-    Both are the expected value *rendered shorter*, which HC-3 protects — it
+    Each is the expected value *rendered shorter*, which HC-3 protects — it
     fails "numeric variance", and dropping cents from 2.8 billion is not
     variance. Scoring them wrong made the platform look worse than it is, which
-    is the error that costs us credibility rather than theirs.
+    is the error that costs us credibility rather than theirs. The third case
+    also printed its own numerator and denominator, 4,928 of 9,786, which
+    divide to exactly the expected 50.36.
 
-    This is NOT a tolerance on the value, and the distinction matters because
-    the module docstring promises there isn't one. Two conditions must BOTH
-    hold, and the first is the real gate:
+    THE RULE: the printed token must be the expected value correctly rounded to
+    whatever precision the platform chose to print — a faithful rendering, not
+    merely a nearby number. That is why 4,182,000 is still refused against
+    4,182,650.00: it is not a rounding of it at any precision. It is also why
+    this is not a tolerance on the value, which the module docstring promises
+    there isn't.
 
-      1. the printed token is the expected value correctly rounded to the
-         precision the platform itself chose to print — a faithful rendering,
-         not merely a nearby number;
-      2. the precision given up is negligible relative to the magnitude.
+    A bare integer therefore counts: "about 22%" is accepted for 22.43, as is
+    "-51" for -50.52. That was a deliberate call (2026-10-06) after the
+    alternative — a floor of three significant digits — was measured and found
+    to change no verdict in the 563 comparisons across the four full CRM and
+    Sales runs on disk. It affects only two-digit values, every one of which is
+    a percentage in our data, at up to 1.9% error. The trade accepted here is
+    that we can no longer distinguish a platform computing a percentage exactly
+    from one reporting it to the nearest point.
 
-    (1) alone would accept "roughly 23%" for 23.21, since 23 is 23.21 rounded
-    to zero places. (2) is what rejects it. Together they also reject the
-    docstring's own counter-example, 4,182,000 against 4,182,650.00.
+    The single exception is a value rounded away to nothing: "0.0" for
+    0.00001234 is a faithful rounding by the arithmetic, but it carries no
+    information about the expected value at all, so a printed zero is refused
+    when the expected value is non-zero.
     """
 
     hits: list[int] = []
@@ -503,10 +507,10 @@ def _printed_at_lower_precision(
         decimals = -printed.as_tuple().exponent
         if decimals < 0:
             continue
+        if printed == 0:
+            continue  # every digit rounded away; says nothing about `expected`
         if round(expected, decimals) != printed:
             continue  # not a faithful rendering of the expected value
-        if abs(expected - printed) / abs(expected) >= _RENDER_PRECISION_TOLERANCE:
-            continue  # too much precision given up to still be the same number
         hits.append(pos)
     return hits
 
