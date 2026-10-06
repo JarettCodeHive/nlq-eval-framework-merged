@@ -127,7 +127,9 @@ def _agreed_release_version() -> str | None:
     versions = set()
     for release in sorted(config_root.glob("*/release.json")):
         try:
-            versions.add(default_release_version(release.parent.name, repo_root=REPO_ROOT))
+            versions.add(
+                default_release_version(release.parent.name, repo_root=REPO_ROOT)
+            )
         except ValueError:
             continue  # a malformed config must not stop the command logging
     return versions.pop() if len(versions) == 1 else None
