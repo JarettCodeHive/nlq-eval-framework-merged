@@ -1,45 +1,112 @@
-# CI/CD Status — One-Pager
+# CI/CD — One-Pager
 
-*Last updated 2026-10-06. See PR #13 for the work this reflects.*
+*Last updated 2026-10-07 · PR #13*
 
-## What exists today
+---
 
-### CI — runs automatically on every push/PR to `development` and `main`
-| Job | What it checks | Gate type |
+## 1. CI — automatic, on every push/PR to `development` and `main`
+
+```
+                              push / pull request
+                                      │
+                                      ▼
+                              ┌───────────────┐
+                              │     lint      │   ruff · black · sqlfluff
+                              └───────┬───────┘
+                                      │ (must pass before anything else runs)
+                   ┌──────────────────┼──────────────────┬──────────────────┐
+                   ▼                  ▼                  ▼                  ▼
+            ┌─────────────┐   ┌──────────────┐   ┌───────────────┐  ┌──────────────┐
+            │  qa-pairs   │   │ dataset-gates│   │reproducibility│  │  full-suite  │
+            └─────────────┘   └──────────────┘   └───────────────┘  └──────────────┘
+                   │                  │                  │                  │
+                   ▼                  ▼                  ▼                  ▼
+            all 4 jobs must pass  →  PR shows green  →  safe to merge
+```
+
+### What each job actually checks
+
+| Job | What runs | What it proves | Gate |
+|---|---|---|---|
+| **lint** | `ruff check .` · `black --check .` · `sqlfluff lint` | Code style and SQL syntax are clean | 🔒 Hard |
+| **qa-pairs** | Builds CRM full dataset + Q&A release, runs 63 tests | Contract shape, ground-truth re-execution, scoring, rephrase groups all correct | 🔒 Hard |
+| **dataset-gates** | Builds all 5 domains full, then: **FK integrity gate** · **row-cap assertion** · **cross-domain question uniqueness** | No orphan foreign keys, no table over 250K rows, no question repeated across domains | 🔒 Hard |
+| **reproducibility** | Rebuilds every domain **a second time from scratch** and byte-compares it to the first build | The "clean-room re-run = byte-identical output" guarantee (HC-7) is real, not assumed | 🔒 Hard |
+| **full-suite** | Full `pytest tests/` — generators, judge, scorecard | No regression anywhere else in the codebase | 🔒 Hard |
+
+**Everything above is a hard gate today.** As of this week, there are no skipped checks, no `continue-on-error`, no `--ignore` flags — a real failure anywhere fails the PR, full stop. (That wasn't true until this PR: 17 tests were previously failing-but-ignored; all fixed at the root cause, not papered over — see PR #13 for exactly what each one was.)
+
+---
+
+## 2. CD — the release flow (`release.yml`), manual only
+
+**This never runs automatically.** It costs real LLM API money and writes to the shared Pulse platform — a human clicks "Run workflow" on purpose, every time.
+
+```
+ GitHub Actions tab → "Run workflow" → pick domain + options
+                              │
+                              ▼
+        ┌─────────────────────────────────────────────────┐
+        │         fresh, temporary cloud VM (GitHub's)     │
+        │                                                   │
+        │   1. check-auth        confirm Pulse + judge      │
+        │                        credentials work            │
+        │                        (fails fast if missing)     │
+        │                                                   │
+        │   2. build-dataset     generate the domain's       │
+        │                        CSVs (deterministic, seed)  │
+        │                                                   │
+        │   3. qa-build          stage CSVs into DuckDB,     │
+        │                        execute reference SQL,      │
+        │                        produce the Q&A release     │
+        │                                                   │
+        │   4. dataset-upload    push CSVs to the real       │
+        │                        Pulse platform ─────────────┼──► Pulse's servers
+        │                                                   │     (external, their infra)
+        │   5. judge             ask Pulse the real          │
+        │      (--pulse live)    questions, score the        │
+        │                        real answers                │
+        │                                                   │
+        │   6. score             combine into a              │
+        │                        regression scorecard        │
+        │                                                   │
+        └──────────────────────┬────────────────────────────┘
+                                │  VM is destroyed here — everything on
+                                │  its disk vanishes UNLESS uploaded first
+                                ▼
+                  scorecard + judge logs + Pulse raw responses
+                  uploaded as a GitHub Actions artifact
+                  (downloadable zip, 90-day retention)
+```
+
+### Inputs you choose when triggering it
+
+| Input | What it does | Default |
 |---|---|---|
-| `lint` | ruff, black, sqlfluff (CRM reference DDL) | **Hard** |
-| `qa-pairs` | Builds CRM full dataset + Q&A release, runs `qa_pairs/tests/` (63 tests: contract shape, ground-truth re-execution, scoring, rephrase) | **Hard** |
-| `dataset-gates` | Builds all 5 domains full, then **FK integrity gate**, **row-cap assertion**, **cross-domain question uniqueness** — each a named, independently-reported step | **Hard** |
-| `reproducibility` | **Clean-room rebuild + byte-compare** per domain (HC-7) — real double-build, not a shortcut | **Hard** |
-| `full-suite` | Full `pytest tests/` (generators, judge, scorecard) | **Hard** (was soft/ignored until today — all 17 pre-existing failures fixed at root cause) |
+| `domain` | Which of the 5 domains to evaluate | *(required, pick one)* |
+| `skip_judge` | Stop after step 4 — dry-run build+upload only, **zero LLM/Pulse cost** | off |
+| `release` | Produce an *official* baseline-comparison scorecard | off — **must stay off until calibration is done (see below)** |
+| `platform_version` | Tag this run for baseline comparison | optional |
 
-### CD — `release.yml`, manually triggered only (`workflow_dispatch`)
-```
-build-dataset → qa-build → check-auth → dataset-upload → judge (--pulse live) → score
-```
-- Never fires on push/PR — it spends real LLM API cost and writes to the real shared Pulse org. A human clicks "Run workflow."
-- `skip_judge` input: dry-runs just build+upload, no LLM/Pulse cost.
-- `release` input: produces an official baseline-comparison scorecard — **gated on calibration, which hasn't happened for any domain yet, so this must stay unchecked today.**
-- Outputs (scorecard CSV+PDF, judge logs, Pulse raw responses) are uploaded as a GitHub Actions artifact, since `release/` is gitignored and nothing in this flow is committed to git anywhere else.
+### Why nothing here touches git
 
-## What's pending — and who it needs
+Dataset generation is **fully deterministic** (fixed seed, no wall-clock, no network calls) — the same code always produces the same bytes. So git only needs to store the *recipe* (generator code + config), never the *output* (CSVs, DuckDB file). Those are regenerated fresh, identically, every single run — that's exactly what the `reproducibility` CI job (above) proves continuously. The only thing that **can't** be regenerated is the judge/scorecard result, because it reflects Pulse's real answer at that moment in time — that's the one thing the workflow explicitly preserves as an artifact.
+
+---
+
+## 3. What's pending before CD can actually run
 
 | # | Item | Blocks | Owner |
 |---|---|---|---|
-| 1 | Add `PULSE_BASE_URL` / `PULSE_AUTH_TOKEN` / `PULSE_ORG_ID` to repo Actions secrets | CD workflow can't run at all — fails fast at `check-auth` | You (pull fresh token via Chrome DevTools, per `docs/judge_runbook.md`) |
-| 2 | Add `FLOODGATE_NARRATIVE_CERT` / `FLOODGATE_NARRATIVE_KEY` to repo Actions secrets | Same — judge step needs server/CI auth, not the local Mac OIDC flow | You / whoever owns Floodgate service credentials |
-| 3 | Judge calibration — ≥10 real human-graded anchors per domain | `release`-flagged runs (official baseline) stay blocked without it | You + Platform Owner (CRM calibration session) |
-| 4 | Branch protection + CODEOWNERS on `development`/`main` | Nothing today stops a direct push bypassing review | Repo admin (GitHub Settings, not code) |
-| 5 | Decide on Git LFS vs. accepting artifact-only persistence | No release artifact is versioned in git today — CD's uploaded Actions artifacts are the only record, and they expire (90-day default) | You / Engagement Lead |
-| 6 | A fresh, current baseline once 1–3 are done | The one existing baseline (CRM 52.84%, Sales 64.42%) predates recent fixes and the 5-domain pair expansion — it's stale | You |
+| 1 | `PULSE_BASE_URL` / `PULSE_AUTH_TOKEN` / `PULSE_ORG_ID` as repo Actions secrets | CD fails immediately at `check-auth` without these | You — pull a fresh token via Chrome DevTools (`docs/judge_runbook.md`) |
+| 2 | `FLOODGATE_NARRATIVE_CERT` / `FLOODGATE_NARRATIVE_KEY` as repo Actions secrets | Judge step needs server/CI auth — the local Mac OIDC flow doesn't work on a cloud runner | You / Floodgate credential owner |
+| 3 | Judge calibration — ≥10 real human-graded anchors per domain | `release`-flagged runs stay blocked without it | You + Platform Owner |
+| 4 | Branch protection + CODEOWNERS | Nothing today stops a direct push bypassing review | Repo admin (GitHub setting, not code) |
+| 5 | Git LFS vs. artifact-only decision | No scorecard/judge result is permanently versioned today — artifacts expire after 90 days | You / Engagement Lead |
+| 6 | A fresh baseline once 1–3 are done | The one existing baseline (CRM 52.84%, Sales 64.42%) predates recent fixes and the 5-domain expansion — it's stale | You |
 
-## How to actually run it, once secrets exist
+---
 
-1. Go to the repo's **Actions** tab → **release** workflow → **Run workflow**.
-2. Pick a domain, leave `release` unchecked (until calibration is done), leave `skip_judge` unchecked.
-3. Watch the job; download the artifact at the end for the scorecard PDF.
-4. Repeat per domain, or extend the workflow to loop all 5 in one dispatch once this is proven out.
+## Bottom line
 
-## The honest caveat
-
-CI is now fully real — every gate in it, including the expensive reproducibility one, actually fails if something's wrong, and nothing is skipped or soft-gated anymore. CD exists as code but has never been run end-to-end, because items 1–2 above aren't done yet. Everything downstream of "does Pulse say the answer is right" (calibration, a real baseline, the accuracy gate) is still blocked on those two secrets plus a real calibration pass — that's the actual critical path, not more CI/CD engineering.
+**CI is fully real** — every check fails loudly if something's actually wrong, nothing is soft-gated. **CD is built and ready** but has never run, because it's waiting on two secrets (items 1–2) that only you or the Floodgate credential owner can provide. Once those exist, the rest of the evaluation loop (calibration, a real baseline, the accuracy gate) can finally start — that's the actual critical path, not more CI/CD engineering.
