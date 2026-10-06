@@ -362,3 +362,97 @@ def _loaded_globals(code) -> set[str]:
         if hasattr(constant, "co_names"):
             names |= _loaded_globals(constant)
     return names
+
+
+# --- where a command's console log is filed ------------------------------------
+
+
+def _log_path(command: str, monkeypatch, tmp_path: Path, **extra) -> Path:
+    monkeypatch.setattr(main_module, "REPO_ROOT", tmp_path)
+    args = argparse.Namespace(command=command, release_version=None, **extra)
+    return main_module._resolve_command_log_path(args)
+
+
+def _release_config(tmp_path: Path, domain: str, version: str) -> None:
+    directory = tmp_path / "config" / "generation" / domain
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "release.json").write_text(
+        json.dumps({"domain": domain, "release_version": version}), encoding="utf-8"
+    )
+
+
+def test_a_cross_domain_command_logs_in_the_bundle_it_writes_to(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """`score` writes its scorecard to release/<version>/scorecard/, so sending
+    its log to the repo root split one invocation across two places."""
+
+    _release_config(tmp_path, "crm", "v1.0.0")
+    _release_config(tmp_path, "sales", "v1.0.0")
+
+    path = _log_path("score", monkeypatch, tmp_path)
+
+    assert path.parent == tmp_path / "release" / "v1.0.0" / "logs"
+
+
+def test_an_explicit_version_decides_where_a_cross_domain_command_logs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _release_config(tmp_path, "crm", "v1.0.0")
+    monkeypatch.setattr(main_module, "REPO_ROOT", tmp_path)
+    args = argparse.Namespace(command="score", release_version="v2.0.0")
+
+    path = main_module._resolve_command_log_path(args)
+
+    assert path.parent == tmp_path / "release" / "v2.0.0" / "logs"
+
+
+def test_disagreeing_domains_make_a_cross_domain_log_claim_no_version(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Filing the record of a sales+crm run under either version would label it
+    with a version that describes only half its inputs, so it claims neither."""
+
+    _release_config(tmp_path, "crm", "v1.0.0")
+    _release_config(tmp_path, "sales", "v1.0.1")
+
+    path = _log_path("score", monkeypatch, tmp_path)
+
+    assert path.parent == tmp_path / "logs"
+
+
+def test_a_malformed_release_config_still_lets_the_command_log(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Logging must never be the thing that fails a run."""
+
+    _release_config(tmp_path, "crm", "v1.0.0")
+    broken = tmp_path / "config" / "generation" / "sales"
+    broken.mkdir(parents=True, exist_ok=True)
+    (broken / "release.json").write_text(json.dumps({"domain": "sales"}), "utf-8")
+
+    path = _log_path("score", monkeypatch, tmp_path)
+
+    # The one readable config still agrees with itself.
+    assert path.parent == tmp_path / "release" / "v1.0.0" / "logs"
+
+
+def test_a_domain_scoped_full_run_logs_inside_that_domains_bundle(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _release_config(tmp_path, "crm", "v1.0.0")
+
+    path = _log_path("judge", monkeypatch, tmp_path, domain="crm", profile="full")
+
+    assert path.parent == tmp_path / "release" / "v1.0.0" / "crm" / "logs"
+
+
+def test_a_dev_run_logs_under_tmp_and_never_in_a_release_bundle(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _release_config(tmp_path, "crm", "v1.0.0")
+
+    path = _log_path("judge", monkeypatch, tmp_path, domain="crm", profile="dev")
+
+    assert "release" not in path.parts
+    assert path.parent == tmp_path / "tmp" / "generated" / "crm" / "dev" / "logs"
