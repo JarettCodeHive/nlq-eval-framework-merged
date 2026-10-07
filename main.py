@@ -1003,7 +1003,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     judge_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
-        command_argv=["--allow-uncalibrated", "--limit", "3"],
+        command_argv=["--allow-uncalibrated", "--limit", "5"],
         release_version=release_version,
     )
     stages = (
