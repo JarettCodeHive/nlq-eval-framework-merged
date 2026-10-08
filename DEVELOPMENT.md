@@ -23,6 +23,34 @@ Choose one for your shell session; the examples below use this variable:
 DOMAIN=crm
 ```
 
+## First Build Track
+
+CRM remains the reference implementation. Sales, Finance, Project Management,
+and Logistics reuse the shared deterministic core and release conventions
+while retaining their own business semantics. Finance alone adds synthetic FX
+conversion; the other implemented domains are USD-only.
+
+## Current Status
+
+The engagement-focused CRM generator, one-command dataset build, and CRM Q&A
+workflow are implemented.
+
+Sales is implemented through configuration, generation, distributions,
+imperfections, validation, release artifact generation, reproducibility, root
+CLI dispatch, and its full automated test suite. Sales dev workflow verification
+and full release generation remain the next steps in
+`Sales_Dataset_Generation_Implementation_Plan.md`.
+
+Finance is implemented through configuration, deterministic generation,
+fixed-point accounting and FX behavior, validation, release artifacts,
+reproducibility, root CLI dispatch, and its full automated test suite.
+
+Project Management and Logistics are implemented through configuration,
+deterministic generation, distributions, controlled imperfections, persisted
+validation, release artifacts, clean-room reproducibility, root CLI dispatch,
+and domain-specific automated test suites. Their dev workflow verification and
+final release generation remain separate acceptance steps.
+
 ## End-to-End Pipeline
 
 After the credentials pass `check-auth`, build the dataset and Q&A pairs,
@@ -47,6 +75,7 @@ Use `build-dataset` for the complete generation and validation workflow:
 ```bash
 python main.py build-dataset --domain "$DOMAIN" --profile dev
 python main.py build-dataset --domain "$DOMAIN" --profile full
+python main.py build-dataset --domain "$DOMAIN" --profile full --version v1.0.0
 ```
 
 The `dev` profile writes staged output under
@@ -89,6 +118,7 @@ confirm that release first, then run:
 
 ```bash
 python main.py qa-build --domain crm --profile full
+python main.py qa-build --domain crm --profile full --version v1.0.0
 ```
 
 Replace `crm` with `sales` for Sales. The Q&A package shares the dataset's
@@ -105,7 +135,8 @@ release/<version>/<domain>/qa_pairs/
 2. `qa-validate-dataset` validates the staged data and required joins.
 3. `qa-generate-pairs` generates and SQL-verifies the complete pair set.
 
-It does not generate review fixtures or rephrase variants.
+For CRM it also generates the required rephrase-group variants; review-only
+seed fixtures remain a separate command for every domain.
 
 ### Advanced Q&A commands
 
@@ -141,12 +172,13 @@ runs into one cross-domain scorecard.
 
 ### Credentials and connectivity
 
-Live judging needs the judge-provider and Pulse credentials in `judge/.env`.
-Copy the annotated example, fill in the required values, and preflight both
-services before spending time on a run:
+Live judging needs the judge-provider and Pulse credentials in `.env` **at
+the repository root** — one file configures the judge, the Pulse client and
+the Studio uploader. Copy the annotated example, fill in the required values,
+and preflight both services before spending time on a run:
 
 ```bash
-cp judge/.env.example judge/.env
+cp .env.example .env
 python main.py check-auth --domain "$DOMAIN"
 ```
 
@@ -168,9 +200,38 @@ project.
 The browser-sourced Pulse JWT normally lasts about one hour. Without refresh,
 a run that cannot fit within its remaining lifetime is refused before it
 starts. Configure the `PULSE_REFRESH_*` values described in
-`judge/.env.example` to let the client renew during a run. The example also
+`.env.example` to let the client renew during a run. The example also
 documents how to probe the refresh chain and the currently unconfirmed response
 shape; do not assume refresh works until that probe passes.
+
+#### Getting the Pulse credentials
+
+There is no API-key page; every value is captured from a browser session. Sign
+in to Claris Studio QA in Chrome, open a chat, open DevTools → Network. **Two
+requests carry everything.**
+
+**1. `GET https://api-qa.platform.claris.com/org/<ORG_ID>/chat?query=<base64>`**
+— the chat-history request the UI fires whenever a chat is open.
+
+- `PULSE_AUTH_TOKEN` — the `Authorization: Bearer …` request header (~1 hour life)
+- `PULSE_ORG_ID` — the integer path segment, `/org/<ORG_ID>/chat` (QA: `4104`)
+
+**2. `POST https://api-qa.platform.claris.com/auth/token`** — read the **request
+body**, not a header, and not the response.
+
+- `PULSE_REFRESH_TOKEN` — the long-lived Cognito refresh token. With it the client
+  re-mints hour-long tokens by itself, which is what makes a 2-hour run possible.
+- `PULSE_COGNITO_CLIENT_ID` — the `clientID` field in the same body.
+
+Verify the chain before a long run: `python judge/pulse_auth.py --probe`
+
+> **Corporate network — three hosts must be reachable**, each a separate
+> allowlist entry: `cognito-idp.us-west-2.amazonaws.com` (Cognito refresh),
+> `studio-qa.platform.claris.com` (token exchange), and
+> `api-qa.platform.claris.com` (the chat endpoint). A blocked `studio-qa` is the
+> one that bites — it is only reached after Cognito succeeds, so the failure reads
+> as a platform fault rather than a missing entry. `floodgate.g.apple.com` is
+> needed for the judge, separately.
 
 ### Resolved inputs and judge input construction
 
@@ -226,20 +287,25 @@ certify a release or establish an official baseline.
 
 ### Calibration and rubric
 
-Calibration scores the independently reviewed anchors in
-`judge/anchors/<domain>.json` and writes
-`judge/.calibration/<domain>.passed.json` only when agreement passes:
+Calibration scores independently reviewed anchors in
+`judge/anchors/<domain>.json`. Calibration needs ≥10 human-graded anchors per
+domain (§10.2); export candidates from a scored run, grade them, and import
+them back before calibrating:
 
 ```bash
+python main.py anchors-export --domain crm --profile full
+# fill the human_* columns, reconcile between BOTH graders, then:
+python main.py anchors-import --domain crm --sheet <the filled sheet>
 python main.py calibrate --domain crm
 python main.py rubric
 ```
 
-The CRM anchors are currently quarantined as `crm.provisional.json` pending the
-§10.2 Platform Owner session, so CRM calibration intentionally cannot produce a
-release marker yet. `rubric` renders `docs/judge_rubric.pdf` from the same Jinja
-templates used by the judge, preventing the signed document from drifting from
-the scored prompt.
+Calibration writes `judge/.calibration/<domain>.passed.json` only when
+agreement passes. The CRM anchors are currently quarantined as
+`crm.provisional.json` pending the §10.2 Platform Owner session, so CRM
+calibration intentionally cannot produce a release marker yet. `rubric`
+renders `docs/judge_rubric.pdf` from the same Jinja templates used by the
+judge, preventing the signed document from drifting from the scored prompt.
 
 ### Run artifacts
 
@@ -300,7 +366,7 @@ The configured model is selected in this order:
 3. `model` in `config/judge/default.json`
 
 The per-domain pin makes a run reproducible from committed configuration.
-Credentials remain in `judge/.env`; they must not be committed.
+Credentials remain in `.env` at the repository root; they must not be committed.
 
 ## Individual Stages and Troubleshooting
 
@@ -420,3 +486,4 @@ continue to evolve.
 - [Judge module documentation](judge/README.md)
 - [Q&A module documentation](qa_pairs/README.md)
 - [Generator documentation](generators/README.md)
+- [Scorecard documentation](scorecard/README.md)
