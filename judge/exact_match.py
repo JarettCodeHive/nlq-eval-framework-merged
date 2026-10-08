@@ -149,6 +149,67 @@ _WS = re.compile(r"\s+")
 _LABEL_MAX_WORDS = 6
 _LABEL_MAX_CHARS = 60
 
+# A T5 trend record ends in one of these words (generator-emitted, e.g.
+# "59449126.42 | 2345667.61 | -57103458.81 | -96.05 | down"). The platform
+# never writes a trend as a signed number — "a decrease of $57,103,458.81",
+# never "-$57,103,458.81" — so a record shaped like this gets two relaxations
+# scoped to it alone, applied nowhere else:
+#   1. its negative numeric fields (the absolute/percent change) also accept
+#      the unsigned magnitude, since the sign is prose, not a digit;
+#   2. the direction word itself accepts the synonyms a human would actually
+#      write, not only the literal token the generator used.
+# Both relaxations require the direction word to still be found and still be
+# near the trend's own numbers (see `_label_owns_a_value`), so a platform that
+# reports the wrong direction, or omits it, still fails.
+_DIRECTION_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "up": (
+        "up",
+        "increase",
+        "increased",
+        "increasing",
+        "rose",
+        "rise",
+        "rising",
+        "risen",
+        "grew",
+        "grow",
+        "growth",
+        "higher",
+        "climbed",
+        "climbing",
+        "gained",
+        "gain",
+    ),
+    "down": (
+        "down",
+        "decrease",
+        "decreased",
+        "decreasing",
+        "decline",
+        "declined",
+        "declining",
+        "drop",
+        "dropped",
+        "dropping",
+        "fell",
+        "fall",
+        "fallen",
+        "falling",
+        "lower",
+        "reduced",
+        "reduction",
+        "shrank",
+        "shrunk",
+    ),
+    "flat": (
+        "flat",
+        "unchanged",
+        "stable",
+        "steady",
+        "flatlined",
+    ),
+}
+
 
 class FieldKind(str, Enum):
     NUMERIC = "numeric"
@@ -385,11 +446,22 @@ def _find_label(index: _ActualIndex, label: str) -> list[tuple[int, int]]:
     Falls back to a whitespace-insensitive search so a CamelCase category value
     like `CustomerEducation` still matches a platform rendering of "Customer
     Education". Nothing else is relaxed — this is not fuzzy matching.
+
+    Word-bounded: a short label like "down" must not match inside an unrelated
+    word like "breakdown". Without this, the match is real but meaningless —
+    it is scored for proximity to a value as if the platform had actually
+    written the word, producing a misleading "too far from its value" failure
+    for a label that was never really there.
     """
     needle = _WS.sub(" ", label.strip().lower())
     if not needle:
         return []
-    spans = [(m.start(), m.end()) for m in re.finditer(re.escape(needle), index.view)]
+    pattern = re.escape(needle)
+    if needle[0].isalnum():
+        pattern = r"\b" + pattern
+    if needle[-1].isalnum():
+        pattern = pattern + r"\b"
+    spans = [(m.start(), m.end()) for m in re.finditer(pattern, index.view)]
     if spans:
         return spans
     tight_needle = needle.replace(" ", "")
@@ -403,21 +475,43 @@ def _find_label(index: _ActualIndex, label: str) -> list[tuple[int, int]]:
     return out
 
 
-def _attachment_cost(span: tuple[int, int], value_pos: int) -> int:
+def _find_direction(index: _ActualIndex, direction: str) -> list[tuple[int, int]]:
+    """Spans for a T5 trend direction word, accepting its natural synonyms.
+
+    `direction` is the literal generator token ("up"/"down"/"flat"); the
+    platform almost never writes that exact word, so this searches every
+    synonym in `_DIRECTION_SYNONYMS` and pools the spans. Unknown words (not
+    one of the three) fall back to a literal search, same as any other label.
+    """
+    words = _DIRECTION_SYNONYMS.get(direction.strip().lower(), (direction,))
+    spans: list[tuple[int, int]] = []
+    for word in words:
+        spans.extend(_find_label(index, word))
+    return spans
+
+
+def _attachment_cost(span: tuple[int, int], value_pos: int) -> tuple[bool, int]:
     """How strongly a label span at `span` claims the value at `value_pos`.
 
-    Distance is measured from the label's near edge, and a label that FOLLOWS
-    its value is charged double. Both choices encode how the platform actually
-    writes these answers — "Awareness led with 35,726" and "Awareness | 35726"
-    put the label first — so a trailing label only wins when it is markedly
-    closer, as in "35,726 campaigns for Awareness".
+    Returns `(follows, cost)`. Distance is measured from the label's near
+    edge, and a label that FOLLOWS its value is charged double. Both choices
+    encode how the platform actually writes these answers — "Awareness led
+    with 35,726" and "Awareness | 35726" put the label first — so a trailing
+    label only wins when no preceding label is in play at all (see
+    `_label_owns_a_value`): for a list like "Delivered shipments total
+    10,560, Shipped shipments total 4,717, ...", the gap from one item's
+    value to the NEXT item's label is only a word or two — doubling that short
+    gap can still beat the current item's own (longer) connector phrase on
+    raw distance alone, which is what let a later record's label outrank the
+    correct one by a couple of characters. `follows` lets the caller refuse to
+    let that happen whenever an actual preceding label is anywhere in range.
     """
     start, end = span
     if end <= value_pos:
-        return value_pos - end
+        return False, value_pos - end
     if start > value_pos:
-        return (start - value_pos) * 2
-    return 0  # overlapping: a label containing digits, already excluded upstream
+        return True, (start - value_pos) * 2
+    return False, 0  # overlapping: a label containing digits, already excluded upstream
 
 
 # --- comparison -------------------------------------------------------------
@@ -450,6 +544,19 @@ def _consume_number(
         if not hits:
             hits = _printed_at_lower_precision(index, field, used)
     return hits or None
+
+
+# "about $79.42 million" for 79421787.31 — a word-scaled rendering is still a
+# faithful rounding, just with the trailing zeros spelled out rather than
+# printed. Checked immediately after the token in `_printed_at_lower_precision`
+# only; it never changes what `_NUMBER_RE` tokenises, so it cannot affect any
+# exact-value match elsewhere.
+_MAGNITUDE_WORDS: dict[str, int] = {
+    "thousand": 3,
+    "million": 6,
+    "billion": 9,
+}
+_MAGNITUDE_RE = re.compile(r"\s{0,2}(thousand|million|billion)\b", re.IGNORECASE)
 
 
 def _printed_at_lower_precision(
@@ -509,8 +616,26 @@ def _printed_at_lower_precision(
             continue
         if printed == 0:
             continue  # every digit rounded away; says nothing about `expected`
-        if round(expected, decimals) != printed:
-            continue  # not a faithful rendering of the expected value
+        if round(expected, decimals) == printed:
+            hits.append(pos)
+            continue
+        # "$79.42 million" for 79421787.31: the token alone (79.42) is not a
+        # faithful rounding of `expected` at its own precision, but it is one
+        # once scaled by the magnitude word immediately following it.
+        tail = index.view[pos + len(token) : pos + len(token) + 10]
+        magnitude_match = _MAGNITUDE_RE.match(tail)
+        if magnitude_match is None:
+            continue
+        extra_digits = _MAGNITUDE_WORDS[magnitude_match.group(1).lower()]
+        scale = Decimal(10) ** extra_digits
+        scaled = printed * scale
+        if scaled == 0:
+            continue
+        effective_decimals = (
+            decimals - extra_digits
+        )  # may be negative: tens, hundreds, ...
+        if round(expected, effective_decimals) != scaled:
+            continue  # not a faithful rendering of the expected value, scaled
         hits.append(pos)
     return hits
 
@@ -546,12 +671,24 @@ def _label_owns_a_value(
             (_attachment_cost(span, value_pos), idx)
             for idx, _raw, span in label_occurrences
         ]
-        winning_cost = min(cost for cost, _ in costs)
-        if nearest is None or winning_cost < nearest:
-            nearest = winning_cost
-        if winning_cost > limit:
-            continue  # nothing is close enough to claim this value
-        if any(cost == winning_cost and idx == record_index for cost, idx in costs):
+        in_range = [(cost, idx) for cost, idx in costs if cost[1] <= limit]
+        # A preceding label in range always outranks a following one, however
+        # close the following one measures — see _attachment_cost. Only when
+        # nothing precedes the value within range do following labels compete
+        # on raw distance, which is the legitimate "N for LABEL" shape.
+        preceding_in_range = [(cost, idx) for cost, idx in in_range if not cost[0]]
+        pool = preceding_in_range or in_range
+        if not pool:
+            cost_values = [cost for cost, _ in costs]
+            if cost_values:
+                best = min(cost_values, key=lambda c: c[1])[1]
+                if nearest is None or best < nearest:
+                    nearest = best
+            continue
+        winning_cost, _ = min(pool, key=lambda item: item[0][1])
+        if nearest is None or winning_cost[1] < nearest:
+            nearest = winning_cost[1]
+        if any(cost == winning_cost and idx == record_index for cost, idx in pool):
             return True, nearest
     return False, nearest
 
@@ -576,6 +713,19 @@ def evaluate_answer(
         f.kind in (FieldKind.MIXED, FieldKind.PROSE) for r in records for f in r
     )
 
+    # A trend record (§ comment on _DIRECTION_SYNONYMS): its last field is a
+    # LABEL naming up/down/flat and it has at least one NUMERIC sibling. The
+    # record_index -> direction-word map drives two scoped relaxations below.
+    trend_direction: dict[int, str] = {}
+    for record_index, record in enumerate(records):
+        if not record or record[-1].kind is not FieldKind.LABEL:
+            continue
+        candidate = record[-1].raw.strip().lower()
+        if candidate in _DIRECTION_SYNONYMS and any(
+            f.kind is FieldKind.NUMERIC for f in record
+        ):
+            trend_direction[record_index] = candidate
+
     checks = 0
     used_numeric: set[int] = set()
     used_date: set[int] = set()
@@ -591,18 +741,39 @@ def evaluate_answer(
     for record_index, record in enumerate(records):
         for field in record:
             if field.kind is FieldKind.LABEL:
-                for span in _find_label(index, field.raw):
+                is_direction_field = (
+                    record_index in trend_direction and field is record[-1]
+                )
+                spans = (
+                    _find_direction(index, field.raw)
+                    if is_direction_field
+                    else _find_label(index, field.raw)
+                )
+                for span in spans:
                     label_occurrences.append((record_index, field.raw, span))
 
     # Pass 1 — values.
     record_value_positions: list[list[int]] = []
-    for record in records:
+    for record_index, record in enumerate(records):
         positions: list[int] = []
         for field in record:
             if field.kind is FieldKind.NUMERIC:
                 checks += 1
                 key = f"value:{field.value}"
                 hits = _consume_number(index, field, used_numeric, policy)
+                if (
+                    hits is None
+                    and record_index in trend_direction
+                    and field.value is not None
+                    and field.value < 0
+                ):
+                    # Trend record: the platform says "a decrease of $X", never
+                    # "-$X" — the sign is the verb, not a digit. Direction
+                    # itself is still checked separately below.
+                    magnitude = ExpectedField(
+                        FieldKind.NUMERIC, field.raw, value=-field.value
+                    )
+                    hits = _consume_number(index, magnitude, used_numeric, policy)
                 if hits is None:
                     failures.append(f"value {field.raw!r} not present")
                     unsatisfied.append(key)
