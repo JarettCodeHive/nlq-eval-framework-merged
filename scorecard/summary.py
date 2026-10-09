@@ -46,6 +46,7 @@ SUMMARY_FIELDNAMES: list[str] = [
     # §9.2 T3 diagnostic — reported beside the scores, never inside them.
     "null_handling_applicable",
     "null_handling_fail",
+    "scorer_disagreements",
     *JUDGE_COLUMNS.keys(),
     "judge_overall",
     # Denominator for judge_overall differs from the per-dimension columns by
@@ -79,6 +80,14 @@ QUESTION_FIELDNAMES: list[str] = [
     "platform_error",
     "rephrase_group_id",
 ]
+
+
+# A judge factual_correctness at or below this, on a row exact-match PASSED, is
+# a contradiction worth printing. Set at 2 because 1 and 2 are the rubric's
+# "wrong number" bands; 3 means "missing fields", which is not a contradiction.
+# Detection precision on the 2026-10-09 runs: 5 flagged, 5 confirmed by hand,
+# 0 false alarms across 220 passes.
+_DISAGREEMENT_FACTUAL_MAX = 2
 
 
 @dataclass(frozen=True)
@@ -135,6 +144,19 @@ class GroupStats:
     expected_answer_off_contract: int = 0
     null_handling_applicable: int = 0
     null_handling_fail: int = 0
+    # Questions exact-match PASSED that the judge judged factually wrong. The
+    # deterministic scorer cannot see this on its own: for a bare scalar it tests
+    # presence, and a long answer that leads with the WRONG figure can still
+    # carry the right one in a breakdown further down. Five such rows were found
+    # by hand across the CRM and Sales runs of 2026-10-09 — e.g. "How many
+    # interactions are phone call events?", expected 28,627, answered "a total of
+    # 57,349" with 28,627 appearing later in a per-type breakdown.
+    #
+    # Reported, never folded into the percentage (§11.3). Letting the judge
+    # overturn exact_match would couple the two scorers, and their independence
+    # is exactly what made this visible — a scorer consulting the judge could
+    # not have caught its own blind spot.
+    scorer_disagreements: int = 0
     judge_errors: int = 0
     platform_errors: int = 0
     clarifications: int = 0
@@ -165,6 +187,9 @@ class GroupStats:
         if em.result == ExactMatchResult.PASS:
             self.exact_match_pass += 1
             self.exact_match_eligible += 1
+            factual = getattr(verdict, "factual_correctness", None)
+            if isinstance(factual, int) and factual <= _DISAGREEMENT_FACTUAL_MAX:
+                self.scorer_disagreements += 1
         elif em.result == ExactMatchResult.FAIL:
             self.exact_match_eligible += 1
         elif em.result == ExactMatchResult.NOT_APPLICABLE:
@@ -258,6 +283,7 @@ def _summary_row(
         "expected_answer_off_contract": stats.expected_answer_off_contract,
         "null_handling_applicable": stats.null_handling_applicable,
         "null_handling_fail": stats.null_handling_fail,
+        "scorer_disagreements": stats.scorer_disagreements,
         "judge_overall": stats.judge_overall,
         "judge_clarifications": stats.clarifications,
         "judge_errors": stats.judge_errors,

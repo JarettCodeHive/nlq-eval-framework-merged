@@ -1095,6 +1095,19 @@ def platform_findings(
         )
     )
 
+    disagreements = sum(int(r.get("scorer_disagreements") or 0) for r in domain_rows)
+    if disagreements:
+        out.append(
+            (
+                "Answers the two scorers disagree on",
+                f"{disagreements}",
+                "exact-match PASSED these, and the judge scored them factually "
+                "wrong — the platform led with a different figure and the "
+                "expected value appears only in a later breakdown. Reported, "
+                "never folded into the percentage (Section 11.3)",
+            )
+        )
+
     if ctx.rephrase_findings:
         out.append(
             (
