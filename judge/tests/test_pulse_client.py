@@ -565,9 +565,7 @@ def test_a_retry_is_logged_not_left_to_be_inferred(tmp_path, monkeypatch):
     client = mod.PulseClient.__new__(mod.PulseClient)
     client._client = _Client()
     client._log = _Log()
-    client._settings = mod.PulseSettings(
-        base_url="http://x", org_id=1, auth_token="t"
-    )
+    client._settings = mod.PulseSettings(base_url="http://x", org_id=1, auth_token="t")
     client._token = "t"
     client._token_provider = None
     client._chat_path = "/chat"
