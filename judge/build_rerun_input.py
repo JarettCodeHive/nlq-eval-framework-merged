@@ -139,11 +139,15 @@ def main() -> None:
     if not (run_dir / "results.json").is_file():
         raise SystemExit(f"no results.json under {run_dir}")
 
-    input_csv = args.input_csv or existing_component_path(
-        args.domain, "qa_pairs", f"{args.domain}_judge_input.csv"
+    # The Q&A author's pair CSV is the judge's input; there is no derived copy.
+    from judge.resolve import judge_input_csv
+
+    input_csv = args.input_csv or judge_input_csv(args.domain, "full")
+    # The rerun subset is a judge artifact, so it does NOT go back into the Q&A
+    # package directory that `input_csv` was read from.
+    output = args.output or existing_component_path(
+        args.domain, "judge", f"{args.domain}_rerun_{args.run}.csv"
     )
-    qa_dir = input_csv.parent
-    output = args.output or qa_dir / f"{args.domain}_rerun_{args.run}.csv"
     build(run_dir, input_csv, output, include_ambiguous=args.include_ambiguous)
 
 

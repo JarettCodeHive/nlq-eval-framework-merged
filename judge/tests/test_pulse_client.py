@@ -516,3 +516,66 @@ def test_provider_returning_nothing_fails_loudly():
             lambda: "  ",
             auth_token=_jwt(int(time.time()) + 60),
         ).query("crm-t1-001")
+
+
+def test_a_retry_is_logged_not_left_to_be_inferred(tmp_path, monkeypatch):
+    """A retried question's `latency_s` covers every attempt, so a
+    timeout-then-succeed is indistinguishable from one very slow answer.
+
+    On the CRM run of 2026-10-09 two questions reported 1191.8s and 1112.1s
+    while the platform never self-reported above 290.3s. Those were retries, but
+    proving it meant comparing two numbers and arguing — and the 16% figure
+    quoted for the previous run rested on the same arithmetic. A claim that goes
+    to the Platform Owner should come from the log.
+    """
+
+    import httpx
+
+    from judge import pulse_client as mod
+
+    calls = {"n": 0}
+
+    class _Client:
+        def post(self, path, json, headers):  # noqa: A002 - mirrors httpx
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise httpx.ReadTimeout("timed out")
+            return httpx.Response(
+                200,
+                json={
+                    "response": '{"analysis": "42"}',
+                    "error": False,
+                    "analysis_request": [],
+                },
+                request=httpx.Request("POST", "http://x"),
+            )
+
+        def close(self):
+            pass
+
+    events: list[tuple[str, dict]] = []
+
+    class _Log:
+        def event(self, name, **fields):
+            events.append((name, fields))
+
+        def redact(self, value):
+            return value
+
+    client = mod.PulseClient.__new__(mod.PulseClient)
+    client._client = _Client()
+    client._log = _Log()
+    client._settings = mod.PulseSettings(base_url="http://x", org_id=1, auth_token="t")
+    client._token = "t"
+    client._token_provider = None
+    client._chat_path = "/chat"
+    monkeypatch.setattr(client, "_sleep", lambda attempt: None)
+
+    client._chat("How many accounts?")
+
+    retries = [f for name, f in events if name == "pulse.retry"]
+    assert len(retries) == 1, f"expected one logged retry, got {events}"
+    assert retries[0]["attempt"] == 1
+    assert retries[0]["kind"] == "transport"
+    assert retries[0]["timeout_s"] == client._settings.timeout_s
+    assert "ReadTimeout" in retries[0]["error"]

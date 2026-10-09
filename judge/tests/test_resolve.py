@@ -19,11 +19,16 @@ from judge.resolve import (
     qa_release_dir,
 )
 
+# Mirrors the real package: `question_id` and `tier` are in the contract file,
+# which is what lets the judge read it directly instead of joining the companion.
 CONTRACT_HEADER = (
-    "natural_language_question,expected_answer,reference_sql,reference_tables,"
-    "reference_fields,judge_reference,derivation_rationale\n"
+    "question_id,tier,natural_language_question,expected_answer,reference_sql,"
+    "reference_tables,reference_fields,judge_reference,derivation_rationale\n"
 )
-CONTRACT_ROW = "How many accounts?,72,SELECT 72,accounts,id,There are 72.,count\n"
+CONTRACT_ROW = (
+    "CRM-T1-01-01,T1,How many accounts?,72,SELECT 72,accounts,id,"
+    "There are 72.,count\n"
+)
 COMPANION_HEADER = "question_id,tier,family,scoring_mode,natural_language_question\n"
 COMPANION_ROW = "CRM-T1-01-01,T1,count,exact,How many accounts?\n"
 
@@ -68,7 +73,7 @@ def _repo(tmp_path: Path, *, release_version: str = "v1.0.0") -> Path:
     return tmp_path
 
 
-def _qa_package(repo: Path, version: str, *, joined: bool = False) -> Path:
+def _qa_package(repo: Path, version: str) -> Path:
     directory = repo / "release" / version / "crm" / "qa_pairs"
     directory.mkdir(parents=True)
     (directory / "crm_qa_pairs.csv").write_text(
@@ -77,10 +82,6 @@ def _qa_package(repo: Path, version: str, *, joined: bool = False) -> Path:
     (directory / "crm_qa_pairs_companion.csv").write_text(
         COMPANION_HEADER + COMPANION_ROW, encoding="utf-8"
     )
-    if joined:
-        (directory / "crm_judge_input.csv").write_text(
-            "question_id\n", encoding="utf-8"
-        )
     return directory
 
 
@@ -130,24 +131,37 @@ def test_dev_profile_resolves_the_disposable_package(tmp_path: Path) -> None:
     )
 
 
-def test_the_judge_input_is_joined_on_demand_when_absent(tmp_path: Path) -> None:
+def test_the_judge_scores_the_qa_authors_own_file(tmp_path: Path) -> None:
+    """There is no derived input CSV any more, and nothing is written.
+
+    A joined copy used to be built here, carrying `family` and `scoring_mode`
+    from the companion. `InputRow` has neither field, so the loader dropped them
+    again on the way in and the copy earned nothing. What it cost was a file in
+    the Q&A package directory that `qa-build` owns and wipes, which could then
+    go stale behind a corrected pair.
+    """
+
     repo = _repo(tmp_path)
     package = _qa_package(repo, "v1.0.0")
 
     resolved = judge_input_csv("crm", "full", repo_root=repo)
 
-    assert resolved == package / "crm_judge_input.csv"
+    assert resolved == package / "crm_qa_pairs.csv"
     assert "CRM-T1-01-01" in resolved.read_text(encoding="utf-8")
 
 
-def test_an_existing_judge_input_is_never_rebuilt(tmp_path: Path) -> None:
+def test_resolving_the_input_writes_nothing(tmp_path: Path) -> None:
+    """Resolution is a lookup. A second call must not have changed the tree."""
+
     repo = _repo(tmp_path)
-    package = _qa_package(repo, "v1.0.0", joined=True)
+    package = _qa_package(repo, "v1.0.0")
+    before = sorted(p.name for p in package.iterdir())
 
-    resolved = judge_input_csv("crm", "full", repo_root=repo)
+    judge_input_csv("crm", "full", repo_root=repo)
+    judge_input_csv("crm", "full", repo_root=repo)
 
-    assert resolved.read_text(encoding="utf-8") == "question_id\n"
-    assert resolved == package / "crm_judge_input.csv"
+    assert sorted(p.name for p in package.iterdir()) == before
+    assert not (package / "crm_judge_input.csv").exists()
 
 
 def test_a_missing_package_names_the_command_that_creates_it(tmp_path: Path) -> None:
@@ -184,7 +198,7 @@ def test_dev_pulse_data_points_at_the_imperfect_stage(tmp_path: Path) -> None:
 
 def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
     repo = _repo(tmp_path)
-    package = _qa_package(repo, "v1.0.0", joined=True)
+    package = _qa_package(repo, "v1.0.0")
     (repo / "release" / "v1.0.0" / "crm" / "dataset").mkdir(parents=True)
     monkeypatch.setenv("PLATFORM_VERSION", "pulse-2026.09")
 
@@ -193,7 +207,7 @@ def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
     )
     resolved = apply_resolved_defaults(args, repo_root=repo)
 
-    assert args.input_csv == str(package / "crm_judge_input.csv")
+    assert args.input_csv == str(package / "crm_qa_pairs.csv")
     assert args.pulse_data == str(repo / "release" / "v1.0.0" / "crm" / "dataset")
     assert args.dataset_version == "v1.0.0"
     assert args.platform_version == "pulse-2026.09"
@@ -207,7 +221,7 @@ def test_two_flags_are_enough_for_a_run(tmp_path: Path, monkeypatch) -> None:
 
 def test_explicit_flags_are_never_overridden(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    _qa_package(repo, "v1.0.0", joined=True)
+    _qa_package(repo, "v1.0.0")
 
     args = build_argparser().parse_args(
         [
@@ -233,7 +247,7 @@ def test_explicit_flags_are_never_overridden(tmp_path: Path) -> None:
 
 def test_sql_pulse_refuses_to_guess_when_the_dataset_is_absent(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    _qa_package(repo, "v1.0.0", joined=True)
+    _qa_package(repo, "v1.0.0")
 
     args = build_argparser().parse_args(
         ["--domain", "crm", "--profile", "full", "--pulse", "sql"]
@@ -242,3 +256,31 @@ def test_sql_pulse_refuses_to_guess_when_the_dataset_is_absent(tmp_path: Path) -
         apply_resolved_defaults(args, repo_root=repo)
 
     assert "build-dataset --domain crm --profile full" in str(excinfo.value)
+
+
+def test_a_pair_file_without_question_id_is_refused(tmp_path: Path) -> None:
+    """The retired join sourced `question_id` and `tier` from the COMPANION.
+
+    Reading the contract directly is only safe while the contract carries them.
+    `load_input_csv` treats both as auto-fillable and will synthesize `x-0001`
+    and `"unknown"` from the filename — correct for an ad-hoc CSV behind
+    `--input-csv`, catastrophic for a release package, because every question id
+    in the run would be fabricated and per-tier reporting would be empty with no
+    error anywhere.
+    """
+
+    repo = _repo(tmp_path)
+    package = repo / "release" / "v1.0.0" / "crm" / "qa_pairs"
+    package.mkdir(parents=True)
+    (package / "crm_qa_pairs.csv").write_text(
+        "natural_language_question,expected_answer,reference_sql,judge_reference\n"
+        "How many accounts?,72,SELECT 72,There are 72.\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ResolutionError) as excinfo:
+        judge_input_csv("crm", "full", repo_root=repo)
+
+    message = str(excinfo.value)
+    assert "question_id" in message and "tier" in message
+    assert "fabricated" in message

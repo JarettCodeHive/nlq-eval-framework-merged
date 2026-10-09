@@ -561,6 +561,7 @@ class PulseClient:
                 last_exc = exc
                 if attempt >= last_retryable:
                     raise PulseResponseError(str(exc)) from exc
+                self._log_retry(question, attempt, "status", exc)
                 self._sleep(attempt)
             except Exception as exc:  # transport error (timeout, connection)
                 last_exc = exc
@@ -570,6 +571,7 @@ class PulseClient:
                     raise PulseResponseError(
                         f"Pulse request failed after {attempt + 1} attempt(s): {exc}"
                     ) from exc
+                self._log_retry(question, attempt, "transport", exc)
                 self._sleep(attempt)
             attempt += 1
         raise PulseResponseError(  # pragma: no cover
@@ -649,6 +651,30 @@ class PulseClient:
             merged["content"] = "".join(text_parts).strip()
         merged.setdefault("_sse_events", [o.get("_event") for o in events])
         return merged
+
+    def _log_retry(
+        self, question: str, attempt: int, kind: str, exc: BaseException
+    ) -> None:
+        """Record a retry, because the alternative is inferring it afterwards.
+
+        A retried question's `latency_s` silently covers every attempt, so a
+        timeout-then-succeed looks identical to one very slow answer. On the CRM
+        run of 2026-10-09 two questions reported 1191.8s and 1112.1s while the
+        platform never self-reported above 290.3s — unambiguously retries, but
+        only provable by comparing two numbers and arguing. 10 of 179 requests
+        (6%) crossed the 420s timeout and recovered, and the figure we quoted
+        for the previous run (16%) was inferred the same way. A claim this
+        load-bearing should come from the log, not from arithmetic.
+        """
+
+        self._log.event(
+            "pulse.retry",
+            question_preview=question[:80],
+            attempt=attempt + 1,
+            kind=kind,
+            timeout_s=self._settings.timeout_s,
+            error=f"{type(exc).__name__}: {exc}"[:200],
+        )
 
     def _sleep(self, attempt: int) -> None:
         delay = min(

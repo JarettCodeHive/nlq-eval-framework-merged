@@ -16,13 +16,12 @@ keeps working unchanged.
 
 from __future__ import annotations
 
+import csv
 import json
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from judge.build_input import build as build_judge_input
 from judge.config import REPO_ROOT, load_env, load_judge_config
 from qa_pairs.utils.release_bundle import active_release_version
 from qa_pairs.utils.release_bundle import existing_component_dir
@@ -109,12 +108,6 @@ def qa_release_dir(domain: str, profile: str, *, repo_root: Path | None = None) 
     )
 
 
-def _has_pairs(directory: Path, domain: str) -> bool:
-    return (directory / f"{domain}_judge_input.csv").is_file() or (
-        directory / f"{domain}_qa_pairs.csv"
-    ).is_file()
-
-
 def judge_input_csv(
     domain: str,
     profile: str,
@@ -122,37 +115,62 @@ def judge_input_csv(
     repo_root: Path | None = None,
     build_if_missing: bool = True,
 ) -> Path:
-    """The joined pair CSV the judge consumes, built on demand if it is absent.
+    """The Q&A author's own pair CSV — the file the judge scores.
 
-    The Q&A release deliberately splits the §9.3 contract from the identifiers,
-    so the joined file is a judge-side artifact rather than part of the sealed
-    package. Building it here is the same deterministic join `judge-build-input`
-    performs — same release in, byte-identical CSV out — which makes "did you
-    remember to run judge-build-input first?" a question nobody has to answer.
+    This used to return a *derived* CSV that joined the contract with its
+    companion, written by `judge-build-input`. It no longer exists, because it
+    carried nothing the judge reads: the join added `family` and `scoring_mode`
+    from the companion, and `InputRow` has no such fields, so the loader dropped
+    them again on the way in. `load_input_csv` returns identical rows from either
+    file — verified over all 179 CRM pairs.
+
+    Removing it removes a class of problem rather than a file. The derived copy
+    lived in the Q&A package directory, which `qa-build` owns and wipes; moving
+    it out then meant it could go stale behind a corrected pair. A file that is
+    not written cannot be stale, cannot be wiped, and cannot disagree with the
+    pairs it came from.
+
+    `build_if_missing` is accepted and ignored. Nothing is built any more; the
+    parameter stays so existing callers keep working.
     """
 
     qa_dir = qa_release_dir(domain, profile, repo_root=repo_root)
-    csv_path = qa_dir / f"{domain}_judge_input.csv"
-    if csv_path.is_file():
-        return csv_path
-
     contract = qa_dir / f"{domain}_qa_pairs.csv"
-    companion = qa_dir / f"{domain}_qa_pairs_companion.csv"
-    if build_if_missing and contract.is_file() and companion.is_file():
-        print(
-            f"[judge] {csv_path.name} is missing — joining it from {qa_dir}",
-            file=sys.stderr,
-        )
-        build_judge_input(qa_dir, domain, csv_path)
-        return csv_path
+    if contract.is_file():
+        _require_identifying_columns(contract)
+        return contract
 
-    missing = [p.name for p in (contract, companion) if not p.is_file()]
     raise ResolutionError(
         f"no judge input for domain={domain!r} profile={profile!r}: {qa_dir} "
-        f"is missing {', '.join(missing) or csv_path.name}.\n"
+        f"is missing {contract.name}.\n"
         f"Generate the pairs first: python main.py qa-build --domain {domain} "
         f"--profile {profile}"
     )
+
+
+# Columns the judge must read rather than invent. `load_input_csv` treats both as
+# auto-fillable and will synthesize `x-0001` and `"unknown"` from the filename if
+# they are absent — which is right for an ad-hoc CSV someone points `--input-csv`
+# at, and wrong for a release package. The retired join sourced both from the
+# COMPANION file, so reading the contract directly is only safe while the
+# contract carries them. Checked here so a package that ever drops them fails
+# loudly, instead of producing a run whose every question id is fabricated and
+# whose per-tier reporting is empty.
+_IDENTIFYING_COLUMNS: tuple[str, ...] = ("question_id", "tier")
+
+
+def _require_identifying_columns(contract: Path) -> None:
+    with contract.open(newline="", encoding="utf-8") as handle:
+        header = next(csv.reader(handle), [])
+    missing = [c for c in _IDENTIFYING_COLUMNS if c not in header]
+    if missing:
+        raise ResolutionError(
+            f"{contract} is missing {', '.join(missing)}. The judge reads the "
+            f"Q&A package directly, so these must come from the pair file "
+            f"rather than be synthesized — otherwise every question id in the "
+            f"run is fabricated and per-tier reporting is empty. Rebuild the "
+            f"pairs, or pass --input-csv explicitly to score an ad-hoc file."
+        )
 
 
 def dataset_release_config(domain: str, *, repo_root: Path | None = None) -> dict:

@@ -3,14 +3,24 @@
    phrasing variation, which corrupts every downstream regression comparison. #}
 NON-DETERMINISM BOUNDARY — READ CAREFULLY (§HC-3)
 
-Numeric values MUST be identical to the EXPECTED ANSWER. Any numeric variance
-is a factual failure. Wording, sentence length, ordering of prose, tone,
-currency formatting, and dashboard presentation are NEVER deductions. Only
-substance and numeric accuracy are scored.
+A number is WRONG when it states a different value. A number is NOT wrong
+merely for being written to fewer digits than the expected answer, provided it
+is that value correctly rounded — "$2.81 billion" and "$2,806,018,214" are both
+2,806,018,214.20 rendered shorter, and rendering is never a deduction. Wording,
+sentence length, ordering of prose, tone, currency formatting, and dashboard
+presentation are NEVER deductions. Only substance and numeric accuracy are
+scored.
+
+THE TEST FOR A SHORTENED NUMBER: round the expected value to the precision the
+platform actually printed. If they then agree, it is the same number and scores
+5. If they disagree, the platform stated a different value and it scores 1.
+Apply this before concluding that a shortened figure is a variance — the
+deterministic scorer applies exactly this rule, and a verdict that contradicts
+it on a correctly-rounded figure is wrong.
 
 WORKED EXAMPLES — these are how the boundary applies in practice.
 
-DO NOT DEDUCT (all four should score 5 on the dimensions shown):
+DO NOT DEDUCT (all should score 5 on the dimensions shown):
 
 Example A — Prose wrapper around the number, no factual change.
   EXPECTED ANSWER: 72
@@ -24,6 +34,23 @@ Example B — Currency formatting differs, number identical.
   → factual_correctness = 5, completeness = 5.
     Currency prefix and dropped `.00` are cosmetic. Rep name and number match.
 
+Example B2 — Cents dropped from a billion-dollar figure.
+  EXPECTED ANSWER: Won | 2806018214.20
+  PLATFORM ANSWER: "Won deals account for $2,806,018,214 in quoted revenue."
+  → factual_correctness = 5. Round 2,806,018,214.20 to whole dollars and you
+    get 2,806,018,214 — the printed figure exactly. This is Example B, NOT
+    Example F: no digit of the value is contradicted. Scoring this 1 because
+    ".20" is absent is the single most common misreading of this boundary.
+
+Example B3 — A large figure written in magnitude words.
+  EXPECTED ANSWER: Hardware | 2912762690.98
+  PLATFORM ANSWER: "Hardware accounts for approximately $2.91 billion."
+  → factual_correctness = 5. Round 2,912,762,690.98 to the three significant
+    digits the platform chose to print and you get 2.91 billion. "Approximately"
+    is the platform telling you it rounded, not hedging a different number.
+    Compare Example F, where the printed digits do NOT agree with the expected
+    value at any precision.
+
 Example C — Different wording, same substance.
   EXPECTED ANSWER: 5 orphan contacts
   PLATFORM ANSWER: "Five contacts have no account assigned."
@@ -36,6 +63,7 @@ Example D — Sentence order and length differ, same information carried.
   → factual_correctness = 5, completeness = 5. Order reversed but every value
     is present with identical numerics. Not a deduction.
 
+
 DO DEDUCT — the score to assign is stated on each example:
 
 Example E — Number wrong, wording irrelevant.
@@ -43,10 +71,13 @@ Example E — Number wrong, wording irrelevant.
   PLATFORM ANSWER: "There are 68 active accounts."
   → factual_correctness = 1. Any numeric variance is zero tolerance.
 
-Example F — Number rounded to fewer digits than expected.
+Example F — A DIFFERENT value, which rounding does not explain.
   EXPECTED ANSWER: 4,182,650.00
   PLATFORM ANSWER: "4,182,000"
-  → factual_correctness = 1. Rounding-loss is still numeric variance.
+  → factual_correctness = 1. Apply the test: 4,182,650 is not 4,182,000 at any
+    precision — to the nearest thousand it is 4,183,000. The platform has
+    stated a different number, which is why this fails where B2 and B3 pass.
+    "Rounded to fewer digits" is NOT the test; "correctly rounded" is.
 
 Example G — Required entity missing, value present.
   QUESTION: "Which sales rep closed the most deal value, and how much?"
