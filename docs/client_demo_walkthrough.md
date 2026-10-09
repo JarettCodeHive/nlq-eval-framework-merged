@@ -290,54 +290,94 @@ Sales  104 questions → ~24 minutes
 
 ## Step 8 — Edge cases where the platform most often fails
 
-From the full runs, in order of how often they bite.
+From the full runs, in order of how often they bite. Every question below is
+quoted exactly as it was sent.
 
-### a. Enum values it cannot see
+### a. The same value resolves correctly in most questions and fails in a few
 
-The platform profiles a column, misses values, and then answers from the
-incomplete picture. Against the data in the org:
+This is the clearest finding, and it needs no reference to our data at all — it
+is the platform contradicting itself inside a single run (`20260928T093011Z`).
 
-| Column | Values actually present | What the platform reported |
+| Value | Reported **with a figure** | Returned zero / "does not exist" |
 |---|---|---|
-| `support_cases.priority` | Critical, Low, **High — 32,666 rows**, **Medium — 60,701** | *"a 'High' priority value has not been confirmed to exist"* |
-| `support_cases.category` | 6 values including **ServiceRequest — 23,815** | listed 4; *"there is no 'Service Request' category in the data"* |
+| `High` (priority) | 25 questions | 2 |
+| `ServiceRequest` (category) | 37 questions | 1 |
+| `EmailOpen` (interaction type) | 25 questions | 2 |
+| `Reengagement` (campaign type) | 20 questions | 4 |
+| `FinancialServices` (industry) | 13 questions | 4 |
 
-Values on **17–23% of 144,000 rows** went unseen. It then behaves two different
-ways on the same defect:
+So the value is resolved correctly the large majority of the time, then is
+unavailable on a handful of questions in the same run against the same tables.
+Two examples, minutes apart:
 
-**Silently returns zero — 10 questions.** The dangerous one, because a zero looks
-like a real answer:
+> **"How many support cases fall under access?"** · `CRM-T1-04-15` · answered
+> correctly, **24,053**, and its own status breakdown goes on to report figures
+> for `High` priority cases.
 
-| Question asks | Stored literal | True answer | Platform said |
-|---|---|---|---|
-| "email opens" | `EmailOpen` | 28,725 | "a total of 0 interactions" |
-| "re-engagement campaigns" | `Reengagement` | 23,620,415.61 | "no budget data was found" |
-| "financial services" | `FinancialServices` | 22.84% | "returned zero resolved cases" |
-| "event booth source" | `EventBooth` | 3,010 | "no leads were found" |
-| "cold call leads" | `ColdCall` | 844 / 789 / 729 / 726 | "no quoted deals were found" |
+> **"How many support cases are logged at high priority?"** · `CRM-T1-03-12`
+> Pulse: *"The support_cases priority field has observed values of 'Critical'
+> and 'Low' in the data; a 'High' priority value has not been confirmed to
+> exist."*
 
-**Asks for clarification — 3 questions.** Here it handles it well: *"Should I count
-cases with priority = 'Critical' as 'high priority'?"*
+**Both statements cannot be true.** This is the question to bring: why does the
+same value resolve in 25 questions and get reported as unconfirmed in 2?
 
-The ask: why does profiling miss values at 23% frequency, and why does an
-unresolved literal sometimes return zero instead of asking?
+Two failure shapes, from the same cause:
+
+**Returns zero — the dangerous one, because a zero looks like an answer.**
+
+> **"How many interactions are email opens?"** · `CRM-RG-15-V01` · correct **28,725**
+> Pulse: *"The data shows a total of 0 interactions recorded as email opens."*
+
+> **"What is the total budget of re-engagement campaigns?"** · `CRM-T1-01-04` · correct **23,620,415.61**
+> Pulse: *"No budget data was found for re-engagement campaigns — the query returned a null total."*
+
+> **"What percentage of support cases for accounts in financial services were resolved within their SLA deadline?"** · `CRM-T2-08-37` · correct **22.84**
+> Pulse: *"No data was found for this question. The query returned zero resolved support cases for accounts in financial services."*
+
+> **"How many leads came from the event booth source?"** · `SALES-T1-03-11` · correct **3,010**
+> Pulse: *"No leads were found from the 'event booth' source in the data."*
+
+**Asks instead — better behaviour for the same problem.** Note the correct
+answers are exactly the row counts it calls unconfirmed:
+
+> **"How many support cases are logged at high priority?"** · `CRM-T1-03-12` · correct **32,666**
+> **"How many support cases fall under service request?"** · `CRM-T1-04-18` · correct **23,815**
+> **"How many high-priority support cases were resolved within their SLA deadline?"** · `CRM-T1-07-30` · correct **7,550**
+
+For completeness, the data was unambiguously present: the platform's own
+`record_counts` reported **144,000** `support_cases` rows on every question in
+that run, the upload verified `rows_on_platform=144000`, and the uploaded CSV
+holds `High` on 32,666 rows and `ServiceRequest` on 23,815. But the finding does
+not rest on any of that — it rests on the platform's own two answers.
+
 
 ### b. Aggregate when a list was asked — 16 CRM, 13 Sales
 
-A question naming entities gets a roll-up instead: *"a total of 2,161 accounts"*
-rather than which accounts.
+A question naming entities gets a roll-up instead.
+
+> **"Right now, which accounts are carrying the biggest unresolved queue of access support cases?"** · `CRM-RG-05-V01`
+> Correct answer **Brown LLC 5; Gibson Ltd 5; Johnson Nichols 5; Long C…**
+> Pulse: *"Across the organization there are 13,070 unresolved access support cases currently open."*
+
+The question asks which accounts; the answer is an organisation-wide total.
 
 ### c. Intermittent hangs — 16% of CRM
 
-29 of 179 exceeded the 420s client timeout, though the platform never
-self-reported over 288s. The retry recovers them, which is why the retry path is
-not theoretical.
+29 of 179 exceeded the 420s client timeout while the platform never
+self-reported over 288s, so the retry recovers them. Worth being precise: these
+are a **latency** problem, not a correctness one.
+
+> **"How many awareness campaigns have no attributed interactions?"** · `CRM-T3-05-25`
+> Correct answer **378** · Pulse answered **378** — correct
+> Platform self-reported 249s; client observed **1,160s**, i.e. timeout then retry
 
 ### d. Same question, different score
 
-Three runs of the **identical 10-question Sales set** scored **7/10, 5/10, 8/10** —
-same questions, same data, same day. Worth stating, because it bounds how
-precisely any single run can be read.
+Three runs of the **identical 10-question Sales set** scored **7/10, 5/10,
+8/10** — same questions, same data, same day. Worth stating, because it bounds
+how precisely any single run can be read.
+
 
 ---
 

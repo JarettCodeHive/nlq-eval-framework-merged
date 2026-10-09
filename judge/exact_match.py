@@ -70,7 +70,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from enum import Enum
 from typing import Literal
 
@@ -90,10 +90,61 @@ __all__ = [
 
 # Grouped-thousands form FIRST so `28,731` is one token rather than `28` + `731`.
 # Each group is exactly three digits, so `1,23` is not silently read as `123`.
+# A currency symbol may sit BETWEEN the sign and the digits: the platform writes
+# a negative delta as "-$1,183,348.01", and matching only from the first digit
+# read that as POSITIVE 1183348.01 — the sign silently dropped, so an expected
+# -1183348.01 was "not present" (SALES-T5-03-12, SALES-T5-03-14).
+_CURRENCY = r"[$€£¥]"
 _NUMBER_RE = re.compile(
-    r"[-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?"  # 28,731   4,182,650.00
-    r"|[-+]?\d+(?:\.\d+)?"  # 28731    26677920.26   0.5
+    rf"(?:[-+]\s*)?(?:{_CURRENCY}\s*)?\d{{1,3}}(?:,\d{{3}})+(?:\.\d+)?"  # -$1,183,348.01
+    rf"|(?:[-+]\s*)?(?:{_CURRENCY}\s*)?\d+(?:\.\d+)?"  # 28731  26677920.26  0.5
 )
+
+
+def _parse_number(token: str) -> Decimal | None:
+    """Parse a matched token, tolerating a currency symbol inside the sign."""
+
+    cleaned = re.sub(rf"[\s,{_CURRENCY[1:-1]}]", "", token)
+    try:
+        return Decimal(cleaned)
+    except InvalidOperation:
+        return None
+
+
+# A magnitude word immediately after a number: "$2.81 billion", "168.4 million".
+# The platform writes every large revenue figure this way, so without it an
+# answer that is correct to three significant figures reads as four missing
+# values (11 of 63 Sales failures in run 20261009T052717Z).
+#
+# Deliberately not a library. quantulum3 is built for physical units and pulls
+# heavy dependencies; numerizer and word2number convert number WORDS ("two
+# million"), which is a different problem; humanize only formats outwards. None
+# of them answer the question that actually matters here — whether a rounded
+# rendering may stand in for the exact value — which is the HC-3 policy below.
+# The vocabulary a BI platform uses is four words long.
+_SCALE_WORDS: dict[str, int] = {
+    "thousand": 3,
+    "k": 3,
+    "million": 6,
+    "mn": 6,
+    "m": 6,
+    "billion": 9,
+    "bn": 9,
+    "b": 9,
+    "trillion": 12,
+    "tn": 12,
+}
+_SCALED_RE = re.compile(
+    r"(?P<num>(?:[-+]\s*)?(?:[$€£¥]\s*)?\d{1,3}(?:,\d{3})*(?:\.\d+)?"
+    r"|(?:[-+]\s*)?(?:[$€£¥]\s*)?\d+(?:\.\d+)?)"
+    r"\s*(?P<scale>" + "|".join(sorted(_SCALE_WORDS, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+# A scaled rendering states as many significant digits as it prints. One is a
+# statement about magnitude rather than value — "$3 billion" is 7% away from
+# 2,806,018,214 — so two is the floor for standing in for an exact figure.
+_MIN_SCALED_SIGNIFICANT_DIGITS = 2
 
 # ISO dates are matched BEFORE numbers and their spans removed. Otherwise the
 # hyphens in `2026-04-01` read as signs and the token stream becomes
@@ -361,13 +412,32 @@ def _build_index(actual: str, policy: ComparisonPolicy) -> _ActualIndex:
 
     numbers: list[tuple[Decimal, int]] = []
     number_strings: list[tuple[str, int]] = []
+    # Scaled figures first, and their spans are masked afterwards so "2.81
+    # billion" contributes 2810000000 and NOT a bare 2.81 that an expected value
+    # of 2.81 could match by accident.
+    scaled_spans: list[tuple[int, int]] = []
+    for match in _SCALED_RE.finditer(masked):
+        try:
+            base = _parse_number(match.group("num"))
+            if base is None:
+                continue
+        except InvalidOperation:  # pragma: no cover — regex guarantees parseable
+            continue
+        value = base.scaleb(_SCALE_WORDS[match.group("scale").lower()])
+        numbers.append((value, match.start()))
+        number_strings.append((match.group(0), match.start()))
+        scaled_spans.append(match.span())
+    for start, end in scaled_spans:
+        masked = masked[:start] + " " * (end - start) + masked[end:]
+
     for match in _NUMBER_RE.finditer(masked):
         token = match.group(0)
         number_strings.append((token, match.start()))
-        try:
-            numbers.append((Decimal(token.replace(",", "")), match.start()))
-        except InvalidOperation:  # pragma: no cover — regex guarantees parseable
-            continue
+        value = _parse_number(token)
+        if value is not None:
+            numbers.append((value, match.start()))
+    numbers.sort(key=lambda pair: pair[1])
+    number_strings.sort(key=lambda pair: pair[1])
 
     return _ActualIndex(
         view=view,
@@ -377,6 +447,62 @@ def _build_index(actual: str, policy: ComparisonPolicy) -> _ActualIndex:
         number_strings=number_strings,
         dates=dates,
     )
+
+
+# A direction is the one LABEL the platform is free to paraphrase. The generator
+# emits a bare "down" as the last field of a trend record; the platform writes
+# "declined", "fell sharply", "a steep sequential drop". Every figure can be
+# right and the record still fails on a missing three-letter token — §HC-3 says
+# wording is never a deduction, so that is a false failure against the platform.
+#
+# Deliberately a CLOSED, SYMMETRIC vocabulary rather than general synonym
+# matching, which is the same trade the module refuses for number words. The
+# whole corpus uses exactly two of these tokens ("down" 17 times, "up" once),
+# and an answer that says "increased" must still FAIL an expected "down" —
+# that is a real numeric-direction error, not phrasing.
+_DIRECTION_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "up": (
+        "up",
+        "rose",
+        "rise",
+        "risen",
+        "increased",
+        "increase",
+        "grew",
+        "growth",
+        "higher",
+        "gained",
+        "gain",
+        "climbed",
+    ),
+    "down": (
+        "down",
+        "fell",
+        "fall",
+        "fallen",
+        "declined",
+        "decline",
+        "decreased",
+        "decrease",
+        "dropped",
+        "drop",
+        "lower",
+        "reduction",
+        "shrank",
+    ),
+    "flat": ("flat", "unchanged", "steady", "stable", "level"),
+}
+
+
+def _direction_alternatives(label: str) -> tuple[str, ...]:
+    """Accepted renderings of a direction label, or () if it is not one.
+
+    Matched on the WHOLE label so an entity that merely contains a direction
+    word is untouched — and note `won` / `lost` are deal stages here, not
+    directions, so they are absent from the vocabulary on purpose.
+    """
+
+    return _DIRECTION_SYNONYMS.get(label.strip().lower(), ())
 
 
 def _find_label(index: _ActualIndex, label: str) -> list[tuple[int, int]]:
@@ -389,6 +515,14 @@ def _find_label(index: _ActualIndex, label: str) -> list[tuple[int, int]]:
     needle = _WS.sub(" ", label.strip().lower())
     if not needle:
         return []
+    alternatives = _direction_alternatives(needle)
+    if alternatives:
+        spans = [
+            (m.start(), m.end())
+            for word in alternatives
+            for m in re.finditer(rf"\b{re.escape(word)}\b", index.view)
+        ]
+        return sorted(spans)
     spans = [(m.start(), m.end()) for m in re.finditer(re.escape(needle), index.view)]
     if spans:
         return spans
@@ -420,7 +554,55 @@ def _attachment_cost(span: tuple[int, int], value_pos: int) -> int:
     return 0  # overlapping: a label containing digits, already excluded upstream
 
 
+def _is_spoken_for(index: _ActualIndex, span: tuple[int, int], limit: int) -> bool:
+    """Whether this label occurrence already has its own value just after it.
+
+    A trailing label may legitimately claim the value before it — "35,726
+    campaigns for Awareness" — but not while it is introducing a value of its
+    own. List prose makes this constant:
+
+        …prospecting deals contain 1,868, negotiation deals contain 1,816…
+
+    `negotiation` sits 7 characters after 1,868 and 15 before its own 1,816, and
+    the doubled trailing penalty (14) still undercut `prospecting`'s honest 15.
+    So the platform named every stage correctly and SALES-T4-02-06 scored a
+    failure. Tuning the multiplier would only move the boundary; what actually
+    distinguishes the cases is that a label already introducing a value is not
+    available to claim a different one.
+    """
+
+    end = span[1]
+    return any(end <= pos <= end + limit for _value, pos in index.numbers)
+
+
 # --- comparison -------------------------------------------------------------
+
+
+def _preferred_hit(
+    hits: list[int],
+    record_index: int,
+    label_occurrences: list[tuple[int, str, tuple[int, int]]],
+    limit: int,
+) -> int:
+    """Which occurrence of a repeated value this record should consume.
+
+    Taking `hits[0]` is wrong whenever two records share a value. SALES-T2-05-19
+    expected `Expired | 1439; Rejected | 1439` and the platform answered
+    "Rejected (1,439), and Expired (1,439)" — correct, since the two counts are
+    equal. But `Expired` is processed first, consumed the earlier 1,439 (the one
+    sitting beside "Rejected"), and left `Rejected` only the occurrence that
+    `Expired` owns. A right answer scored as a failure.
+
+    So a record consumes the occurrence its OWN label claims most strongly, and
+    falls back to document order when it has no label or none is in range.
+    """
+
+    mine = [span for idx, _raw, span in label_occurrences if idx == record_index]
+    if not mine:
+        return hits[0]
+    costs = {pos: min(_attachment_cost(span, pos) for span in mine) for pos in hits}
+    best = min(hits, key=lambda pos: (costs[pos], pos))
+    return best if costs[best] <= limit else hits[0]
 
 
 def _consume_number(
@@ -450,6 +632,20 @@ def _consume_number(
         if not hits:
             hits = _printed_at_lower_precision(index, field, used)
     return hits or None
+
+
+def _round_significant(value: Decimal, digits: int) -> Decimal:
+    """`value` rounded to `digits` significant figures.
+
+    Used to test a scaled rendering: "2.81 billion" prints three significant
+    digits, so it stands for the expected figure only if that figure rounds to
+    exactly 2.81E+9 at three significant digits.
+    """
+
+    if value == 0:
+        return value
+    quantum = Decimal(1).scaleb(value.adjusted() - digits + 1)
+    return value.quantize(quantum, rounding=ROUND_HALF_EVEN)
 
 
 def _printed_at_lower_precision(
@@ -496,16 +692,23 @@ def _printed_at_lower_precision(
     expected = field.value
     if expected is None or expected == 0:
         return hits
-    for token, pos in index.number_strings:
+    # Iterate the PARSED values, not the raw tokens: a scaled token reads
+    # "2.81 billion", which no amount of stripping turns into a Decimal, and
+    # re-parsing here would silently skip exactly the renderings this accepts.
+    for printed, pos in index.numbers:
         if pos in used:
-            continue
-        cleaned = token.strip().lstrip("$€£¥").replace(",", "").strip()
-        try:
-            printed = Decimal(cleaned)
-        except (InvalidOperation, ValueError):
             continue
         decimals = -printed.as_tuple().exponent
         if decimals < 0:
+            # A scaled rendering: "2.81 billion" parsed to 2.81E+9. It asserts
+            # significant digits rather than decimal places, so it is checked
+            # against the expected value rounded to the same significance.
+            digits = len(printed.as_tuple().digits)
+            if digits < _MIN_SCALED_SIGNIFICANT_DIGITS:
+                continue
+            if _round_significant(expected, digits) != printed:
+                continue
+            hits.append(pos)
             continue
         if printed == 0:
             continue  # every digit rounded away; says nothing about `expected`
@@ -527,6 +730,7 @@ def _label_owns_a_value(
     record_index: int,
     value_positions: list[int],
     limit: int,
+    index: _ActualIndex | None = None,
 ) -> tuple[bool, int | None]:
     """Does record `record_index`'s label claim one of its own values?
 
@@ -536,16 +740,25 @@ def _label_owns_a_value(
     the numbers are all present, but each is claimed by a different record's
     label than the one that declared it.
 
+    A label occurrence that is already introducing a value of its own is skipped
+    when it would be claiming BACKWARDS — see :func:`_is_spoken_for`. Without
+    that, the next item's label in a comma-separated list beats the value's own
+    preceding label and a fully correct answer scores a failure.
+
     Returns (owned, nearest_cost). `nearest_cost` is the best claim distance seen,
     for a message that distinguishes "a different label claims it" from "your
     label is nowhere near any of its values".
     """
     nearest: int | None = None
     for value_pos in value_positions:
-        costs = [
-            (_attachment_cost(span, value_pos), idx)
-            for idx, _raw, span in label_occurrences
-        ]
+        costs = []
+        for idx, _raw, span in label_occurrences:
+            trailing = span[0] > value_pos
+            if trailing and index is not None and _is_spoken_for(index, span, limit):
+                continue
+            costs.append((_attachment_cost(span, value_pos), idx))
+        if not costs:
+            continue
         winning_cost = min(cost for cost, _ in costs)
         if nearest is None or winning_cost < nearest:
             nearest = winning_cost
@@ -596,7 +809,7 @@ def evaluate_answer(
 
     # Pass 1 — values.
     record_value_positions: list[list[int]] = []
-    for record in records:
+    for record_index, record in enumerate(records):
         positions: list[int] = []
         for field in record:
             if field.kind is FieldKind.NUMERIC:
@@ -607,7 +820,14 @@ def evaluate_answer(
                     failures.append(f"value {field.raw!r} not present")
                     unsatisfied.append(key)
                     continue
-                used_numeric.add(hits[0])
+                used_numeric.add(
+                    _preferred_hit(
+                        hits,
+                        record_index,
+                        label_occurrences,
+                        policy.label_proximity_chars,
+                    )
+                )
                 satisfied.append(key)
                 positions.extend(hits)
             elif field.kind is FieldKind.DATE:
@@ -666,6 +886,7 @@ def evaluate_answer(
                     record_index,
                     value_positions,
                     policy.label_proximity_chars,
+                    index,
                 )
                 if owned:
                     satisfied.append(key)

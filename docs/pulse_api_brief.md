@@ -135,52 +135,73 @@ not yet knowable; CRM and Sales differ 3.5x on identical tier structure.
 
 ## 4. Where the platform fails
 
-### a. Enum values it cannot see — the big one
+### a. The same value resolves in most questions and fails in a few
 
-The platform's profiling of a column is **incomplete**, and it acts on the
-incomplete picture. Checked against the data we uploaded:
+The clearest finding, and it needs no reference to our data — it is the platform
+contradicting itself inside one run (`20260928T093011Z`):
 
-| Column | Values actually present | What the platform said |
+| Value | Reported **with a figure** | Returned zero / "does not exist" |
 |---|---|---|
-| `support_cases.priority` | Critical, Low, **High (32,666 rows)**, **Medium (60,701)** | "observed values of 'Critical' and 'Low'; a 'High' priority value has not been confirmed to exist" |
-| `support_cases.category` | Billing, Integration, Access, ProductIssue, **GeneralInquiry**, **ServiceRequest (23,815)** | listed four; "there is no 'Service Request' category in the data" |
+| `High` (priority) | 25 questions | 2 |
+| `ServiceRequest` (category) | 37 questions | 1 |
+| `EmailOpen` (interaction type) | 25 questions | 2 |
+| `Reengagement` (campaign type) | 20 questions | 4 |
+| `FinancialServices` (industry) | 13 questions | 4 |
 
-It missed values holding **17–23% of 144,000 rows**. The same defect then shows
-up two different ways:
+Two answers from the same run, minutes apart:
 
-**Silently returns zero — 10 questions.** This is the dangerous one, because a
-zero looks like an answer:
+> **"How many support cases fall under access?"** — answered correctly (24,053),
+> and its own breakdown reports figures for `High` priority cases.
 
-| Question asks | Stored literal | Expected | Platform said |
-|---|---|---|---|
-| "email opens" | `EmailOpen` | 28,725 | "a total of 0 interactions" |
-| "re-engagement campaigns" | `Reengagement` | 23,620,415.61 | "no budget data was found" |
-| "financial services" | `FinancialServices` | 22.84% | "returned zero resolved support cases" |
-| "event booth source" | `EventBooth` | 3,010 | "no leads were found" |
-| "cold call leads" | `ColdCall` | 844 / 789 / 729 / 726 | "no quoted deals were found" |
+> **"How many support cases are logged at high priority?"** — *"a 'High'
+> priority value has not been confirmed to exist."*
 
-**Asks for clarification — 3 questions.** Here it notices and asks, e.g. *"Should
-I count cases with priority = 'Critical' as 'high priority'?"* — which is the
-right behaviour for the same underlying problem.
+**Both cannot be true.** The question to bring: why does the same value resolve
+in 25 questions and come back unconfirmed in 2?
 
-**So: same defect, two behaviours, and no way to predict which.** Worth asking
-them why profiling misses values at 23% frequency, and why an unresolved literal
-sometimes returns zero instead of asking.
+**Shape 1 — returns zero.** Dangerous, because a zero looks like an answer:
+
+| Question sent | Correct answer | Platform said |
+|---|---|---|
+| "How many interactions are email opens?" | 28,725 | "a total of 0 interactions recorded as email opens" |
+| "What is the total budget of re-engagement campaigns?" | 23,620,415.61 | "no budget data was found" |
+| "What percentage of support cases for accounts in financial services were resolved within their SLA deadline?" | 22.84 | "returned zero resolved support cases" |
+| "How many leads came from the event booth source?" | 3,010 | "no leads were found" |
+
+**Shape 2 — asks instead.** Better behaviour, same cause. The correct answers
+are exactly the row counts it calls unconfirmed:
+
+| Question sent | Correct answer | Platform said |
+|---|---|---|
+| "How many support cases are logged at high priority?" | **32,666** | "a 'High' priority value has not been confirmed to exist" |
+| "How many support cases fall under service request?" | **23,815** | "there is no 'Service Request' category in the data" |
+| "How many high-priority support cases were resolved within their SLA deadline?" | 7,550 | "'High' is not a confirmed value" |
+
+Corroboration, though the finding does not rest on it: the platform's own
+`record_counts` reported **144,000** `support_cases` rows on every question in
+that run, the upload verified `rows_on_platform=144000`, and the uploaded CSV
+holds `High` on 32,666 rows and `ServiceRequest` on 23,815.
 
 ### b. Answers an aggregate when a list was asked — 16 CRM, 13 Sales
 
-"Which accounts carry the biggest unresolved queue of access support cases?"
-returns a single total rather than naming the accounts. The question asks for
-entities; the response gives a roll-up.
+> **"Right now, which accounts are carrying the biggest unresolved queue of access support cases?"**
+> Correct answer: `Brown LLC | 5; Gibson Ltd | 5; Johnson Nichols | 5; …`
+> Pulse: *"Across the organization there are 13,070 unresolved access support cases currently open."*
 
-Every case counted here has been checked individually against the question
-wording and the reference SQL, so each one holds up if challenged.
+The question asks which accounts; the answer is an organisation-wide total. Every
+case counted here has been checked individually against the question wording and
+the reference SQL, so each one holds up if challenged.
 
 ### c. Intermittent hangs — 16% of CRM
 
-Client latency exceeded our 420s timeout on 29 of 179, while the platform never
-self-reported more than 288s. The retry usually succeeds, so the retry path is
-load-bearing in production, not theoretical.
+29 of 179 exceeded the 420s client timeout while the platform never
+self-reported over 288s, so the retry recovers them. Worth being precise: these
+are a **latency** problem, not a correctness one.
+
+> **"How many awareness campaigns have no attributed interactions?"**
+> Pulse answered **378** — correct. Platform self-reported 249s; client observed
+> **1,160s**, i.e. timeout then retry.
+
 
 ### d. Substance-level non-determinism
 
