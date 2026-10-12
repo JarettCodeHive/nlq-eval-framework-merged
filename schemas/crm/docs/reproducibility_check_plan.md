@@ -1,5 +1,7 @@
 # CRM Reproducibility Check Plan
 
+> **Historical note:** written during initial CRM implementation planning (Track A). Any path below referencing the retired `release/crm/<version>/` domain-first layout is stale — the canonical layout is now `release/<version>/crm/...` (see `qa_pairs/utils/release_bundle.py` and the root `README.md`). Kept as the historical record of the original validation design, not a living reference; this pattern was not replicated for the other four domains — see `DOCUMENTATION_IMPLEMENTATION_PLAN.md` §6.
+
 Source of truth:
 
 - Seed and fixed date: `config/generation/base.json`

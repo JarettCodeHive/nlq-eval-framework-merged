@@ -15,9 +15,19 @@ Implemented domain packages:
   validation.
 - `generators/finance`: chart-of-accounts, transaction, double-entry ledger,
   budget, and synthetic FX generation and validation.
+- `generators/logistics`: shipment, order, carrier, warehouse, and inventory
+  generation and validation.
+- `generators/project_management`: project, task, milestone, resource, and
+  time-entry generation and validation.
 
 `generators/domain_registry.py` maps root CLI dataset commands to the correct
-domain implementation. Q&A dispatch remains separate and CRM-only.
+domain implementation, for all five domains above. Q&A pair generation
+(`qa-build` and related commands) is dispatched the same way, per domain, from
+`main.py`'s `QA_STAGE`/`QA_VALIDATE`/`QA_GENERATE`/`QA_REPHRASE` tables — it is
+no longer CRM-only. The CRM-only exceptions are the review-only seed-fixture
+command (`qa-author-fixtures`) and the taxonomy-matrix regeneration script
+(`gen_family_matrix.py`), both of which remain CRM-specific tooling, not a
+dispatch limitation.
 
 Generator requirements:
 
@@ -31,11 +41,14 @@ Generator requirements:
 Expected answers must be verified from exported CSVs, not from intermediate
 dataframes created by these generators.
 
-CRM, Sales, and Finance intentionally model different business questions. CRM
+All five domains intentionally model different business questions. CRM
 focuses on engagement, campaign attribution, and support SLA behavior. Sales
 focuses on pipeline deals, products, quote lines, and quota attainment. Finance
 focuses on accounting, FX-adjusted sums, budget versus actual, and rolling
-balances. Shared code must not collapse those domain semantics into one model.
+balances. Logistics focuses on shipment routing, carrier performance, and
+warehouse/inventory fulfillment. Project Management focuses on task and
+milestone status, resource allocation, and logged-time breakdowns. Shared
+code must not collapse those domain semantics into one model.
 
 Domain modules follow the same stage boundary:
 

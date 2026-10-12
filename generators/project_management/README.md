@@ -44,14 +44,19 @@ python main.py build-dataset --domain project_management --profile full
 The dev command writes all three stages below
 `tmp/generated/project_management/dev/` and validates the persisted
 `imperfect` CSVs. The full command writes the versioned release under
-`release/project_management/dataset-v1.0.0/`, runs every persisted validation
+`release/<version>/project_management/dataset/` (the canonical version-first
+layout — see `qa_pairs/utils/release_bundle.py`; the retired
+`release/project_management/dataset-v1.0.0/` domain-first layout is
+read-only compatibility, never written to), runs every persisted validation
 and clean-room reproducibility gate, and creates `manifest.json` last.
 
 The manifest seals the release. Do not rerun a release-writing command against
 that version after it exists. Use a new dataset version for corrections.
 
 All PM currency fields are fixed to USD. Relative date logic uses the configured
-reference date rather than the wall clock. Detailed distribution and
-imperfection behavior is documented in
-`Project_Management_Distributions_and_Imperfections_Matrix.md` at the repository
-root.
+reference date rather than the wall clock. The distribution/imperfection matrix
+referenced in earlier drafts of this document
+(`Project_Management_Distributions_and_Imperfections_Matrix.md`) was never
+committed to this repository; see `config/generation/project_management/README.md`
+and the inline docstrings in `distributions.py`/`imperfections.py` for the
+current, authoritative description of each stage's behavior.
