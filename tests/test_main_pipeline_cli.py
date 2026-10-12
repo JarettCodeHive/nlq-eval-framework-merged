@@ -27,10 +27,10 @@ def test_run_pipeline_is_registered_and_accepts_only_shared_inputs() -> None:
     assert args.domain == "sales"
     assert args.profile == "full"
     assert args.release_version == "client-2.4.0"
-    assert args.keep_platform_data is False
+    assert args.cleanup_platform_data is False
 
-    retained = build_parser().parse_args(["run-pipeline", "--keep-platform-data"])
-    assert retained.keep_platform_data is True
+    cleanup = build_parser().parse_args(["run-pipeline", "--cleanup-platform-data"])
+    assert cleanup.cleanup_platform_data is True
 
 
 def test_run_pipeline_runs_each_command_in_order_with_judge_defaults(
@@ -58,7 +58,14 @@ def test_run_pipeline_runs_each_command_in_order_with_judge_defaults(
     )
 
     args = build_parser().parse_args(
-        ["run-pipeline", "--domain", "crm", "--profile", "dev"]
+        [
+            "run-pipeline",
+            "--domain",
+            "crm",
+            "--profile",
+            "dev",
+            "--cleanup-platform-data",
+        ]
     )
     run_pipeline(args)
 
@@ -158,7 +165,7 @@ def test_run_pipeline_reports_the_failed_stage_and_stops(
     assert "[2/6] START" not in captured.out
 
 
-def test_keep_platform_data_skips_post_run_cleanup(monkeypatch, capsys) -> None:
+def test_platform_data_is_retained_by_default(monkeypatch, capsys) -> None:
     outcome = object()
     cleaned = []
 
@@ -173,13 +180,11 @@ def test_keep_platform_data_skips_post_run_cleanup(monkeypatch, capsys) -> None:
         lambda _args: cleaned.append(True),
     )
 
-    args = build_parser().parse_args(
-        ["run-pipeline", "--domain", "crm", "--keep-platform-data"]
-    )
+    args = build_parser().parse_args(["run-pipeline", "--domain", "crm"])
     run_pipeline(args)
 
     assert cleaned == []
-    assert "cleanup skipped: --keep-platform-data" in capsys.readouterr().out
+    assert "cleanup skipped" in capsys.readouterr().out
 
 
 def test_judge_failure_still_cleans_uploaded_entities(monkeypatch) -> None:
@@ -202,7 +207,9 @@ def test_judge_failure_still_cleans_uploaded_entities(monkeypatch) -> None:
     )
 
     with pytest.raises(RuntimeError, match="judge failed"):
-        run_pipeline(build_parser().parse_args(["run-pipeline"]))
+        run_pipeline(
+            build_parser().parse_args(["run-pipeline", "--cleanup-platform-data"])
+        )
 
     assert cleaned == [outcome]
 
@@ -227,7 +234,9 @@ def test_partial_upload_failure_still_cleans_created_entities(monkeypatch) -> No
     )
 
     with pytest.raises(RuntimeError, match="upload failed"):
-        run_pipeline(build_parser().parse_args(["run-pipeline"]))
+        run_pipeline(
+            build_parser().parse_args(["run-pipeline", "--cleanup-platform-data"])
+        )
 
     assert cleaned == [outcome]
 
@@ -247,7 +256,9 @@ def test_cleanup_failure_fails_an_otherwise_successful_pipeline(monkeypatch) -> 
     )
 
     with pytest.raises(RuntimeError, match="cleanup failed"):
-        run_pipeline(build_parser().parse_args(["run-pipeline"]))
+        run_pipeline(
+            build_parser().parse_args(["run-pipeline", "--cleanup-platform-data"])
+        )
 
 
 def test_primary_failure_is_preserved_when_cleanup_also_fails(monkeypatch) -> None:
@@ -269,6 +280,8 @@ def test_primary_failure_is_preserved_when_cleanup_also_fails(monkeypatch) -> No
     )
 
     with pytest.raises(RuntimeError, match="judge failed") as excinfo:
-        run_pipeline(build_parser().parse_args(["run-pipeline"]))
+        run_pipeline(
+            build_parser().parse_args(["run-pipeline", "--cleanup-platform-data"])
+        )
 
     assert any("cleanup failed" in note for note in excinfo.value.__notes__)
