@@ -5,8 +5,7 @@ open-source project, but it has multiple engineers working in parallel and
 needs the same discipline. This file distills the Execution Scope's §13.2
 standards (branching, review, CI, large files, secrets) into the repository
 itself, since none of that was previously written down anywhere a new
-engineer would actually read it — see `DOCUMENTATION_IMPLEMENTATION_PLAN.md`
-§3.3.
+engineer would actually read it.
 
 ## Branching
 
@@ -91,12 +90,11 @@ the repository in the first place.
 
 ## Where things live
 
-Before adding a new module or domain, read the placement standard in
-`DOCUMENTATION_IMPLEMENTATION_PLAN.md` §1 and the system view in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). In short: a module's own
-`README.md` travels with its code; cross-cutting documentation goes in
-`docs/`; dated audit findings go in `docs/findings/<domain>/`, never at repo
-root. If you add a domain or a module, update its `README.md` in the same
-pull request — the staleness in `DOCUMENTATION_IMPLEMENTATION_PLAN.md` §3.1
-happened exactly because this didn't happen when Logistics and Project
-Management were added.
+Before adding a new module or domain, read the system view in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and follow the placement
+standard: a module's own `README.md` travels with its code; cross-cutting
+documentation goes in `docs/`; dated audit findings go in
+`docs/findings/<domain>/`, never at repo root. If you add a domain or a
+module, update its `README.md` in the same pull request — a module can
+silently drift out of date with the code it describes if adding a domain
+doesn't also trigger a documentation update.

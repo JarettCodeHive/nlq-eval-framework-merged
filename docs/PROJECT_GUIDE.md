@@ -16,7 +16,7 @@ read the documentation that already exists in this repository.
 3. [`../DEVELOPMENT.md`](../DEVELOPMENT.md) — the practical companion to
    #1: actual commands for dataset builds, Q&A generation, the judge, and
    the scorecard, plus troubleshooting. Treat this as the thing you come
-   back to while actually running commands, not a one-time read.
+   back to while actually running commands.
 
 That's enough to run the pipeline and know what each stage produced.
 
@@ -87,15 +87,7 @@ narrative:
 - [`judge_rubric.pdf`](judge_rubric.pdf) — the §14.1 rubric deliverable
   (regenerate with `python -m judge.rubric`, never hand-edit).
 
-## Path F — "Why does the documentation look the way it does?"
-
-[`../DOCUMENTATION_IMPLEMENTATION_PLAN.md`](../DOCUMENTATION_IMPLEMENTATION_PLAN.md)
-— the audit and action plan behind the current documentation layout: why
-some things are co-located READMEs and others are in `docs/`, what was
-stale and got fixed, and what's still open (`P3`). Root-level planning docs
-in this repository are treated as disposable once acted on (see that
-file's own §1) — if it's gone by the time you read this, it means
-everything in it shipped.
+## Path F — "Where do audit/findings records live?"
 
 [`findings/<domain>/`](findings) — dated judge-failure root-cause analyses,
 one subfolder per domain, regenerated each time a new failure batch is
@@ -113,18 +105,17 @@ one stage covered in Path B.
 
 ## Where this file lives
 
-**`docs/`**, alongside `ARCHITECTURE.md` — not repo root. Reasoning, per
-the placement standard in `DOCUMENTATION_IMPLEMENTATION_PLAN.md` §1: this
-is cross-cutting (it indexes every module, not one) and has ongoing
-reference value rather than being a one-time decision record, so it
-doesn't belong in root's "disposable once acted on" category alongside
-`DOCUMENTATION_IMPLEMENTATION_PLAN.md`. It also isn't a module's own
-README, so it doesn't belong co-located with one piece of code either.
-`docs/` — reserved for exactly this kind of cross-cutting, lasting material
-— is the correct home, and keeping it next to `ARCHITECTURE.md` (the
-system view this guide points at first) keeps the two obviously related.
+**`docs/`**, alongside `ARCHITECTURE.md` — not repo root. This guide is
+cross-cutting (it indexes every module, not one) and has ongoing reference
+value rather than being a one-time decision record, so it doesn't belong at
+repo root, which is reserved for disposable, one-time planning docs. It
+also isn't a module's own README, so it doesn't belong co-located with one
+piece of code either. `docs/` — reserved for exactly this kind of
+cross-cutting, lasting material — is the correct home, and keeping it next
+to `ARCHITECTURE.md` (the system view this guide points at first) keeps the
+two obviously related.
 
-It will go stale exactly the way the files in
-`DOCUMENTATION_IMPLEMENTATION_PLAN.md` §3.1 did if a new module is added
-without a line here — treat updating this file as part of the same
-"update the relevant README" review habit that plan's P3 recommends.
+It will go stale the same way any navigation doc does if a new module is
+added without a line here — treat updating this file as part of the normal
+"update the relevant README" review habit whenever a domain or module is
+added.

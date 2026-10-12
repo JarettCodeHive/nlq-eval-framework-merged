@@ -64,9 +64,8 @@ is the *dataset's* encoding of these enum values (e.g. storing
 `lead_source` as `"Cold Call"` with a space, or `quote_status` consistently
 lower/upper-cased to match what a model is likely to guess) — a dataset
 regeneration decision, not a quick patch, and the same open question
-flagged for Logistics/Project Management's CamelCase values elsewhere in
-`DOCUMENTATION_IMPLEMENTATION_PLAN.md`'s history. See the cross-domain
-common-patterns file for the consolidated recommendation.
+flagged for Logistics/Project Management's CamelCase values. See the
+cross-domain common-patterns file for the consolidated recommendation.
 
 ---
 

@@ -4,8 +4,7 @@ A system-level view of how this repository's pieces fit together: five
 pipeline stages, one shared release-bundle contract between them, and where
 the CLI and the platform-mutating module sit relative to that pipeline. This
 document is deliberately thin — it links to the module that owns each
-detail rather than restating it, per
-`DOCUMENTATION_IMPLEMENTATION_PLAN.md` §3.4/§4.6.
+detail rather than restating it.
 
 For the command surface (what to actually type), see the root
 [`README.md`](../README.md) and [`DEVELOPMENT.md`](../DEVELOPMENT.md). This
@@ -147,5 +146,5 @@ means:
   judge module specifically.
 - [`docs/judge_runbook.md`](judge_runbook.md) — operational runbook for
   running a judge pass.
-- `DOCUMENTATION_IMPLEMENTATION_PLAN.md` — why this document exists and
-  what else is in flight.
+- [`docs/PROJECT_GUIDE.md`](PROJECT_GUIDE.md) — a reading path through all
+  of this repository's documentation, if you need more than this page.

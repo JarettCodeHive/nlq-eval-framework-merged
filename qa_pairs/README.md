@@ -263,15 +263,12 @@ and the identical four-driver shape (`generate_<domain>.py` →
 so none of their files can collide with CRM's or each other's. Each has its
 own `config.json`, `catalog.json`, `families.json`, `labels.json`, and
 `templates/t{1..5}/*.sql.j2` tuned to that domain's entities and business
-language — see each domain's `generators/<domain>/README.md` (and
-`generators/logistics/README.md`, currently missing — tracked in
-`DOCUMENTATION_IMPLEMENTATION_PLAN.md`) for the dataset side, and
-`config/generation/<domain>/README.md` for configuration.
+language — see each domain's `generators/<domain>/README.md` for the dataset
+side, and `config/generation/<domain>/README.md` for configuration.
 
 None of the four has its own `taxonomy/`-style design-spec document set or
-CRM's granular per-step planning docs — by design (see the Documentation
-Implementation Plan's explicit non-recommendation against replicating
-those), not because the work is incomplete. Each domain's own
-`generators/<domain>/README.md` and this file's shared sections above are
+CRM's granular per-step planning docs — by design, not because the work is
+incomplete. Each domain's own `generators/<domain>/README.md` and this
+file's shared sections above are
 the living reference; CRM's `taxonomy/` documents remain CRM-specific
 historical/governance artifacts, not a template every domain must duplicate.

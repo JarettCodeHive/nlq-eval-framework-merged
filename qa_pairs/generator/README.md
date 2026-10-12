@@ -27,7 +27,7 @@ hand-written seed fixtures, review-only, never released) and
 `gen_family_matrix.py` (regenerates CRM's taxonomy matrix CSV). No other
 domain has a seed-fixture script or a `taxonomy/`-style design-spec
 document set — by design, not because the work is incomplete; see
-`../README.md#other-domains` and `DOCUMENTATION_IMPLEMENTATION_PLAN.md` §6.
+`../README.md#other-domains`.
 
 ## Per-domain identity
 
