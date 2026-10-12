@@ -950,11 +950,14 @@ def run_judge(args: argparse.Namespace) -> None:
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
-    """Build, evaluate, then remove only the platform entities this run created.
+    """Build, evaluate, and retain the platform entities this run created.
 
     This is the convenient end-to-end entry point.  The individual commands
     remain available with their existing behavior; only this wrapper confirms
-    the delete and supplies the judge-specific smoke-test flags.
+    the delete and supplies the judge-specific smoke-test flags. Uploaded
+    entities are retained by default so the data stays inspectable on the
+    platform; pass --cleanup-platform-data to remove only this run's entities
+    afterward, including on failure.
     """
 
     total = 6
@@ -979,12 +982,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
         replace=False,
         dry_run=False,
         release_version=release_version,
-        cleanup_after_upload=not getattr(args, "keep_platform_data", False),
+        cleanup_after_upload=getattr(args, "cleanup_platform_data", False),
     )
     judge_args = argparse.Namespace(
         domain=args.domain,
         profile=args.profile,
         command_argv=["--allow-uncalibrated", "--limit", "5"],
+        # command_argv=["--allow-uncalibrated"],
         release_version=release_version,
     )
     stages = (
@@ -1044,10 +1048,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
             )
             try:
                 with reporter.stage(cleanup_stage):
-                    if getattr(args, "keep_platform_data", False):
+                    if not getattr(args, "cleanup_platform_data", False):
                         print(
-                            "cleanup skipped: --keep-platform-data retained "
-                            "this run's uploaded entities"
+                            "cleanup skipped: this run's uploaded entities are "
+                            "retained by default; pass --cleanup-platform-data "
+                            "to delete them"
                         )
                     else:
                         run_uploaded_data_cleanup(
@@ -1298,11 +1303,12 @@ def build_parser() -> argparse.ArgumentParser:
         "sent and send none of them.",
     )
     parser.add_argument(
-        "--keep-platform-data",
+        "--cleanup-platform-data",
         action="store_true",
         help=(
-            "run-pipeline: retain entities uploaded by this run for debugging. "
-            "By default they are deleted after judging, including on failure."
+            "run-pipeline: delete entities uploaded by this run after judging, "
+            "including on failure. By default they are retained on the "
+            "platform for inspection; pass this flag to clean them up."
         ),
     )
     validation_source = parser.add_mutually_exclusive_group()

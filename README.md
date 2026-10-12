@@ -101,12 +101,12 @@ python main.py run-pipeline --domain crm --profile full --version v1.0.0
 `--domain` also accepts `sales`, `finance`, `project_management`, and
 `logistics`; `crm` above is only the example.
 
-Platform entities uploaded by `run-pipeline` are temporary and are deleted by
-entity ID after the judge finishes. To retain the uploaded entities for
-debugging, opt out explicitly:
+Platform entities uploaded by `run-pipeline` are retained by default so the
+data stays inspectable on the platform. To delete only this run's entities by
+entity ID after the judge finishes, opt in explicitly:
 
 ```bash
-python main.py run-pipeline --domain crm --profile full --version v1.0.0 --keep-platform-data
+python main.py run-pipeline --domain crm --profile full --version v1.0.0 --cleanup-platform-data
 ```
 
 `--version` is the single evaluation-release version shared by the dataset,
@@ -150,12 +150,13 @@ files, and demo recordings. A failure names the stage and elapsed time before
 the command exits non-zero.
 
 > **Warning:** `run-pipeline` confirms `dataset-delete` internally. It deletes
-> and re-uploads the selected domain/profile before judging. After judging, it
-> deletes only entity IDs created by that upload invocation; it never discovers
-> cleanup targets by table name. Cleanup also runs after upload or judge
-> failures. A cleanup failure makes the command fail and remains recorded in
-> the platform manifest. Use `dataset-delete --yes` for deliberate manual
-> cleanup of retained data.
+> and re-uploads the selected domain/profile before judging. After judging, by
+> default it leaves the uploaded entities on the platform. Pass
+> `--cleanup-platform-data` to delete only the entity IDs created by that
+> upload invocation afterward — it never discovers cleanup targets by table
+> name — including after an upload or judge failure. A cleanup failure makes
+> the command fail and remains recorded in the platform manifest. Use
+> `dataset-delete --yes` for deliberate manual cleanup of retained data.
 
 ### Judge and Scorecard Workflow
 
