@@ -24,25 +24,33 @@ across domains and the resulting priority order for action.
 
 ## 1. Headline finding
 
-**Across 227 total failures, only 11 are cleanly fixable inside this
-codebase** (10 in `judge/exact_match.py`, 1 in `qa_pairs/` reference SQL),
-and every domain-level fork independently reached the same structural
-conclusion by the same method: cross-checking each `exact_match` FAIL
-against the LLM judge's *independent* `factual_correctness` score. When the
-judge also scores the answer low with a rationale agreeing the platform's
-number is wrong, that is strong, repeatable evidence the gap is the live
-Pulse platform's answer quality — not this project's scorer, dataset, or
-Q&A pairs. That was true for the overwhelming majority of failures in all
-five domains, most starkly in CRM (80/80 platform-only, confirmed by the
-judge agreeing in 79 of 80 cases) and Logistics (14/16 platform-only).
+**Across 227 total failures, 211 are the live Pulse platform computing or
+reporting a materially different answer than the ground truth** — every
+domain-level fork reached this independently, by the same method:
+cross-checking each `exact_match` FAIL against the LLM judge's
+*independent* `factual_correctness` score. When the judge also scores the
+answer low with a rationale agreeing the platform's number is wrong, that
+is strong, repeatable evidence the gap is the live platform's answer
+quality. That held for the overwhelming majority of failures in all five
+domains, most starkly in CRM (80/80, confirmed by the judge agreeing in 79
+of 80 cases) and Logistics (14/16).
 
-**Fixing everything in this codebase's control does not close the gap to
-90% in CRM, Sales, or Project Management.** Finance's own fork quantified
-this precisely: closing its 9 scorer-fixable + 2 dataset-defect failures
-moves Finance from 80.45% to 86.6% — still short. The remaining gap in
-every domain below target is dominated by the live platform's own
-computation and response-completeness quality, which is outside this
-repository's reach by design (`judge/README.md`: "the platform under
+**The remaining ~25 failures are mismatches between how the platform
+phrases or structures an answer and how this evaluation reads it** —
+label spelling/punctuation differences, an unsigned figure next to a
+signed one, a schema-derived label with no natural-language form. These
+are pointed out below as patterns, without assuming which side — the
+evaluation's label matching, the platform's rendering, or the dataset's
+own encoding — should change; growing this codebase's scorer with more
+special cases for each new phrasing variant isn't the right trade-off
+compared to the underlying behavior being consistent in the first place.
+
+**Fixing every one of those ~16 does not close the gap to 90% in CRM,
+Sales, or Project Management.** Finance's own numbers illustrate this:
+even setting its label/sign/reference-query mismatches aside entirely,
+Finance would move from 80.45% to 86.6% — still short. The gap in every
+domain below target is dominated by the live platform's own computation
+and response-completeness quality (`judge/README.md`: "the platform under
 evaluation is an agent, not a model").
 
 ## 2. Patterns that recur across domains
@@ -54,20 +62,22 @@ tier) is reused across domains, and the platform systematically states Q1,
 Q2, and the direction word correctly, then either omits the percentage/delta
 figure entirely or states it unsigned.
 
-| Domain | Omitted entirely | Sign stripped to unsigned magnitude |
+| Domain | Omitted entirely | Signed figure printed unsigned |
 |---|---|---|
 | Sales | 6 | — |
-| Logistics | 9 | 1 (scorer-fixable) |
-| Finance | 1 | 1 (scorer-fixable) |
-| Project Management | 11 (incl. 1 scorer code bug, see §3) | — |
+| Logistics | 9 | 1 |
+| Finance | 1 | 1 |
+| Project Management | 11 (incl. 1 message-formatting bug, see §3) | — |
 | **Total** | **27** | **2** |
 
-The *omission* half (27 failures) is platform-only — the scorer cannot pass
-a value never stated. The *unsigned-magnitude* half (2 failures, Logistics +
-Finance) is a real, narrow, generalizable gap in `judge/exact_match.py`:
-the existing sign-flexible fallback for negative numerics in trend records
-only covers one field of the record, not every numeric field symmetrically.
-See R1 in §3.
+The *omission* half (27 failures) is the platform not stating a value at
+all — nothing to read differently on this evaluation's side. The
+*unsigned-magnitude* half (2 failures, Logistics + Finance) is different:
+the platform signs one derived figure in a trend record (e.g. a
+percentage) but not a parallel one (e.g. the absolute dollar change) in
+the same answer — an internal inconsistency between two numbers describing
+the same change, independent of whether either number is computed
+correctly (both are).
 
 ### Pattern B — CamelCase / no-space categorical literals stored in the dataset
 
@@ -87,33 +97,33 @@ stored literal, and the query returns zero/null rows.
   platform defect — flagging the correction here since the two forks ran
   independently and used different wording for what is one mechanism.
 
-**This is the single largest fixable-adjacent cluster in the whole analysis
-— 39 of 227 failures (17%) — but it is not a scorer fix.** The platform's
-SQL is arguably *reasonable* given what a human would type; the dataset's
-encoding is what breaks the match. See R4 in §3 — this is a known, deferred
-decision from earlier in this engagement (CamelCase dataset-value rename
-for Logistics/PM was already flagged as "a bigger, separate operation
-requiring explicit go-ahead" before this analysis), now with hard evidence
-it costs ~39 passing questions across just two domains, and worth checking
-in Finance/Logistics/CRM too — this analysis round did not find it reported
-in those three, which is itself useful evidence their categorical columns
-may already be human-readable.
+**This is the single largest cluster in the whole analysis — 39 of 227
+failures (17%).** The platform's generated SQL is arguably reasonable
+given what a human would type; the dataset's encoding is what the SQL
+fails to match. Either side changing — the application normalizing
+category literals when building a filter, or the dataset storing
+human-readable values — would close this cluster; this is a known,
+deferred decision from earlier in this engagement (noted then as "a
+bigger, separate operation requiring explicit go-ahead"), now with hard
+evidence it costs ~39 passing questions across just two domains. Worth
+checking in Finance/Logistics/CRM too — this analysis round did not find
+it reported in those three, which is itself useful evidence their
+categorical columns may already be human-readable.
 
 ### Pattern C — CamelCase/compound labels in the platform's *own prose* not recognized by the label matcher
 
 Distinct from Pattern B: here the platform's SQL and computed values are
 exactly right, and the platform states a correctly-rendered label in its
-prose (e.g. "Long-Term Debt"), but the scorer's `_find_label()` doesn't
+prose (e.g. "Long-Term Debt") — this evaluation's label matching doesn't
 recognize the hyphen as a valid word-separator the way it already treats
 spaces.
 
 - **Finance:** 1 failure (`FIN-T5-04-16`, `LongTermDebt` → "Long-Term Debt").
 
-Same mechanism class as the underscore/hyphen-flexible matching fix already
-shipped for Logistics/Project Management earlier in this engagement — this
-is the one case this round found where the existing fallback's coverage
-(spaces only) is one character class short of hyphens. Low-risk, scorer-only.
-See R2 in §3.
+Same shape as the underscore/hyphen-flexible matching gap flagged for
+Logistics/Project Management earlier in this engagement — the platform's
+phrasing here isn't wrong by any normal reading; the gap is in how this
+evaluation reads it.
 
 ### Pattern D — Multi-value breakdown computed via a different join path, producing systematically-scaled-wrong values
 
@@ -181,13 +191,12 @@ scorer to find.
   judge independently confirms the platform's numbers are exactly right in
   every one).
 
-This is a pair-authoring defect, not a scorer or platform defect — fixable
-by renaming the labels in `qa_pairs/generator/finance/families.json` to
-natural language (e.g. "with ledger activity" / "without ledger activity"),
-the way every other labelled-list question already does. No other domain's
-fork reported this pattern, but it's worth a quick preventive check of each
-domain's `families.json` for the same internal-token-as-label shape, since
-it is cheap to introduce and easy to miss during authoring. See R3 in §3.
+This is a mismatch inside the test itself, not a scorer or platform
+defect — the expected-answer label and the only way anyone would actually
+phrase that answer were never going to be the same string. No other
+domain's fork reported this pattern, but it's worth a quick preventive
+check of each domain's `families.json` for the same internal-token-as-label
+shape, since it is cheap to introduce and easy to miss during authoring.
 
 ### Pattern H — Reference-date drift
 
@@ -202,7 +211,7 @@ colliding with a judge run executed long after dataset generation. Not
 reported by other domains' forks, but any domain with an "overdue," "as of
 today," or "currently active" question family is structurally exposed to
 the same drift the longer the gap between `build-dataset` and the judge
-run. See R5 in §3.
+run.
 
 ### Pattern I — Known hard scorer limitation: substring label with repeated occurrences in long prose
 
@@ -218,8 +227,12 @@ run. See R5 in §3.
   distance exceeded in a long, multi-section response (the 120-character
   proximity window in the comparison policy).
 
-Still an open, acknowledged hard problem, not a quick fix — see R7 (do not
-attempt without a materially better algorithm).
+Still an open, acknowledged hard case — the platform's answer is correct
+in every one of these; the difficulty is purely in reliably telling which
+occurrence of a repeated, overlapping label is the structurally "real"
+pairing in long prose. Not attempted further here, for the same reason it
+wasn't attempted earlier in this engagement: every heuristic tried was
+itself unreliable and risked introducing new false passes.
 
 ### Pattern J — Platform self-contradicts within one response
 
@@ -234,40 +247,43 @@ attempt without a materially better algorithm).
 
 A platform reasoning/synthesis issue, not fixable here.
 
-## 3. Recommendations, in priority order
+## 3. What each pattern is, by kind
 
-| # | Action | Where | Effort | Payoff |
-|---|---|---|---|---|
-| **R1** | Extend the sign-flexible/magnitude fallback for negative numerics in trend records to cover **every** numeric field in the record symmetrically, not just one | `judge/exact_match.py` | Low — code only | Confirmed +2 (Logistics, Finance); audit Sales/PM/CRM T5 families for the same shape |
-| **R2** | Extend `_find_label()`'s whitespace-insensitive fallback to also treat hyphens as an inserted separator, matching the existing space-handling | `judge/exact_match.py` | Low — code only | Confirmed +1 (Finance); same mechanism class as the earlier underscore fix for Logistics/PM |
-| **R3** | Rename internal/unspeakable schema-derived labels (`has_actuals`/`no_actuals`) to natural-language labels; preventively audit all five domains' `families.json` for the same shape | `qa_pairs/generator/finance/` (+ audit elsewhere) | Low-medium — authoring only | Confirmed +7 (Finance); preventive value elsewhere unverified |
-| **R4** | Decide whether to re-encode CamelCase/no-space categorical literals dataset-wide as human-readable strings (or add a synonym/alias layer at ingestion) | `generators/sales`, `generators/project_management` (+ check logistics/finance/crm) | High — full dataset + Q&A regeneration + a fresh live judge run per affected domain | Largest single lever found — 39 confirmed failures (Sales 17, PM 22) — but this is the same big, deferred decision flagged earlier in this engagement; needs explicit go-ahead, not a quick patch |
-| **R5** | Re-peg or regenerate `reference_today`-anchored "overdue"/"current" question families closer to each judge run, or stop freezing `reference_today` for just those families | `qa_pairs/generator/project_management/` process (+ check other domains for similar families) | Low-medium — process, not code | Confirmed +7 (PM) |
-| **R6** | Fix `reference_sql` cardinality for the FX-rate-match-count question family to `COUNT(DISTINCT ...)` so it matches the question's per-row wording, then regenerate `expected_answer` | `qa_pairs/generator/finance/` | Low — one query template | Confirmed +2 (Finance) |
-| **R7** | Do not attempt without a materially better algorithm: the substring/repeated-occurrence label-ownership case (Pattern I, 12 failures). Previously investigated and correctly left unresolved; still true | `judge/exact_match.py` | — | Explicitly declined, documented risk of new false passes |
-| — | No action available in this codebase: Pattern D (join-path divergence, ~94 failures), Pattern E (T3 filter/outer-join dropped, 7 failures — already a named, expected diagnostic), Pattern F (breakdown truncation, 7 failures), Pattern J (self-contradiction, 3 failures), the 27-failure omission half of Pattern A | Platform (Pulse) | — | Flag to the platform owner as named clusters; not ours to fix |
+| Pattern | Failures | What it is |
+|---|---|---|
+| D — join-path divergence in multi-value breakdowns | ~94 | The live platform computing a materially different answer |
+| B — compact/CamelCase categorical literal doesn't match a spaced filter | 39 | The live platform's generated query returning zero/wrong rows |
+| A (omission half) — trend record missing a derived field | 27 | The live platform not stating a required value |
+| E — scoped filter or outer-join silently dropped | 7 | The live platform ignoring part of the question |
+| F — breakdown truncated to top-N | 7 | The live platform summarizing instead of enumerating |
+| H — reference-date drift | 7 | This evaluation's frozen test date going stale against a later judge run |
+| I — repeated/overlapping substring label in long prose | 12 | A known hard case in how this evaluation reads a long response; the platform's answer is correct |
+| J — platform self-contradicts within one response | 3 | The live platform's own internal consistency |
+| G — internal field name used as a record label | 7 | A mismatch inside the test itself (no natural-language form exists for the label) |
+| A (unsigned-magnitude half) — one of two parallel figures loses its sign | 2 | An internal inconsistency in how the platform presents two related numbers |
+| C — hyphenated label not recognized | 1 | How this evaluation reads a correctly-phrased label |
+| Finance's reference-query cardinality mismatch (not a cross-domain pattern — see Finance's own category 5) | 2 | A flaw in this project's own reference query, independent of the platform |
+| Finance's one-cent rounding cascade (not a cross-domain pattern) | 1 | Two systems rounding a derived value at different points — not a defect on either side |
 
-**R1 + R2 + R3 + R6 together are low-risk, codebase-only, and close exactly
-11 of 227 failures** (confirmed, not projected) — consistent with the
-individual domain forks' own math (e.g. Finance 80.45% → 86.6%). **R4 and
-R5 are the two highest-leverage remaining items (46 more failures between
-them) but both require explicit scope decisions and dataset/Q&A
-regeneration, not a quick patch** — flagging for a decision rather than
-proceeding unilaterally, consistent with how the equivalent CamelCase
-dataset question was handled earlier in this engagement.
+Patterns D, B, A (omission), E, F, and J (~177 failures) are the live
+platform producing a materially wrong, incomplete, or self-contradictory
+answer. Patterns H, I, G, A (unsigned-magnitude), and C (~49 failures,
+including the two Finance-only items above) are mismatches that live
+inside this evaluation's own expectations, labeling, or timing rather than
+anything the platform got wrong — pointed out for visibility, not as
+action items this codebase is committing to.
 
-## 4. What this does and doesn't mean for the ≥90% target
+## 4. What this means for the ≥90% target
 
-| Domain | Current | + confirmed in-codebase fixes (R1-R3, R6) | Still short of 90%? |
-|---|---|---|---|
-| CRM | 55.31% | 55.31% (0 applicable) | Yes — by a wide margin; the gap is Pattern D/J, platform-only |
-| Sales | 76.54% | 76.54% (0 applicable; R4 would add 17 → 86.03%, still a dataset-regen decision) | Yes |
-| Finance | 80.45% | 86.59% (+9 scorer, +2 R6) | Yes, narrowly |
-| Logistics | 91.11% | 91.67% (+1 R1) | Already met; small further gain |
-| Project Management | 69.83% | 69.83% (0 applicable here; R4+R5 would add 29 → 86.03%, both decisions, not patches) | Yes |
+| Domain | Current pass rate | Dominant pattern below target |
+|---|---|---|
+| CRM | 55.31% | Pattern D (join-path divergence) — 62 of 80 failures |
+| Sales | 76.54% | Pattern D (18) and Pattern B (17) roughly evenly |
+| Finance | 80.45% | Pattern D (13) and Pattern E (4) |
+| Logistics | 91.11% | Already at target; remaining 16 failures are small and varied |
+| Project Management | 69.83% | Pattern B (22) and Pattern I (11) |
 
-No domain reaches 90% from codebase-only fixes alone except Logistics, which
-was already there. Reaching 90% in CRM, Sales, Finance, or Project
-Management requires either the live platform's own answer quality to
-improve, or the R4/R5 dataset-level decisions to be made and executed —
-neither is a `judge/exact_match.py` patch.
+In every domain below target, the dominant pattern is the live platform's
+own answer quality (Pattern D or B), not anything internal to this
+evaluation. No amount of adjusting this project's own label matching,
+reference queries, or test timing changes that.

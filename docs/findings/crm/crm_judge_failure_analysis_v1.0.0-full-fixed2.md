@@ -1,12 +1,23 @@
 # CRM Judge Failure Analysis — `v1.0.0-full-fixed2`
 
 **Run:** `release/v1.0.0-full-fixed2/crm/judge/20261012T064133Z/results.json`
+
 **Exact match:** 99 pass / 80 fail / 179 eligible — **55.31% pass rate**
+
 **Target:** ≥90% — **gap: 34.69 points, 61 additional passes needed**
 
 Every one of the 80 failing rows was read individually: the question, `expected_answer`, the platform's full prose `actual_answer`, the scorer's `exact_match_detail`, and — as an independent cross-check — the LLM judge's `factual_correctness` score and rationale (scored from the same platform answer, blind to the deterministic scorer's verdict). Where the judge independently agrees the platform's number is wrong, that is strong evidence the fault is in the **platform's answer**, not in `judge/exact_match.py`. Where the judge disagrees (rates the answer correct) despite an exact-match fail, that is the signature of a **scorer bug**.
 
 **Result of that cross-check: 76 of 80 failures score `factual_correctness: 1` from the judge, 3 score `2`, and 1 scores `4`. There is no case in this run where the judge independently found the platform's answer correct while the deterministic scorer failed it.** That is the headline finding: **all 80 CRM failures in this run are platform-side — Pulse's own answer is numerically wrong, empty, or incomplete. None are fixable by changing `judge/exact_match.py`, and none are dataset defects** (every `expected_answer` checked against its `reference_sql` in `crm_qa_pairs.csv` is internally consistent).
+
+**Plain-language, root-cause write-ups** —
+one per category below, confirmed against the actual dataset, with a
+suggested fix for each:
+
+- [Category 1 — zero results returned for real data](crm_category1_zero_results_v1.0.0-full-fixed2.md)
+- [Category 2 — SLA compliance rate lands close but wrong](crm_category2_sla_rate_mismatch_v1.0.0-full-fixed2.md)
+- [Category 3 — wrong numbers in breakdowns and rankings](crm_category3_wrong_breakdown_values_v1.0.0-full-fixed2.md)
+- [Category 4 — ranked list cut short](crm_category4_truncated_list_v1.0.0-full-fixed2.md)
 
 ---
 

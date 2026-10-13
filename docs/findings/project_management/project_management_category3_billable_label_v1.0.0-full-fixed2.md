@@ -1,0 +1,35 @@
+# Project Management — Category 3: "non_billable" Not Recognized Inside a Longer Response (11 questions)
+
+11 questions involving a billable/non-billable breakdown fail even though
+both numbers are stated correctly and attached to the right label in
+plain English.
+
+## What's happening
+
+**Example:** "For resources in the delivery department, how does the
+count of logged time entries break down by billable status?" Expected
+`billable | 20183; non_billable | 5684`. Answer: "...20,183 were marked
+billable and 5,684 were marked non-billable..." — both numbers correct,
+both correctly paired with their label, in natural phrasing.
+
+The underlying difficulty: `non-billable` contains the word `billable` as
+a substring, and the word `billable` also appears elsewhere in the same
+response on its own (totals, other breakdowns). Telling which occurrence
+of "billable" is part of "non-billable" and which is a free-standing
+mention — reliably, across arbitrary response lengths and structures — is
+a hard problem in general, not specific to one phrasing choice.
+
+In one instance (`PM-RG-08-V01`), even the plain `billable` label loses
+its pairing in a longer response, showing this isn't limited to the
+non-billable/billable overlap specifically — long, multi-section
+responses make this kind of label-to-value pairing harder generally.
+
+## The problem
+
+This is an open, known limitation of how this evaluation pairs a label
+with its value in free-form text, not a case where the underlying answer
+is wrong — every instance here is independently confirmed correct. No
+reliable fix has been found: approaches tried so far either miss this
+case or risk breaking other, currently-passing pairings elsewhere.
+Documenting it as a known limitation rather than claiming a fix that
+isn't actually safe to make.

@@ -14,6 +14,14 @@ either a platform SQL-generation defect, a platform behavioral gap, or a
 dataset-encoding choice that misleads the platform's own SQL generation —
 not a scorer bug.
 
+**Plain-language, root-cause write-ups** — one per category below,
+confirmed against the actual dataset:
+
+- [Category 1 — categorical value stored compactly, filter written with spaces](sales_category1_enum_literal_mismatch_v1.0.0-full-fixed2.md)
+- [Category 2 — materially wrong totals](sales_category2_wrong_totals_v1.0.0-full-fixed2.md)
+- [Category 3 — percentage-change figure never stated](sales_category3_missing_percentage_v1.0.0-full-fixed2.md)
+- [Category 4 — list tail compressed into a range instead of enumerated](sales_category4_truncated_list_v1.0.0-full-fixed2.md)
+
 ---
 
 ## Category 1 — Enum/categorical literal mismatch between dataset encoding and the platform's guessed SQL literal (17 — **not scorer-fixable; dataset-encoding issue**)
@@ -71,50 +79,46 @@ cross-domain common-patterns file for the consolidated recommendation.
 
 ## Category 2 — Platform SQL logic defects: genuinely wrong computation (18 — **not fixable in this codebase at all**)
 
-The platform's own SQL joins, filters, or date-boundary logic produce a
-materially different number from the ground truth, with no shared
-mechanism this codebase controls:
+Re-verified against the actual `platform_generated_sql`, `reference_sql`,
+and the exported dataset (not just the response text) — this corrects two
+mechanisms the original pass guessed at:
 
-- **`SALES-T3-02-09`** — "How many new leads have never become a deal?"
-  Expected `2228`, platform answered `10000` (essentially every lead). The
-  platform's SQL is `WHERE NOT EXISTS (SELECT 1 FROM studio.deals d WHERE
-  d.lead_id = l.lead_id)` — if `deals.lead_id` isn't the column that
-  actually links a deal back to its originating lead (or is sparsely
-  populated), the anti-join matches almost everything. Judge
-  `factual_correctness` = 1, agreeing.
-- **`SALES-T5-03-12`** — North-territory Q1→Q2 won-deal comparison. Expected
-  `6,754,906.82 | 210,657.55`; platform answered **"~$2.05 billion" / "~$64.9
-  million"** — roughly 300x too large. The platform's SQL joins
-  `deals d JOIN leads l ON l.rep_name = d.rep_name` — a join on a name
-  string rather than an id. If any rep name is not unique across the
-  dataset, this fans out into massive double/triple counting, and North is
-  the one territory where it happened at this scale. Judge
-  `factual_correctness` = 1.
-- **`SALES-T4-04-14`..`18`** (5 questions, one per territory, won-deal-by-
-  target-period breakdown) — partial mismatches on specific periods
-  (`platform_generated_sql` joins `targets t ON t.rep_name = w.rep_name`,
-  the same name-join pattern as above, which can silently fan out a
-  period's total when a rep's target row isn't uniquely keyed). Judge scores
-  these 2-3 (partially right), consistent with "most periods compute
-  correctly, specific ones don't."
-- **`SALES-T5-02-06`, `-08`, `-09`** (rep-quota-shortfall lists by
-  territory) — platform finds fewer reps below quota than expected, or
-  computes a different shortfall amount for one or two reps on the list.
-  Judge factual_correctness 1-2.
-- **`SALES-T5-05-19`..`-22`, `SALES-T5-06-23`, `SALES-RG-14-V01`** (6
-  questions, Q1→Q2 quoted-revenue-by-product-category) — consistently ~10-15%
-  lower than expected on both quarters (e.g. hardware: platform `$878.4M` Q1
-  vs expected `$984.0M`). The platform's SQL filters on `quoted_at` date
-  rather than the deal's `close_date`; a consistent percentage-size gap
-  across every category suggests a systematic date-window difference
-  between "when quoted" and "when the deal closed," not a one-off error.
-  `SALES-T5-06-23` ("which category had the best trend") inherits this and
-  picks a different "best" category as a direct consequence.
-- **`SALES-T3-03-15`** (West-territory zero-amount target periods: `23` vs
-  expected `24`) and **`SALES-T2-09-37`** (Won deals in target period: `945`
-  vs expected `940`) — small off-by-a-few discrepancies, same family of
-  boundary/join edge cases as above, too small individually to diagnose
-  further without the platform's full statement set.
+- **Date range treated as inclusive on both ends instead of
+  start-inclusive/end-exclusive (7 questions).** Target periods are
+  `[period_start, period_end)` in the reference — the end date belongs to
+  the *next* period. Several generated queries use `BETWEEN period_start
+  AND period_end`, pulling boundary-exact deals into the wrong period.
+  `SALES-T2-09-37`: expected `940`, answered `945`. `SALES-T3-03-15`:
+  expected `24` zero-amount periods, answered `23`. `SALES-T4-04-14`
+  through `-18` (won-amount-by-target-period breakdowns) are right for
+  every period except the ones with a boundary-exact close date — this,
+  not a name-join fan-out, is why the original pass saw "most periods
+  correct, specific ones wrong."
+- **Quarter window applied to the wrong date column (6 questions).**
+  `SALES-T5-05-19` through `-22`, `SALES-T5-06-23`, `SALES-RG-14-V01` filter
+  Q1/Q2 by `quotations.quoted_at` instead of `deals.close_date` — confirmed
+  against both SQL statements. A quote date and its deal's close date are
+  routinely weeks apart, so every quarter total comes out consistently
+  lower (hardware: `$878.4M` vs. expected `$984.0M`).
+- **Joining through a non-unique name column multiplies every matching
+  row (1 question).** `SALES-T5-03-12` joins `deals` to `leads` on
+  `rep_name` (text, not an id) to find territory. 50 reps share 15,000
+  leads — about 300 lead rows per rep — so each deal row gets duplicated
+  roughly 300 times before the sum. Expected Q1: `$6.75M`; answered
+  `~$2.05 billion`, almost exactly the 300x the leads-per-rep ratio
+  predicts.
+- **A different definition of "most recently completed period" (3
+  questions).** `SALES-T5-02-06`, `-08`, `-09`: the reference uses one
+  global period (latest `period_end` across every target row, no
+  territory distinction); the generated query computes the latest period
+  **per rep**, restricted to periods ending on or before the real-world
+  current date — a narrower, per-rep rule that can select a different
+  period than the reference's single global one.
+- **A status word in the question dropped from the filter (1 question).**
+  `SALES-T3-02-09` — "How many **new** leads have never become a deal?"
+  The reference filters to `lead_status = 'New'` (`2228`); the generated
+  query drops that filter and counts every unconverted lead of any status
+  (`10000`).
 
 **Full list (18):** `SALES-T2-09-37`, `SALES-T3-02-09`, `SALES-T3-03-15`,
 `SALES-T4-04-14`, `SALES-T4-04-15`, `SALES-T4-04-16`, `SALES-T4-04-17`,
@@ -122,10 +126,8 @@ mechanism this codebase controls:
 `SALES-T5-03-12`, `SALES-T5-05-19`, `SALES-T5-05-20`, `SALES-T5-05-21`,
 `SALES-T5-05-22`, `SALES-T5-06-23`, `SALES-RG-14-V01`.
 
-**Resolution path:** none available in this repository. The deterministic
-scorer and the dataset are both correct here; the platform's query planning
-is the defect, and this evaluation framework only observes the platform's
-final answer — it cannot change how Pulse writes SQL.
+See [the Category 2 write-up](sales_category2_wrong_totals_v1.0.0-full-fixed2.md)
+for the full detail.
 
 ---
 

@@ -1,11 +1,15 @@
 # Finance Judge Failure Analysis — `release/v1.0.0-full-fixed2`
 
 **Run:** `release/v1.0.0-full-fixed2/finance/judge/20261012T002452Z/results.json`
+
 **Exact match:** eligible 179, pass 144, fail 35, **pass_pct 80.45%**
-**Target:** ≥ 90% — gap: 35 failures, of which only 9 are within this codebase's
-control (see §Summary). Closing all 9 moves pass_pct to **85.47%**, still short
-of 90% — the remaining gap is dominated by genuine platform/Pulse answer
-errors (§3) that no scorer or dataset change can close.
+
+**Target:** ≥ 90% — gap: 35 failures. 23 of them are the live platform
+computing or reporting a materially different answer than the ground
+truth (categories 4, 6, 7, 8); the remaining 12 are mismatches between
+the platform's phrasing and this evaluation's own expectations (categories
+1–3) or a flaw in this project's own reference query (category 5) —
+pointed out below without assuming which side should change.
 
 Every number below was cross-checked by re-running each failing question's
 `reference_sql` directly against the exported CSVs in
@@ -14,9 +18,20 @@ the CSV's `expected_answer` column alone. Where that re-run reproduced
 `expected_answer` exactly, the ground truth is confirmed and any mismatch is
 the platform's; this surfaced one case (§5) where it is not.
 
+**Plain-language, root-cause write-ups** —
+one per category below, confirmed against the actual dataset:
+
+- [Category 1 — an internal field name used as a record label](finance_category1_internal_label_v1.0.0-full-fixed2.md)
+- [Category 2 — a hyphenated label isn't recognized](finance_category2_hyphenated_label_v1.0.0-full-fixed2.md)
+- [Category 3 — a negative value loses its sign](finance_category3_unsigned_delta_v1.0.0-full-fixed2.md)
+- [Category 4 — one field missing from an otherwise-correct answer](finance_category4_missing_field_v1.0.0-full-fixed2.md)
+- [Category 6 — a stated filter gets dropped](finance_category6_dropped_filter_v1.0.0-full-fixed2.md)
+- [Category 7 — breakdown cut short at top 5](finance_category7_truncated_breakdown_v1.0.0-full-fixed2.md)
+- [Category 8 — materially wrong totals](finance_category8_wrong_totals_v1.0.0-full-fixed2.md)
+
 ---
 
-## 1. Scorer-fixable — internal schema label never spoken in prose (7)
+## Category 1 — An internal field name used as a record label (7)
 
 `has_actuals` / `no_actuals` are the field names the Q&A pair generator used
 as record labels, not words a human (or an LLM platform) would ever say back.
@@ -37,67 +52,58 @@ periods recorded ledger activity for their account versus none?")
   not present`
 - judge `factual_correctness`: 5 — "exactly matches... 236... 251"
 
-**Resolution (would-be):** not a synonym-table fix like the CamelCase case
-below — there is no natural-language synonym for `has_actuals`. The real fix
-belongs in the Q&A pair authoring step
-(`qa_pairs/generator/finance/families.json` / the `scale_pairs_finance.py`
-template), not the scorer: give this record pair human-speakable labels (e.g.
-`"with ledger activity"` / `"without ledger activity"`) the way every other
-labelled-list question in this domain already does. Changing the scorer to
-special-case these two literal tokens would fix only these 7 questions and
-leave the actual defect (an unspeakable label in the pair contract) in place
-for any future question built the same way.
+**The problem:** not a synonym-table gap like the hyphenated-label case
+below — there is no natural-language synonym for `has_actuals`. This
+label never had a chance of appearing in anyone's prose, platform or
+otherwise; see
+[Category 1](finance_category1_internal_label_v1.0.0-full-fixed2.md) for
+the general write-up.
 
 ---
 
-## 2. Scorer-fixable — CamelCase label needs hyphen/space-flexible matching (1)
+## Category 2 — A hyphenated label isn't recognized (1)
 
 `FIN-T5-04-16` — "...which three account subtypes received the most ledger
 entries?" expected `AccountsPayable | 20211; RetainedEarnings | 19396;
 LongTermDebt | 17540`. The platform wrote "Accounts Payable" and "Retained
-Earnings" (both matched fine — `_find_label()`'s existing whitespace-insensitive
-fallback handles a two-word CamelCase split), but "Long-Term Debt" uses a
-**hyphen**, which that fallback does not treat as an inserted separator.
+Earnings" (both matched fine — the two-word CamelCase split is already
+handled), but "Long-Term Debt" uses a **hyphen** where the others used a
+space.
 
 - `exact_match_detail`: `label 'LongTermDebt' not present`
 - judge `factual_correctness`: 5 — "match the expected answer exactly...
   Full match."
 
-**Resolution (would-be):** extend `_find_label()`'s whitespace-insensitive
-fallback in `judge/exact_match.py` to also strip hyphens (not just spaces)
-when building the comparison form, the same way it already collapses
-multiple spaces. Low-risk, code-only, no dataset regeneration needed — this
-is a narrower, purely-mechanical case of the CamelCase-rendering problem
-flagged for Logistics/Project Management elsewhere in this repository's
-findings, and the fix technique is the same.
+**The problem:** this evaluation's label matching treats a space as an
+inserted word-separator in a CamelCase name but doesn't treat a hyphen the
+same way — a narrower, purely-mechanical case of the CamelCase-rendering
+problem flagged for Logistics/Project Management elsewhere in this
+repository's findings. The platform's own phrasing here is fine; the gap
+is in how this evaluation reads it.
 
 ---
 
-## 3. Scorer-fixable — negative delta rendered as unsigned magnitude (1)
+## Category 3 — A negative value loses its sign (1)
 
 `FIN-T5-06-23` expects `... | -515789370.20 | -22.32 | down`. The platform
 wrote: "a drop of roughly **$515,789,370.20**, or about **-22.3%**". The
-percentage carries its sign and rounds faithfully (accepted); the dollar
-figure is printed as a bare positive magnitude, with the decrease conveyed
-only by the word "drop" — never a minus sign.
+percentage carries its sign; the dollar figure next to it is printed as a
+bare positive magnitude, with the decrease conveyed only by the word
+"drop" — never a minus sign.
 
 - `exact_match_detail`: `value '-515789370.20' not present`
 - judge `factual_correctness`: 5
 
-**Resolution (would-be):** when a record's last field is a direction label
-(`_direction_alternatives()` already recognizes "down"/"up"/"flat") and a
-sibling numeric field is negative, also accept that field printed as its
-unsigned absolute value. This is a real, currently-unimplemented gap in
-`judge/exact_match.py` — not something already fixed on another branch (the
-file was read directly to confirm). **Note:** a near-identical case,
-`FIN-T5-06-22`, is NOT in this bucket — there the platform never printed a
-percentage figure at all (see §4), which is an omission, not a sign-rendering
-issue, even though the `exact_match_detail` message looks superficially
-similar.
+**The problem:** the same answer signs one derived figure but not the
+other, for the same quarter-over-quarter change. **Note:** a near-identical
+case, `FIN-T5-06-22`, is NOT the same issue — there the platform never
+printed a percentage figure at all (see §4), which is a missing field, not
+a sign-rendering inconsistency, even though the `exact_match_detail`
+message looks superficially similar.
 
 ---
 
-## 4. Platform-side — omitted one required field, rest correct (1)
+## Category 4 — Platform omitted one required field, rest correct (1)
 
 `FIN-T5-06-22` expects `1025062593.13 | 632997816.06 | -392064777.07 |
 -38.25 | down`. The platform's Q1/Q2/absolute-change figures are all exactly
@@ -114,7 +120,7 @@ against the question's own 5-field contract.
 
 ---
 
-## 5. Dataset/pair defect — reference SQL cardinality doesn't match the question's intent (2)
+## Category 5 — Reference SQL cardinality doesn't match the question's intent (2)
 
 `FIN-T3-12-28` ("How many FX rate records have at least one matching
 transaction on their rate date?") and its rephrase `FIN-RG-10-V01` both
@@ -156,7 +162,7 @@ is a Q&A-pair-authoring fix, not a scorer fix and not a platform fault.
 
 ---
 
-## 6. Platform-side — ignores a WHERE filter or outer-join NULL-check (4)
+## Category 6 — Platform ignores a WHERE filter or outer-join NULL-check (4)
 
 Four failures share a mechanism already named in `judge/README.md`'s own
 "T3 NULL handling (§9.2)" diagnostic: a `LEFT JOIN ... WHERE <child>.id IS
@@ -191,7 +197,7 @@ and every T3 pair in every domain is a candidate for the same weakness.
 
 ---
 
-## 7. Platform-side — truncates a required full labelled breakdown (5)
+## Category 7 — Platform truncates a required full labelled breakdown (5)
 
 Question IDs: `FIN-T4-07-23`, `FIN-T4-07-24`, `FIN-T4-07-25`, `FIN-T4-07-26`,
 `FIN-T4-07-27` — all "break down ledger entry count by account subtype"
@@ -211,7 +217,7 @@ missing values for the scorer to find.
 
 ---
 
-## 8. Platform-side — materially wrong computation, verified against ground truth (13)
+## Category 8 — Platform materially wrong computation, verified against ground truth (13)
 
 Every one of these was independently re-run via `reference_sql` against
 `release/v1.0.0-full-fixed2/finance/dataset/*.csv` in DuckDB; every one
@@ -262,7 +268,7 @@ or budget-activity-join shape.
 
 ---
 
-## 9. Not actionable — one-cent rounding cascade on a derived delta (1)
+## Category 9 — One-cent rounding cascade on a derived delta (1)
 
 `FIN-T5-02-06` — Q1/Q2 absolute figures and the percentage all match
 exactly; only the absolute change fails: expected `-798881494.76`, platform
@@ -284,28 +290,31 @@ and is believed to be a residual-risk case rather than a bug anywhere.
 
 ## Summary
 
-| # | Category | Count | Fixability |
-|---|---|---|---|
-| 1 | Internal schema label never spoken in prose (`has_actuals`/`no_actuals`) | 7 | Scorer/pair-fixable |
-| 2 | CamelCase label needs hyphen-flexible matching (`LongTermDebt`) | 1 | Scorer-fixable |
-| 3 | Negative delta rendered as unsigned magnitude + decline wording | 1 | Scorer-fixable |
-| 4 | Platform omitted one required field, rest correct | 1 | Not fixable here |
-| 5 | Reference SQL cardinality mismatch vs. question intent | 2 | Dataset/pair defect |
-| 6 | Platform ignores WHERE filter / outer-join NULL-check | 4 | Not fixable here |
-| 7 | Platform truncates a required full labelled breakdown | 5 | Not fixable here |
-| 8 | Platform materially wrong computation (ground-truth verified) | 13 | Not fixable here |
-| 9 | One-cent rounding cascade on a derived delta | 1 | Not actionable (by design) |
-| | **Total** | **35** | |
+| # | Category | Count |
+|---|---|---|
+| 1 | Internal field name used as a record label (`has_actuals`/`no_actuals`) | 7 |
+| 2 | Hyphenated label not recognized (`LongTermDebt`) | 1 |
+| 3 | Negative value loses its sign | 1 |
+| 4 | Platform omitted one required field, rest correct | 1 |
+| 5 | Reference SQL cardinality mismatch vs. question intent | 2 |
+| 6 | Platform ignores WHERE filter / outer-join NULL-check | 4 |
+| 7 | Platform truncates a required full labelled breakdown | 5 |
+| 8 | Platform materially wrong computation (ground-truth verified) | 13 |
+| 9 | One-cent rounding cascade on a derived delta | 1 |
+| | **Total** | **35** |
 
-**Of 35 failures: 9 are scorer/pair-fixable in this codebase (categories 1–3),
-2 are a dataset/pair-authoring defect (category 5), 23 are the live
-platform answering incorrectly or incompletely (categories 4, 6, 7, 8), and 1
-is an inherent rounding artifact not worth chasing (category 9).**
+Categories 4, 6, 7, and 8 (23 failures) are the live platform computing or
+reporting a materially different answer than the ground truth. Categories
+1–3 (9 failures) are mismatches between the platform's own phrasing and
+this evaluation's expectations — the platform's numbers are independently
+confirmed correct in every one of them by the judge. Category 5 (2
+failures) is a flaw in this project's own reference query, not the
+platform's. Category 9 (1 failure) is a one-cent rounding artifact from
+two systems deriving the same value at different points in the
+calculation — not attributable to either side as a defect.
 
-Fixing everything in this codebase's control (9 + 2 = 11 questions) would
-raise Finance's exact-match pass rate from 80.45% (144/179) to **86.6%**
-(155/179) — short of the 90% target. The remaining gap is the platform's
-to close, concentrated in FX-adjusted quarter comparisons and
+Even setting categories 1–3, 5, and 9 aside entirely, 23 of 35 failures
+remain concentrated in FX-adjusted quarter comparisons and
 account-ledger-activity presence questions (category 8), plus the
 documented T3 NULL-handling weakness (category 6) that is very likely to
 recur in every domain's T3 tier, not just Finance's.
