@@ -37,9 +37,7 @@ from qa_pairs.utils import build_stamp, verify  # noqa: E402
 from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 from qa_pairs.utils.output_paths import resolve_qa_output_dir  # noqa: E402
 
-ID_PREFIX = json.loads((BASE / "generator" / "finance" / "config.json").read_text())[
-    "id_prefix"
-]
+ID_PREFIX = json.loads((BASE / "generator" / "finance" / "config.json").read_text())["id_prefix"]
 
 
 def _gid(group: str) -> str:
@@ -73,10 +71,7 @@ GROUPS = {
         "T2-01",
         {"source_system": "Billing"},
         "Lexical",
-        [
-            "How many ledger entries came from transactions originating in the "
-            "Billing system?"
-        ],
+        ["How many ledger entries came from transactions originating in the " "Billing system?"],
     ),
     "RG-05": (
         "T2-07",
@@ -99,10 +94,7 @@ GROUPS = {
         "T3-01",
         {"source_system": "Billing"},
         "Rephrase",
-        [
-            "How many transactions from the Billing system remain unposted to "
-            "the ledger?"
-        ],
+        ["How many transactions from the Billing system remain unposted to " "the ledger?"],
     ),
     "RG-08": (
         "T3-08",
@@ -123,10 +115,7 @@ GROUPS = {
         "T3-12",
         {},
         "Rephrase",
-        [
-            "How many FX rate rows line up with at least one transaction dated "
-            "the same day?"
-        ],
+        ["How many FX rate rows line up with at least one transaction dated " "the same day?"],
     ),
     "RG-11": (
         "T4-01",
@@ -143,10 +132,7 @@ GROUPS = {
         "T4-05",
         {"normal_balance": "Credit"},
         "Lexical",
-        [
-            "For credit-normal-balance accounts, what's the ledger entry tally "
-            "by source system?"
-        ],
+        ["For credit-normal-balance accounts, what's the ledger entry tally " "by source system?"],
     ),
     "RG-13": (
         "T4-02",
@@ -182,10 +168,7 @@ GROUPS = {
         "T2-09",
         {"account_subtype": "AccountsPayable"},
         "Lexical",
-        [
-            "What is the combined budget (USD) set aside for accounts payable "
-            "accounts?"
-        ],
+        ["What is the combined budget (USD) set aside for accounts payable " "accounts?"],
     ),
 }
 # Note: Section 9.5 also lists a "Referential" class (named-entity /
@@ -256,16 +239,12 @@ def _read(path: Path) -> list[dict]:
 def generate_rephrases(profile: str) -> None:
     """Generate verified rephrase variants for an existing Q&A release."""
 
-    _mf = json.loads(
-        (BASE / "dataset" / f"manifest_finance_{profile}.json").read_text()
-    )
+    _mf = json.loads((BASE / "dataset" / f"manifest_finance_{profile}.json").read_text())
     dv, domain = _mf["dataset_version"], _mf["domain"]
 
     qa = resolve_qa_output_dir(BASE, profile, "finance")
     companion = _read(qa / "finance_qa_pairs_companion.csv")
-    contract = {
-        r["natural_language_question"]: r for r in _read(qa / "finance_qa_pairs.csv")
-    }
+    contract = {r["natural_language_question"]: r for r in _read(qa / "finance_qa_pairs.csv")}
     by_family_param = {(r["family"], r["param_values"]): r for r in companion}
 
     con = connect_typed(BASE / "dataset" / f"finance_{profile}.duckdb")
@@ -318,9 +297,7 @@ def generate_rephrases(profile: str) -> None:
                     ),
                 )
             )
-            variants.append(
-                {**{k: base[k] for k in CONTRACT}, "natural_language_question": q}
-            )
+            variants.append({**{k: base[k] for k in CONTRACT}, "natural_language_question": q})
             full_variants.append(
                 {
                     **base,
@@ -346,8 +323,7 @@ def generate_rephrases(profile: str) -> None:
     bad = [
         gid
         for gid in GROUPS
-        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)})
-        != 1
+        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)}) != 1
     ]
     if bad:
         raise SystemExit(f"rephrase hash mismatch (nothing written): {bad}")
@@ -417,9 +393,7 @@ def _write_plan(path: Path) -> None:
 def _write(path: Path, fields: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(
-            fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n"
-        )
+        w = csv.DictWriter(fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
 

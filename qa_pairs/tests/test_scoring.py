@@ -54,8 +54,7 @@ def _bump_first_number(answer: str) -> str:
     first = nums[0]
     target = str(first)
     replacement = str(
-        first
-        + (Decimal("1") if first == first.to_integral_value() else Decimal("0.01"))
+        first + (Decimal("1") if first == first.to_integral_value() else Decimal("0.01"))
     )
     return answer.replace(target, replacement, 1)
 
