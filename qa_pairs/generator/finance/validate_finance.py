@@ -185,13 +185,9 @@ def validate(profile: str) -> None:
         print(f"  {mark} {label}: {n:,}")
 
     manifest = BASE / "dataset" / f"manifest_finance_{profile}.json"
-    print(
-        f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}"
-    )
+    print(f"[{profile}] manifest: {json.loads(manifest.read_text())['dataset_version']}")
 
-    print(
-        f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}"
-    )
+    print(f"\n{'ALL CHECKS PASSED' if failures == 0 else f'{failures} CHECK(S) FAILED'}")
     con.close()
     if failures:
         raise ValueError(f"{failures} Q&A dataset validation check(s) failed")

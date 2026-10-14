@@ -37,9 +37,7 @@ from qa_pairs.utils import build_stamp, verify  # noqa: E402
 from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 from qa_pairs.utils.output_paths import resolve_qa_output_dir  # noqa: E402
 
-ID_PREFIX = json.loads((BASE / "generator" / "logistics" / "config.json").read_text())[
-    "id_prefix"
-]
+ID_PREFIX = json.loads((BASE / "generator" / "logistics" / "config.json").read_text())["id_prefix"]
 
 
 def _gid(group: str) -> str:
@@ -86,8 +84,7 @@ GROUPS = {
         {"region": "APAC"},
         "Lexical",
         [
-            "How many APAC-region inventory records have fallen below their "
-            "reorder point?",
+            "How many APAC-region inventory records have fallen below their " "reorder point?",
             "In the APAC region, how many stock items are at risk of running "
             "out (below reorder point)?",
         ],
@@ -96,10 +93,7 @@ GROUPS = {
         "T3-01",
         {"order_status": "Cancelled"},
         "Rephrase",
-        [
-            "How many cancelled orders have either no warehouse assigned or an "
-            "invalid one?"
-        ],
+        ["How many cancelled orders have either no warehouse assigned or an " "invalid one?"],
     ),
     "RG-07": (
         "T3-06",
@@ -120,8 +114,7 @@ GROUPS = {
         [
             "For cancelled orders, break down the shipment count by which "
             "carrier type handled them.",
-            "Among cancelled orders, how many shipments did each carrier type "
-            "handle?",
+            "Among cancelled orders, how many shipments did each carrier type " "handle?",
         ],
     ),
     "RG-10": (
@@ -249,16 +242,12 @@ def _read(path: Path) -> list[dict]:
 def generate_rephrases(profile: str) -> None:
     """Generate verified rephrase variants for an existing Q&A release."""
 
-    _mf = json.loads(
-        (BASE / "dataset" / f"manifest_logistics_{profile}.json").read_text()
-    )
+    _mf = json.loads((BASE / "dataset" / f"manifest_logistics_{profile}.json").read_text())
     dv, domain = _mf["dataset_version"], _mf["domain"]
 
     qa = resolve_qa_output_dir(BASE, profile, "logistics")
     companion = _read(qa / "logistics_qa_pairs_companion.csv")
-    contract = {
-        r["natural_language_question"]: r for r in _read(qa / "logistics_qa_pairs.csv")
-    }
+    contract = {r["natural_language_question"]: r for r in _read(qa / "logistics_qa_pairs.csv")}
     by_family_param = {(r["family"], r["param_values"]): r for r in companion}
 
     con = connect_typed(BASE / "dataset" / f"logistics_{profile}.duckdb")
@@ -311,9 +300,7 @@ def generate_rephrases(profile: str) -> None:
                     ),
                 )
             )
-            variants.append(
-                {**{k: base[k] for k in CONTRACT}, "natural_language_question": q}
-            )
+            variants.append({**{k: base[k] for k in CONTRACT}, "natural_language_question": q})
             full_variants.append(
                 {
                     **base,
@@ -339,8 +326,7 @@ def generate_rephrases(profile: str) -> None:
     bad = [
         gid
         for gid in GROUPS
-        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)})
-        != 1
+        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)}) != 1
     ]
     if bad:
         raise SystemExit(f"rephrase hash mismatch (nothing written): {bad}")
@@ -410,9 +396,7 @@ def _write_plan(path: Path) -> None:
 def _write(path: Path, fields: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(
-            fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n"
-        )
+        w = csv.DictWriter(fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
 

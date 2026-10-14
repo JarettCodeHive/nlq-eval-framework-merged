@@ -34,9 +34,7 @@ EXCLUDE = HOUSE_STYLE + [
 def _lint(sql: str, exclude, config=None):
     return [
         v
-        for v in sqlfluff.lint(
-            sql, dialect="ansi", exclude_rules=exclude, config=config
-        )
+        for v in sqlfluff.lint(sql, dialect="ansi", exclude_rules=exclude, config=config)
         if not v.get("warning")
     ]
 
@@ -57,7 +55,5 @@ def test_every_release_reference_sql_is_clean(pairs):
         seen.add(s)
         v = _lint(s, EXCLUDE)
         if v:
-            failures.append(
-                (r["natural_language_question"][:55], [x["code"] for x in v])
-            )
+            failures.append((r["natural_language_question"][:55], [x["code"] for x in v]))
     assert not failures, failures

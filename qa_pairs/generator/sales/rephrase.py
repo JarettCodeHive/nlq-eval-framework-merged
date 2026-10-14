@@ -37,9 +37,7 @@ from qa_pairs.utils import build_stamp, verify  # noqa: E402
 from qa_pairs.utils.duckdb_io import connect_typed  # noqa: E402
 from qa_pairs.utils.output_paths import resolve_qa_output_dir  # noqa: E402
 
-ID_PREFIX = json.loads((BASE / "generator" / "sales" / "config.json").read_text())[
-    "id_prefix"
-]
+ID_PREFIX = json.loads((BASE / "generator" / "sales" / "config.json").read_text())["id_prefix"]
 
 
 def _gid(group: str) -> str:
@@ -82,10 +80,7 @@ GROUPS = {
         "T3-01",
         {"territory": "Central"},
         "Rephrase",
-        [
-            "Among Central-territory leads, how many are stuck without ever "
-            "turning into a deal?"
-        ],
+        ["Among Central-territory leads, how many are stuck without ever " "turning into a deal?"],
     ),
     "RG-06": (
         "T3-04",
@@ -108,18 +103,13 @@ GROUPS = {
         "T4-01",
         {"stage": "Won"},
         "Rephrase",
-        [
-            "For Won deals, give the net quoted revenue total broken out by "
-            "product category."
-        ],
+        ["For Won deals, give the net quoted revenue total broken out by " "product category."],
     ),
     "RG-09": (
         "T4-05",
         {"category": "Hardware"},
         "Rephrase",
-        [
-            "For hardware products, give the net quoted revenue broken out by deal stage."
-        ],
+        ["For hardware products, give the net quoted revenue broken out by deal stage."],
     ),
     "RG-10": (
         "T5-01",
@@ -128,8 +118,7 @@ GROUPS = {
         [
             "Which three product categories brought in the most net quoted "
             "revenue among Won deals?",
-            "Among Won deals, name the top three product categories by net "
-            "quoted revenue.",
+            "Among Won deals, name the top three product categories by net " "quoted revenue.",
         ],
     ),
     "RG-11": (
@@ -154,8 +143,7 @@ GROUPS = {
         [
             "For Central-territory reps, compare total won-deal amount in "
             "the January-March 2026 period with the April-June 2026 period.",
-            "Did Central-territory reps close more won-deal value in Q2 2026 "
-            "than in Q1 2026?",
+            "Did Central-territory reps close more won-deal value in Q2 2026 " "than in Q1 2026?",
         ],
     ),
     "RG-14": (
@@ -250,9 +238,7 @@ def generate_rephrases(profile: str) -> None:
 
     qa = resolve_qa_output_dir(BASE, profile, "sales")
     companion = _read(qa / "sales_qa_pairs_companion.csv")
-    contract = {
-        r["natural_language_question"]: r for r in _read(qa / "sales_qa_pairs.csv")
-    }
+    contract = {r["natural_language_question"]: r for r in _read(qa / "sales_qa_pairs.csv")}
     by_family_param = {(r["family"], r["param_values"]): r for r in companion}
 
     con = connect_typed(BASE / "dataset" / f"sales_{profile}.duckdb")
@@ -305,9 +291,7 @@ def generate_rephrases(profile: str) -> None:
                     ),
                 )
             )
-            variants.append(
-                {**{k: base[k] for k in CONTRACT}, "natural_language_question": q}
-            )
+            variants.append({**{k: base[k] for k in CONTRACT}, "natural_language_question": q})
             full_variants.append(
                 {
                     **base,
@@ -333,8 +317,7 @@ def generate_rephrases(profile: str) -> None:
     bad = [
         gid
         for gid in GROUPS
-        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)})
-        != 1
+        if len({m["result_hash"] for m in mapping if m["pair_group_id"] == _gid(gid)}) != 1
     ]
     if bad:
         raise SystemExit(f"rephrase hash mismatch (nothing written): {bad}")
@@ -404,9 +387,7 @@ def _write_plan(path: Path) -> None:
 def _write(path: Path, fields: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(
-            fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n"
-        )
+        w = csv.DictWriter(fh, fieldnames=fields, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
 
