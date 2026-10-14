@@ -369,7 +369,7 @@ class _ActualIndex:
     """
 
     view: str  # lowercased, whitespace-collapsed
-    tight: str  # `view` with all spaces removed
+    tight: str  # `view` with all spaces and hyphens removed
     tight_to_view: list[int]  # tight index -> view index
     numbers: list[tuple[Decimal, int]]  # (value, position in view)
     number_strings: list[tuple[str, int]]  # (raw token, position) for "string" form
@@ -382,7 +382,7 @@ def _build_index(actual: str, policy: ComparisonPolicy) -> _ActualIndex:
     tight_chars: list[str] = []
     tight_to_view: list[int] = []
     for i, ch in enumerate(view):
-        if not ch.isspace():
+        if not ch.isspace() and ch != "-":
             tight_chars.append(ch)
             tight_to_view.append(i)
 
@@ -505,12 +505,33 @@ def _direction_alternatives(label: str) -> tuple[str, ...]:
     return _DIRECTION_SYNONYMS.get(label.strip().lower(), ())
 
 
+def _record_has_direction(record: list[ExpectedField]) -> bool:
+    """Whether this record carries a direction label (up/down/flat).
+
+    A trend record's direction word already states the sign of its change
+    unambiguously (§HC-3 wording tolerance). An answer that gives the
+    correct direction and a correctly-signed percentage, but prints a
+    sibling dollar/count change as a bare unsigned magnitude ("a drop of
+    $515,789,370.20" instead of "-515789370.20"), has not gotten the number
+    wrong — it has just dropped a minus sign the record's own direction word
+    already conveys. Records without a direction label get no such
+    tolerance: a negative value there must still be printed with its sign.
+    """
+
+    return any(
+        field.kind is FieldKind.LABEL and _direction_alternatives(field.raw)
+        for field in record
+    )
+
+
 def _find_label(index: _ActualIndex, label: str) -> list[tuple[int, int]]:
     """Spans (start, end) in view coordinates where `label` occurs.
 
     Falls back to a whitespace-insensitive search so a CamelCase category value
     like `CustomerEducation` still matches a platform rendering of "Customer
-    Education". Nothing else is relaxed — this is not fuzzy matching.
+    Education", and the same fallback drops hyphens too, so `LongTermDebt`
+    still matches "Long-Term Debt". Nothing else is relaxed — this is not
+    fuzzy matching.
     """
     needle = _WS.sub(" ", label.strip().lower())
     if not needle:
@@ -811,11 +832,22 @@ def evaluate_answer(
     record_value_positions: list[list[int]] = []
     for record_index, record in enumerate(records):
         positions: list[int] = []
+        has_direction = _record_has_direction(record)
         for field in record:
             if field.kind is FieldKind.NUMERIC:
                 checks += 1
                 key = f"value:{field.value}"
                 hits = _consume_number(index, field, used_numeric, policy)
+                if hits is None and has_direction and field.value < 0:
+                    # The record's own direction word already states this
+                    # sign (see _record_has_direction) — accept the same
+                    # magnitude printed unsigned, including the usual
+                    # lower-precision tolerance _consume_number already
+                    # applies to a positive value.
+                    unsigned = ExpectedField(
+                        FieldKind.NUMERIC, field.raw.lstrip("-"), value=-field.value
+                    )
+                    hits = _consume_number(index, unsigned, used_numeric, policy)
                 if hits is None:
                     failures.append(f"value {field.raw!r} not present")
                     unsatisfied.append(key)
