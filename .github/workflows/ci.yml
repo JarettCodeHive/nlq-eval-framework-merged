@@ -26,7 +26,16 @@ jobs:
       - name: ruff
         run: ruff check .
 
-      - name: black --check
+      # Split in two: with no pyproject.toml at repo root, a single `black --check .`
+      # silently falls back to Black's bare defaults for the whole tree - including
+      # qa_pairs/, which declares its own line-length/target-version in
+      # qa_pairs/pyproject.toml. Checking qa_pairs/ from its own directory makes
+      # Black actually discover and enforce that config instead of skipping it.
+      - name: black --check (repo, excluding qa_pairs)
+        run: black --check . --extend-exclude 'qa_pairs/'
+
+      - name: black --check (qa_pairs - own pyproject.toml config)
+        working-directory: qa_pairs
         run: black --check .
 
       - name: sqlfluff (authoritative CRM reference DDL)
