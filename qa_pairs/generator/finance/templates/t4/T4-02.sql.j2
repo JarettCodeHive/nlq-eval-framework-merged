@@ -9,7 +9,7 @@ SELECT
         WHERE ac.account_id = b.account_id
           AND ac.transaction_date >= b.period_start
           AND ac.transaction_date < b.period_end
-    ) THEN 'has_actuals' ELSE 'no_actuals' END AS entity,
+    ) THEN 'ledger activity' ELSE 'no ledger activity' END AS entity,
     COUNT(*) AS metric
 FROM budgets b
 WHERE b.scenario = {{ scenario | sqlstr }}
