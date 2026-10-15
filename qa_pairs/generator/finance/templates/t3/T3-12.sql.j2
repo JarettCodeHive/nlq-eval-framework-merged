@@ -1,4 +1,4 @@
-SELECT COUNT(*) AS rate_count
+SELECT COUNT(DISTINCT f.rate_id) AS rate_count
 FROM fx_rates f
 INNER JOIN transactions t
     ON f.from_currency = t.source_currency

@@ -298,10 +298,10 @@
     "question": "For {scenario}-scenario budgets, how many budget periods recorded ledger activity for their account versus none?",
     "tables": "budgets, ledger_entries, transactions",
     "fields": "budgets.account_id, budgets.period_start, budgets.period_end, budgets.scenario, ledger_entries.account_id, ledger_entries.transaction_id, transactions.transaction_id, transactions.transaction_date",
-    "judge": "Two categories - has_actuals and no_actuals - each with the count of budget rows in the named scenario whose account recorded (or did not record) at least one ledger entry during that budget's period, alphabetical by category.",
+    "judge": "Two categories - ledger activity and no ledger activity - each with the count of budget rows in the named scenario whose account recorded (or did not record) at least one ledger entry during that budget's period, alphabetical by category.",
     "scoring_mode": "table_exact",
     "answer_shape": "table",
-    "rationale": "For each budget row filtered to the scenario, test EXISTS a ledger_entries/transactions row for the same account with transaction_date within [period_start, period_end) - the LEFT JOIN semantics of finance_jp_010 expressed as an existence test - then GROUP BY that has_actuals/no_actuals label, count, order alphabetically."
+    "rationale": "For each budget row filtered to the scenario, test EXISTS a ledger_entries/transactions row for the same account with transaction_date within [period_start, period_end) - the LEFT JOIN semantics of finance_jp_010 expressed as an existence test - then GROUP BY that ledger activity/no ledger activity label, count, order alphabetically."
   },
   {
     "family": "T4-03",
@@ -332,10 +332,10 @@
     "question": "For {account_type} accounts, how many budget periods recorded ledger activity for their account versus none?",
     "tables": "budgets, accounts, ledger_entries, transactions",
     "fields": "budgets.account_id, budgets.period_start, budgets.period_end, accounts.account_id, accounts.account_type, ledger_entries.account_id, ledger_entries.transaction_id, transactions.transaction_id, transactions.transaction_date",
-    "judge": "Two categories - has_actuals and no_actuals - each with the count of budget rows on accounts of the named type whose account recorded (or did not record) at least one ledger entry during that budget's period, alphabetical by category.",
+    "judge": "Two categories - ledger activity and no ledger activity - each with the count of budget rows on accounts of the named type whose account recorded (or did not record) at least one ledger entry during that budget's period, alphabetical by category.",
     "scoring_mode": "table_exact",
     "answer_shape": "table",
-    "rationale": "INNER JOIN budgets to accounts on account_id, filter to the account_type, then for each budget row test EXISTS a ledger_entries/transactions row for the same account with transaction_date within [period_start, period_end) - the LEFT JOIN semantics of finance_jp_010 expressed as an existence test - GROUP BY that has_actuals/no_actuals label, count, order alphabetically."
+    "rationale": "INNER JOIN budgets to accounts on account_id, filter to the account_type, then for each budget row test EXISTS a ledger_entries/transactions row for the same account with transaction_date within [period_start, period_end) - the LEFT JOIN semantics of finance_jp_010 expressed as an existence test - GROUP BY that ledger activity/no ledger activity label, count, order alphabetically."
   },
   {
     "family": "T5-01",
@@ -659,7 +659,7 @@
     "judge": "A single count of fx_rates rows whose currency-pair/date key matches at least one transaction.",
     "scoring_mode": "scalar_exact",
     "answer_shape": "scalar",
-    "rationale": "INNER JOIN fx_rates to transactions on the finance_jp_006 composite key (reverse direction), count matching fx_rates rows - paired with T3-11's LEFT JOIN unmatched count to demonstrate both sides of the join path's semantics."
+    "rationale": "INNER JOIN fx_rates to transactions on the finance_jp_006 composite key (reverse direction), COUNT(DISTINCT f.rate_id) so a rate matching several same-day transactions is still counted once per the question's per-rate-record wording - paired with T3-11's LEFT JOIN unmatched count to demonstrate both sides of the join path's semantics."
   },
   {
     "family": "T3-13",
@@ -737,10 +737,10 @@
     "question": "For accounts with normal balance {normal_balance}, how many budget periods recorded ledger activity for their account versus none?",
     "tables": "budgets, accounts, ledger_entries, transactions",
     "fields": "budgets.account_id, budgets.period_start, budgets.period_end, accounts.account_id, accounts.normal_balance, ledger_entries.account_id, ledger_entries.transaction_id, transactions.transaction_id, transactions.transaction_date",
-    "judge": "Two categories - has_actuals and no_actuals - each with the count of budget rows on accounts with the named normal balance whose account recorded (or did not record) at least one ledger entry during that budget's period, alphabetical by category.",
+    "judge": "Two categories - ledger activity and no ledger activity - each with the count of budget rows on accounts with the named normal balance whose account recorded (or did not record) at least one ledger entry during that budget's period, alphabetical by category.",
     "scoring_mode": "table_exact",
     "answer_shape": "table",
-    "rationale": "INNER JOIN budgets to accounts on account_id, filter to the normal_balance, then for each budget row test EXISTS a ledger_entries/transactions row for the same account with transaction_date within [period_start, period_end) - the LEFT JOIN semantics of finance_jp_010 expressed as an existence test - GROUP BY that has_actuals/no_actuals label, count, order alphabetically."
+    "rationale": "INNER JOIN budgets to accounts on account_id, filter to the normal_balance, then for each budget row test EXISTS a ledger_entries/transactions row for the same account with transaction_date within [period_start, period_end) - the LEFT JOIN semantics of finance_jp_010 expressed as an existence test - GROUP BY that ledger activity/no ledger activity label, count, order alphabetically."
   },
   {
     "family": "T4-07",
