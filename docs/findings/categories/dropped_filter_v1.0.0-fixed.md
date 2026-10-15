@@ -42,6 +42,18 @@ with the same shape, scoped to "analyst resources," failed this way in
 the previous release but passed this run — the platform correctly
 applied that scope this time.)
 
+## Where to look these up
+
+Search by `question_id` in these two files per domain — the first has
+the full question text and expected answer, the second has the
+platform's actual answer, `exact_match_detail`, and judge scores:
+
+| Domain | Question + expected answer | Platform's answer + judge scores |
+|---|---|---|
+| Finance | `release/v1.0.0-fixed/finance/qa_pairs/finance_qa_pairs.csv` | `release/v1.0.0-fixed/finance/judge/20261013T112105Z/results.json` |
+| Logistics | `release/v1.0.0-fixed/logistics/qa_pairs/logistics_qa_pairs.csv` | `release/v1.0.0-fixed/logistics/judge/20261013T160913Z/results.json` |
+| Project Management | `release/v1.0.0-fixed/project_management/qa_pairs/project_management_qa_pairs.csv` | `release/v1.0.0-fixed/project_management/judge/20261013T174157Z/results.json` |
+
 ## Status
 
 Not fixable in this evaluation — the scoping condition named in the

@@ -28,6 +28,13 @@ from the previous release — all 7 still fail for the same reason, since
 the gap between the dataset's frozen date and the live run only grows
 with time.
 
+## Where to look these up
+
+Search by `question_id` in `release/v1.0.0-fixed/project_management/qa_pairs/project_management_qa_pairs.csv`
+(question text and expected answer) and
+`release/v1.0.0-fixed/project_management/judge/20261013T174157Z/results.json`
+(platform's actual answer, `exact_match_detail`, judge scores).
+
 ## Status
 
 A timing mismatch, not a defect in either the dataset or the response:

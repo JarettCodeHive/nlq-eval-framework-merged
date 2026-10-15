@@ -60,6 +60,19 @@ fails for the ordinary missing-percentage reason either way, and the
 message bug just happens not to be visibly triggered in this run's data.
 Worth fixing for message clarity, not because it affects any score.
 
+## Where to look these up
+
+Search by `question_id` in these two files per domain — the first has
+the full question text and expected answer, the second has the
+platform's actual answer, `exact_match_detail`, and judge scores:
+
+| Domain | Question + expected answer | Platform's answer + judge scores |
+|---|---|---|
+| Sales | `release/v1.0.0-fixed/sales/qa_pairs/sales_qa_pairs.csv` | `release/v1.0.0-fixed/sales/judge/20261013T102604Z/results.json` |
+| Logistics | `release/v1.0.0-fixed/logistics/qa_pairs/logistics_qa_pairs.csv` | `release/v1.0.0-fixed/logistics/judge/20261013T160913Z/results.json` |
+| Finance | `release/v1.0.0-fixed/finance/qa_pairs/finance_qa_pairs.csv` | `release/v1.0.0-fixed/finance/judge/20261013T112105Z/results.json` |
+| Project Management | `release/v1.0.0-fixed/project_management/qa_pairs/project_management_qa_pairs.csv` | `release/v1.0.0-fixed/project_management/judge/20261013T174157Z/results.json` |
+
 ## Status
 
 Not fixable by this evaluation — the scorer cannot pass a value that

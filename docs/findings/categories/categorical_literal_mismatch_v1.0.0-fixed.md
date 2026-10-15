@@ -84,6 +84,19 @@ Status-filter affected: `PM-T1-03-12`, `PM-T1-03-13`, `PM-T2-01-04`,
 `PM-T5-07-24`. Location-filter affected: `PM-T2-09-35`, `PM-T2-09-37`,
 `PM-T3-09-31`.
 
+## Where to look these up
+
+Search by `question_id` in these two files per domain — the first has
+the full question text and expected answer, the second has the
+platform's actual answer, `exact_match_detail`, and judge scores:
+
+| Domain | Question + expected answer | Platform's answer + judge scores |
+|---|---|---|
+| CRM | `release/v1.0.0-fixed/crm/qa_pairs/crm_qa_pairs.csv` | `release/v1.0.0-fixed/crm/judge/20261014T033522Z/results.json` |
+| Sales | `release/v1.0.0-fixed/sales/qa_pairs/sales_qa_pairs.csv` | `release/v1.0.0-fixed/sales/judge/20261013T102604Z/results.json` |
+| Finance | `release/v1.0.0-fixed/finance/qa_pairs/finance_qa_pairs.csv` | `release/v1.0.0-fixed/finance/judge/20261013T112105Z/results.json` |
+| Project Management | `release/v1.0.0-fixed/project_management/qa_pairs/project_management_qa_pairs.csv` | `release/v1.0.0-fixed/project_management/judge/20261013T174157Z/results.json` |
+
 ## Status
 
 Not fixable in this evaluation's scorer or Q&A pairs — the text is read

@@ -140,6 +140,19 @@ independently flags this exact rephrase group as resolving to
 inconsistent ground truth across its variants — the same question asked
 three ways produces three different outcomes from the live platform.
 
+## Where to look these up
+
+Search by `question_id` in these two files per domain — the first has
+the full question text and expected answer, the second has the
+platform's actual answer, `exact_match_detail`, and judge scores:
+
+| Domain | Question + expected answer | Platform's answer + judge scores |
+|---|---|---|
+| CRM | `release/v1.0.0-fixed/crm/qa_pairs/crm_qa_pairs.csv` | `release/v1.0.0-fixed/crm/judge/20261014T033522Z/results.json` |
+| Sales | `release/v1.0.0-fixed/sales/qa_pairs/sales_qa_pairs.csv` | `release/v1.0.0-fixed/sales/judge/20261013T102604Z/results.json` |
+| Finance | `release/v1.0.0-fixed/finance/qa_pairs/finance_qa_pairs.csv` | `release/v1.0.0-fixed/finance/judge/20261013T112105Z/results.json` |
+| Logistics | `release/v1.0.0-fixed/logistics/qa_pairs/logistics_qa_pairs.csv` | `release/v1.0.0-fixed/logistics/judge/20261013T160913Z/results.json` |
+
 ## Status
 
 Not fixable in this evaluation's scorer or dataset. Every cause above

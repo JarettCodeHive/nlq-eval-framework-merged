@@ -24,6 +24,13 @@ platform correctly separating NULL from orphan that time. The
 underlying defect recurs; which specific sibling question trips it
 varies run to run.
 
+## Where to look these up
+
+Search by `question_id` in `release/v1.0.0-fixed/logistics/qa_pairs/logistics_qa_pairs.csv`
+(question text and expected answer) and
+`release/v1.0.0-fixed/logistics/judge/20261013T160913Z/results.json`
+(platform's actual answer, `exact_match_detail`, judge scores).
+
 ## Status
 
 Not fixable in this evaluation. The fix is on the platform's query-

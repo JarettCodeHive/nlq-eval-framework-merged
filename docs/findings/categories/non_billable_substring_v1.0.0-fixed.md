@@ -28,6 +28,13 @@ All 11 instances: `PM-T4-04-14`, `PM-T4-04-15`, `PM-T4-04-16`,
 `PM-T4-04-17`, `PM-T4-04-18`, `PM-T4-07-28`, `PM-T4-07-29`,
 `PM-T4-07-30`, `PM-T4-07-31`, `PM-T4-07-32`, `PM-RG-08-V01`.
 
+## Where to look these up
+
+Search by `question_id` in `release/v1.0.0-fixed/project_management/qa_pairs/project_management_qa_pairs.csv`
+(question text and expected answer) and
+`release/v1.0.0-fixed/project_management/judge/20261013T174157Z/results.json`
+(platform's actual answer, `exact_match_detail`, judge scores).
+
 ## Status
 
 This is an **open, known, and deliberately unfixed** limitation of how

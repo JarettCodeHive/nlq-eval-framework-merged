@@ -9,6 +9,13 @@ anywhere in the response; every reference to the count uses the word
 "three," and the only bare digits present belong to unrelated breakdown
 figures.
 
+## Where to look this up
+
+`PM-T3-01-02` — question text and expected answer in
+`release/v1.0.0-fixed/project_management/qa_pairs/project_management_qa_pairs.csv`;
+platform's actual answer, `exact_match_detail`, and judge scores in
+`release/v1.0.0-fixed/project_management/judge/20261013T174157Z/results.json`.
+
 ## Status
 
 Not a new defect — this is the first time this project's

@@ -13,6 +13,13 @@ artifact Finance's analysis documented in a previous release (that
 specific instance didn't recur this run; the platform answered that
 question differently this time).
 
+## Where to look this up
+
+`CRM-T1-01-03` — question text and expected answer in
+`release/v1.0.0-fixed/crm/qa_pairs/crm_qa_pairs.csv`; platform's actual
+answer, `exact_match_detail`, and judge scores in
+`release/v1.0.0-fixed/crm/judge/20261014T033522Z/results.json`.
+
 ## Status
 
 Not a meaningful computation error, and not something to fix. Loosening

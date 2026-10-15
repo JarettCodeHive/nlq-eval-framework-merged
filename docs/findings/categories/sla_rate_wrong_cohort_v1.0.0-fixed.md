@@ -30,6 +30,13 @@ zero from a categorical-literal mismatch on the `industry` filter; see
 `categorical_literal_mismatch_v1.0.0-fixed.md`. The filter mismatch
 happens before the resolved/status confusion would even matter.)
 
+## Where to look these up
+
+Search by `question_id` in `release/v1.0.0-fixed/crm/qa_pairs/crm_qa_pairs.csv`
+(question text and expected answer) and
+`release/v1.0.0-fixed/crm/judge/20261014T033522Z/results.json`
+(platform's actual answer, `exact_match_detail`, judge scores).
+
 ## Status
 
 Not fixable in this evaluation. Treating `resolved_at IS NOT NULL` (a

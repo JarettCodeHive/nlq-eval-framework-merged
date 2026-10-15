@@ -94,7 +94,8 @@ Before adding a new module or domain, read the system view in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and follow the placement
 standard: a module's own `README.md` travels with its code; cross-cutting
 documentation goes in `docs/`; dated audit findings go in
-`docs/findings/<domain>/`, never at repo root. If you add a domain or a
+`docs/findings/`, organized by root cause rather than by domain (see
+`docs/findings/README.md`), never at repo root. If you add a domain or a
 module, update its `README.md` in the same pull request — a module can
 silently drift out of date with the code it describes if adding a domain
 doesn't also trigger a documentation update.
