@@ -32,30 +32,26 @@ conversion; the other implemented domains are USD-only.
 
 ## Current Status
 
-The engagement-focused CRM generator, one-command dataset build, and CRM Q&A
-workflow are implemented.
+All five domains (CRM, Sales, Finance, Logistics, Project Management) are
+implemented end to end: configuration, deterministic generation,
+distributions, controlled imperfections, validation, release artifact
+generation, clean-room reproducibility, root CLI dispatch, Q&A pair
+generation (including rephrase groups), and a full automated test suite
+per domain. CRM remains the reference implementation and is the only
+domain with CRM-only review tooling (`qa-author-fixtures` seed fixtures,
+the taxonomy-matrix regenerator). Finance alone adds synthetic FX
+conversion; the other domains are USD-only.
 
-Sales is implemented through configuration, generation, distributions,
-imperfections, validation, release artifact generation, reproducibility, root
-CLI dispatch, and its full automated test suite. Sales dev workflow verification
-and full release generation remain the next steps in
-`Sales_Dataset_Generation_Implementation_Plan.md`.
-
-Finance is implemented through configuration, deterministic generation,
-fixed-point accounting and FX behavior, validation, release artifacts,
-reproducibility, root CLI dispatch, and its full automated test suite.
-
-Project Management and Logistics are implemented through configuration,
-deterministic generation, distributions, controlled imperfections, persisted
-validation, release artifacts, clean-room reproducibility, root CLI dispatch,
-and domain-specific automated test suites. Their dev workflow verification and
-final release generation remain separate acceptance steps.
+Every domain has produced real, scored full-profile releases against the
+live platform (`release/<version>/<domain>/`, with judge runs under
+`judge/<run_id>/`) — this is active, in-use infrastructure, not a
+pending acceptance step.
 
 ## End-to-End Pipeline
 
 After the credentials pass `check-auth`, build the dataset and Q&A pairs,
-replace the configured platform dataset, and run a three-question judge preview
-with the currently supported CRM or Sales Q&A workflow:
+replace the configured platform dataset, and run a three-question judge
+preview:
 
 ```bash
 python main.py check-auth --domain "$DOMAIN"

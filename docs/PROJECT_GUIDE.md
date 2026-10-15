@@ -89,9 +89,13 @@ narrative:
 
 ## Path F — "Where do audit/findings records live?"
 
-[`findings/<domain>/`](findings) — dated judge-failure root-cause analyses,
-one subfolder per domain, regenerated each time a new failure batch is
-investigated. Historical record, not something to action directly.
+[`findings/README.md`](findings/README.md) — judge-failure root-cause
+analyses, organized by shared root cause rather than by domain (a fix
+that affects multiple domains is documented once, not repeated per
+domain). Individual causes live under `findings/categories/`, each
+stating where to find the underlying question/answer data by
+`question_id`. Regenerated each time a new failure batch is
+investigated — historical record, not something to action directly.
 
 ## What this guide deliberately doesn't cover
 

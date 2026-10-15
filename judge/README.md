@@ -333,6 +333,23 @@ pairs, so a numerics-only comparison inflates the §14.2 accuracy gate. A label
 must therefore appear *and* be the nearest claimant of its own value; prose that
 keeps them together still passes, because §HC-3 forbids deducting for phrasing.
 
+**Label matching tolerates spaces and hyphens as inserted word
+separators.** An expected label like `LongTermDebt` (CamelCase, no
+separator) still matches a platform rendering of "Long Term Debt" or
+"Long-Term Debt" — both a space and a hyphen are treated as the same
+kind of formatting choice, not a different label. Nothing else is
+relaxed; this is not fuzzy matching.
+
+**A negative value in a direction-bearing trend record may also be
+printed unsigned.** A record carrying an "up"/"down"/"flat" label
+already states its sign unambiguously in words. When the matching
+expected value is negative and isn't found printed with its sign, the
+same value printed as its unsigned magnitude is also accepted (e.g. "a
+drop of $57,103,459" for an expected `-57103458.81`, with the usual
+lower-precision tolerance still applying). This tolerance is scoped to
+records that carry a direction label — a negative value anywhere else
+must still be printed with its sign.
+
 ### OI-2 — what "identical" compares
 
 Open, owned by the Platform Owner: *"Zero tolerance is meaningless without a

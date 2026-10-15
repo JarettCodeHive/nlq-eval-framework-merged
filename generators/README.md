@@ -7,6 +7,27 @@ distributions, imperfection helpers, CSV export, hashing, integrity results,
 schema-contract parsing, and progress reporting. It must remain free of
 domain-specific business rules.
 
+```
+generators/core/
+├── base.py              <- the reproducibility contract: one root seed, stable
+│                            named child streams, seeded Faker instances, no
+│                            wall-clock reads anywhere in the generation path
+├── config.py            <- shared contracts for component-based domain configuration
+├── schema_contract.py   <- shared parsing helpers for domain schema contracts
+├── distributions.py     <- shared statistical distributions (Pareto, Poisson,
+│                            Gaussian-mixture, etc.) every domain selects from
+├── imperfections.py     <- controlled imperfection helpers (duplicates, NULLs,
+│                            outliers, boundary values)
+├── temporal.py          <- domain-neutral deterministic date/timestamp helpers
+├── fixed_point.py       <- domain-neutral exact fixed-point unit allocation
+│                            (splitting a total across rows with no float drift)
+├── integrity.py         <- integrity checks for generated relational datasets
+├── csv_export.py        <- CSV export helpers for released dataset artifacts
+├── manifest.py          <- manifest generation and artifact hashing helpers
+└── progress.py          <- console progress reporting (ProgressReporter for a
+                             single generator; PipelineReporter for run-pipeline)
+```
+
 Implemented domain packages:
 
 - `generators/crm`: account, contact, campaign, engagement, and support-case
@@ -61,3 +82,27 @@ Domain modules follow the same stage boundary:
 Finance-specific fixed-point, accounting, and FX rules remain under
 `generators/finance`; only reusable deterministic primitives belong in
 `generators/core`.
+
+## Adding a sixth domain
+
+`generators/core` is entirely domain-agnostic — nothing in it has ever
+needed to change across the four domains added after CRM. Adding another
+domain means, outside this folder: a `config/generation/<domain>/` pair
+(`generation.json`, `release.json`) and a `schemas/<domain>/` contract
+(DDL, CSV header spec, semantics doc) — then, inside this folder:
+
+1. Create `generators/<domain>/` following the same shape every existing
+   domain uses: `generator.py` (base entities), `distributions.py`,
+   `imperfections.py`, `export.py`, plus `validators/config.py`,
+   `validators/relational.py`, `validators/fk_integrity.py`,
+   `validators/join_paths.py`, `validators/row_caps.py`,
+   `validators/imperfection_rates.py`, `validators/reproducibility.py` —
+   see `generators/crm/README.md` for what each one owns.
+2. Register the new domain's components in `generators/domain_registry.py`
+   (`DATASET_DOMAINS`) the same way the existing five are wired, so
+   `main.py`'s `build-dataset` and related commands can find it.
+3. Add the new domain's dataset-generation test suite under
+   `tests/generators/<domain>/`, following an existing domain's shape.
+
+Q&A pair generation for the new domain is a separate step, documented in
+`qa_pairs/generator/README.md#adding-a-sixth-domain`.
