@@ -1,0 +1,106 @@
+# Evaluation Orchestrator — config contract (DRAFT, design only, scope doc §12.1).
+#
+# This is NOT consumed by any code today. It is the shape a generalized
+# driving-loop adapter would read, replacing the Pulse-specific constants
+# documented in orchestrator/ARCHITECTURE.md §1 (judge/pulse_client.py).
+#
+# The values below are Pulse's own real settings, used as the worked example
+# because it's the only platform this repo has actually integrated — not a
+# recommendation that Pulse stay the default once a second platform exists.
+
+platform: claris_pulse
+
+endpoint:
+  base_url: "https://api-qa.platform.claris.com"
+  # {org_id} is substituted from auth.org_id below. Keeping it in the path
+  # template (not hardcoded, as DEFAULT_CHAT_PATH is today) is what makes a
+  # second platform with a differently-shaped path possible without a code change.
+  path: "/api-proxy/org/{org_id}/ai-svc/v2/tco/chat"
+  method: POST
+  timeout_s: 420
+
+auth:
+  method: bearer_token          # bearer_token | api_key_header | oauth2_client_credentials
+  token_env_var: PULSE_AUTH_TOKEN
+  org_id_env_var: PULSE_ORG_ID
+  # Optional self-healing refresh - PulseClient's PULSE_REFRESH_* already
+  # does this; naming it here so a generic adapter doesn't lose the feature.
+  refresh:
+    enabled_env_var: PULSE_REFRESH_TOKEN
+    url_env_var: PULSE_REFRESH_URL
+    method_env_var: PULSE_REFRESH_METHOD   # default GET
+    cookie_env_var: PULSE_REFRESH_COOKIE
+    body_env_var: PULSE_REFRESH_BODY
+    headers_env_var: PULSE_REFRESH_HEADERS
+    refresh_margin_s: 300        # re-mint this far ahead of expiry
+
+request:
+  headers:
+    X-Claris-Features: "TCOApiV2Feature"
+  # Jinja-style placeholders filled per question. {question_text} is the only
+  # one the orchestrator must supply; the rest are session bookkeeping the
+  # platform wants but the orchestrator can generate deterministically
+  # (uuid4 per question is what PulseClient does today).
+  body_template:
+    prompt: "{question_text}"
+    messages:
+      - content: "{question_text}"
+        role: "user"
+    chat_session_id: "{generated_uuid}"
+    message_session_id: "{generated_uuid}"
+    model_name: "claude-sonnet-5"
+    is_quick_prompt: false
+    stream: false
+    stream_thinking: false
+
+question_format:
+  # One free-text natural-language question per request. No multi-turn
+  # context, no conversation history (the Referential rephrase class is
+  # explicitly out of scope for the same reason, per §9.5).
+  shape: single_turn_text
+
+response:
+  # Replaces the hardcoded _ANSWER_KEYS / _SQL_CONTAINER_KEYS / _SQL_SCALAR_KEYS
+  # candidate-key lists in judge/pulse_client.py. Listed in priority order -
+  # the adapter should try each key path in turn and take the first present.
+  answer_field_candidates:
+    - "response.analysis"      # Pulse: the response body is itself a JSON string
+    - "answer_text"
+    - "answer"
+    - "final_answer"
+    - "content"
+    - "text"
+    - "summary"
+  generated_sql_field_candidates:
+    - "analysis_request[?(@.id=='primary')].sql"   # Pulse: the "primary" entry
+    - "generated_sql"
+    - "sql"
+  clarification_detection:
+    # How the adapter decides the platform asked a question back instead of
+    # answering (§2e). Pulse encodes this inside `analysis`; a generic rule
+    # (e.g. "response ends with '?'") is deliberately NOT assumed here -
+    # each platform needs its own, explicit rule.
+    strategy: platform_specific
+    notes: >
+      Pulse's current rule lives in judge/pulse_client.py's response parsing.
+      Document the equivalent rule for any second platform here before
+      wiring it in - do not guess a generic heuristic.
+  raw_response_archival: true   # always dump the raw payload (pulse_raw/*.json
+                                 # equivalent) - required for §14.2 condition 33
+
+timeouts:
+  request_timeout_s: 420
+  max_retries: 3
+  backoff_base_s: 0.5
+  backoff_max_s: 8.0
+
+concurrency:
+  platform_requests: 4   # --pulse-concurrency equivalent
+  judge_requests: 4      # --concurrency equivalent
+  # SQLPulse (offline DuckDB replay) forces this to 1 - a single shared
+  # connection isn't thread-safe. A generic adapter must expose the same
+  # override, keyed on its own concurrency-safety, not assume 4 is always safe.
+
+tls:
+  verify: true
+  ca_bundle_path_env_var: PULSE_CA_BUNDLE   # corp inspection proxy workaround
