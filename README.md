@@ -1,6 +1,6 @@
 # NLQ Evaluation Framework
 
-Independent evaluation framework for the Cleris Pulse NLQ platform.
+Independent evaluation framework for the Claris Pulse NLQ platform.
 
 This repository does not build or modify the Pulse runtime. It contains the
 assets and code needed to produce reproducible synthetic datasets, verified
@@ -35,15 +35,17 @@ Q&A evaluation pairs, judge scoring, and regression scorecards.
 ```text
 nlq-eval-framework/
   config/        Per-domain generation, schema, and judge configs.
+  docs/          System architecture, rubric, audit findings, and handover docs.
   generators/    Seeded generation, transformation, export, and validation modules.
-  schemas/       DDL, ER diagram sources, and CSV header specs.
-  qa_pairs/      Q&A authoring templates, SQL templates, and verification.
   judge/         LLM-as-Judge prompts, calibration anchors, and scoring code.
-  scorecard/     Deterministic scoring, aggregation, CSV and PDF reporting.
   orchestrator/  Design documentation and config contract only.
-  tests/         Pytest suites for generation, integrity, and scoring behavior.
+  qa_pairs/      Q&A authoring templates, SQL templates, and verification.
   release/       Versioned generated outputs and manifests.
-  docs/          Data dictionaries, rubric, audit reports, and handover docs.
+  schemas/       DDL, ER diagram sources, and CSV header specs.
+  scorecard/     Deterministic scoring, aggregation, CSV and PDF reporting.
+  scripts/       Standalone utilities, including the cross-domain question-uniqueness CI gate.
+  studio/        Claris Studio platform client — uploads, verifies, and cleans up a released dataset.
+  tests/         Pytest suites for generation, integrity, and scoring behavior.
 ```
 
 ## Python Environment
@@ -80,8 +82,7 @@ deactivate
 Run commands from the repository root with the Python environment activated.
 CRM, Sales, Finance, Project Management, and Logistics are implemented
 generation domains.
-Pass `--domain` explicitly in repeatable workflows. Omitting it continues to
-select CRM for backward compatibility.
+Pass `--domain` explicitly in repeatable workflows.
 
 ### End-to-End Pipeline
 

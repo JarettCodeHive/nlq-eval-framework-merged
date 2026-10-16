@@ -32,30 +32,26 @@ conversion; the other implemented domains are USD-only.
 
 ## Current Status
 
-The engagement-focused CRM generator, one-command dataset build, and CRM Q&A
-workflow are implemented.
+All five domains (CRM, Sales, Finance, Logistics, Project Management) are
+implemented end to end: configuration, deterministic generation,
+distributions, controlled imperfections, validation, release artifact
+generation, clean-room reproducibility, root CLI dispatch, Q&A pair
+generation (including rephrase groups), and a full automated test suite
+per domain. CRM remains the reference implementation and is the only
+domain with CRM-only review tooling (`qa-author-fixtures` seed fixtures,
+the taxonomy-matrix regenerator). Finance alone adds synthetic FX
+conversion; the other domains are USD-only.
 
-Sales is implemented through configuration, generation, distributions,
-imperfections, validation, release artifact generation, reproducibility, root
-CLI dispatch, and its full automated test suite. Sales dev workflow verification
-and full release generation remain the next steps in
-`Sales_Dataset_Generation_Implementation_Plan.md`.
-
-Finance is implemented through configuration, deterministic generation,
-fixed-point accounting and FX behavior, validation, release artifacts,
-reproducibility, root CLI dispatch, and its full automated test suite.
-
-Project Management and Logistics are implemented through configuration,
-deterministic generation, distributions, controlled imperfections, persisted
-validation, release artifacts, clean-room reproducibility, root CLI dispatch,
-and domain-specific automated test suites. Their dev workflow verification and
-final release generation remain separate acceptance steps.
+Every domain has produced real, scored full-profile releases against the
+live platform (`release/<version>/<domain>/`, with judge runs under
+`judge/<run_id>/`) — this is active, in-use infrastructure, not a
+pending acceptance step.
 
 ## End-to-End Pipeline
 
 After the credentials pass `check-auth`, build the dataset and Q&A pairs,
-replace the configured platform dataset, and run a three-question judge preview
-with the currently supported CRM or Sales Q&A workflow:
+replace the configured platform dataset, and run a three-question judge
+preview:
 
 ```bash
 python main.py check-auth --domain "$DOMAIN"
@@ -86,9 +82,10 @@ Corrections to a sealed release require a new release version.
 
 ## Q&A Pair Workflow
 
-The root CLI runs the Q&A authoring pipeline for CRM and Sales. Each Q&A command
-consumes the selected profile's generated dataset; it does not regenerate the
-golden dataset itself. Build the dataset first, then run `qa-build` for the same
+The root CLI runs the Q&A authoring pipeline for all five domains (CRM,
+Sales, Finance, Logistics, Project Management). Each Q&A command consumes
+the selected profile's generated dataset; it does not regenerate the golden
+dataset itself. Build the dataset first, then run `qa-build` for the same
 domain and profile.
 
 ### Development Q&A profile
@@ -101,8 +98,9 @@ python main.py build-dataset --domain crm --profile dev
 python main.py qa-build --domain crm --profile dev
 ```
 
-Replace `crm` with `sales` to run the Sales workflow. Development outputs are
-disposable and are written beneath:
+Replace `crm` with `sales`, `finance`, `logistics`, or `project_management`
+to run any other domain's workflow. Development outputs are disposable and
+are written beneath:
 
 ```text
 tmp/generated/<domain>/dev/qa_pairs/
@@ -121,22 +119,24 @@ python main.py qa-build --domain crm --profile full
 python main.py qa-build --domain crm --profile full --version v1.0.0
 ```
 
-Replace `crm` with `sales` for Sales. The Q&A package shares the dataset's
-release version and is written to the location configured in
-`qa_pairs/generator/<domain>/config.json`:
+Replace `crm` with any other domain the same way as above. The Q&A package
+shares the dataset's release version and is written to the location
+configured in `qa_pairs/generator/<domain>/config.json`:
 
 ```text
 release/<version>/<domain>/qa_pairs/
 ```
 
-`qa-build` runs these production stages in order:
+`qa-build` runs these production stages in order, for every domain:
 
 1. `qa-stage-dataset` stages the selected generated dataset in DuckDB.
 2. `qa-validate-dataset` validates the staged data and required joins.
 3. `qa-generate-pairs` generates and SQL-verifies the complete pair set.
+4. `qa-generate-rephrases` generates the 16 required rephrase-group
+   variants (§9.5 companion).
 
-For CRM it also generates the required rephrase-group variants; review-only
-seed fixtures remain a separate command for every domain.
+Review-only seed fixtures (`qa-author-fixtures`) remain a separate command
+and remain CRM-only — no other domain has a seed-fixture script.
 
 ### Advanced Q&A commands
 
@@ -146,17 +146,17 @@ Use the individual commands only when troubleshooting one production stage:
 python main.py qa-stage-dataset --domain crm --profile dev
 python main.py qa-validate-dataset --domain crm --profile dev
 python main.py qa-generate-pairs --domain crm --profile dev
+python main.py qa-generate-rephrases --domain crm --profile dev
 ```
 
-These three production-stage commands support both CRM and Sales; replace
-`crm` with `sales` as needed.
+These four production-stage commands support all five domains; replace
+`crm` with any other domain as needed.
 
-These optional commands produce testing or review artifacts and are not part of
-`qa-build`. They are currently CRM-only:
+This optional command produces a review artifact and is not part of
+`qa-build`. It is CRM-only:
 
 ```bash
 python main.py qa-author-fixtures --domain crm --profile dev
-python main.py qa-generate-rephrases --domain crm --profile dev
 ```
 
 Replace `dev` with `full` when troubleshooting a full-profile stage. The
@@ -481,6 +481,8 @@ continue to evolve.
 
 ## Additional Runbooks
 
+- [Project guide — reading path through the documentation](docs/PROJECT_GUIDE.md)
+- [System architecture](docs/ARCHITECTURE.md)
 - [Judge runbook](docs/judge_runbook.md)
 - [Judge flow](docs/judge_flow.md)
 - [Judge module documentation](judge/README.md)
