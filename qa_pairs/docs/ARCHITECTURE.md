@@ -1,9 +1,13 @@
-# CRM Q&A Pair POC — Architecture & How It Works
+# Q&A Evaluation Pairs (Track B) — Architecture & How It Works
 
 This document is the design reference: what each part does, how data
-flows, what the guarantees are, and how to extend it. For the current
-build state (what is / isn't done) see `../README.md`. For the tier-to-
-schema mapping see `../taxonomy/crm_qa_taxonomy_spec.md`.
+flows, what the guarantees are, and how to extend it. Written against
+**CRM, the reference implementation** — built first and most heavily
+reviewed — but the same design is now implemented for all five domains
+(Sales, Finance, Logistics, Project Management included); see
+[Other domains](../README.md#other-domains) in `../README.md` for what
+differs per domain. For the current build state see `../README.md`. For
+CRM's tier-to-schema mapping see `../taxonomy/crm_qa_taxonomy_spec.md`.
 
 ---
 
@@ -11,19 +15,21 @@ schema mapping see `../taxonomy/crm_qa_taxonomy_spec.md`.
 
 The NLQ Evaluation Framework has five tracks (scope doc §5):
 
-| Track | Component | Relationship to this POC |
+| Track | Component | Relationship to Track B |
 |---|---|---|
 | A | Golden synthetic datasets | **Input** — generator dev preview or frozen full release |
-| **B** | **Q&A evaluation pair sets** | **This POC** — produces the answer key |
+| **B** | **Q&A evaluation pair sets** | **This document** — produces the answer key |
 | C | LLM-as-Judge module | Consumes `judge_reference` + `expected_answer` |
 | D | Regression scorecard | Consumes `expected_answer` for exact-match scoring |
 | E | Evaluation Orchestrator | Deferred (design only) |
 
 **Track B produces the answer key.** For each of the five domains it must
 deliver 750+ (target 800) natural-language questions, each with a
-deterministic ground-truth answer and the metadata to audit it. This POC
-implements the CRM slice (160 pairs) end-to-end to prove the approach
-before the Week 3–7 authoring effort.
+deterministic ground-truth answer and the metadata to audit it. CRM was
+built first (160 pairs end-to-end) to prove the approach; Sales, Finance,
+Logistics, and Project Management each followed the identical pattern
+afterward, so what's described below for CRM applies to all five domains
+unless noted otherwise.
 
 The **one rule** that shapes the whole design (scope doc §9.6):
 
@@ -43,22 +49,24 @@ qa_pairs/
 ├── schema/                     LOCAL REFERENCE. ddl.sql +
 │                               er.dbml (the diagram, version-controlled as text).
 │
-├── taxonomy/                   DESIGN. What questions exist, before any code:
+├── taxonomy/                   CRM'S DESIGN docs (not replicated per domain — see ../README.md):
 │   ├── crm_qa_taxonomy_spec.md         tier -> schema narrative
 │   ├── crm_question_family_matrix.csv  32 families, param, tier quota
 │   ├── crm_allowed_join_paths.csv      JP1-JP12 - the only joins a family may use
 │   ├── crm_answer_format_matrix.csv    how each answer shape serializes to a string
 │   └── crm_edge_case_coverage_map.csv  each imperfection -> the family that exercises it
 │
-├── utils/                       DOMAIN-AGNOSTIC core:
+├── utils/                       DOMAIN-AGNOSTIC core, shared by all five domains:
 │   ├── verify.py               execute SQL + serialize + deterministic log
 │   ├── serialization.py        THE ONLY place a result becomes an answer string
 │   ├── sql.py                  sqlstr() literal quoting + Jinja env factory
 │   ├── sampling.py             even_sample() + N-parameter combos()
 │   ├── duckdb_io.py            typed-DuckDB connect + distinct()
-│   └── labels.py               generic label lookup (CRM map: generator/crm/labels.json)
+│   └── labels.py               generic label lookup (each domain supplies its own labels.json)
 │
-├── generator/                  CRM SPECIFICS - data files + thin drivers:
+├── generator/crm/               CRM SPECIFICS - data files + thin drivers (Sales, Finance,
+│                                 Logistics, and Project Management mirror this exact shape
+│                                 under generator/<domain>/ — see §8):
 │   ├── config.json             dataset sources, output paths, Q&A version, domain, quotas
 │   ├── catalog.json            param name -> SQL listing its allowed values
 │   ├── families.json           32 question families - DECLARATIVE, the source of truth
@@ -66,14 +74,14 @@ qa_pairs/
 │   ├── generate_crm.py         Step 1 - stage generator output into a TYPED dataset
 │   ├── validate_crm.py         Step 2 - integrity gate on the staged dataset
 │   ├── scale_pairs.py          Step 3 - 160 pairs from families.json + templates
-│   ├── author_qa_pairs.py      Step 3b - seed FIXTURES (review only, not the 160)
+│   ├── author_qa_pairs.py      Step 3b - seed FIXTURES (review only, not the 160; CRM-only)
 │   ├── rephrase.py             Step 3c - 16 rephrase groups + map (Section 9.5 companion)
 │   ├── gen_family_matrix.py    regenerate the taxonomy matrix CSV from families.json
 │   └── templates/t{1..5}/*.sql.j2   one tiny SQL template per question family
 │
 ├── tests/                      pytest: contract / templates / ground-truth / scoring / rephrase / sqlfluff
 ├── pyproject.toml              requires-python 3.11, ruff + black config
-│                               (CI: <repo>/.github/workflows/qa-pairs-poc.yml)
+│                               (CI: <repo>/.github/workflows/qa-pairs.yml)
 │
 ├── dataset/                    GENERATED (git-ignored except manifests). Step 1 output:
 │   └── <profile>/*.csv , crm_<profile>.duckdb , manifest_<profile>.json
@@ -91,7 +99,9 @@ scale). **Only `full` output is deliverable** (scope doc §7.3).
 
 ```
  tmp/generated/crm/dev/imperfect/*.csv        (dev)
- release/crm/<dataset_version>/*.csv          (full)
+ release/<version>/crm/dataset/*.csv          (full — canonical version-first layout;
+                                                the retired release/crm/<version>/ domain-first
+                                                layout is read-only compatibility only)
         │
         │  ── generate_crm.py ──────────────────────────────────────────────
         │     • copy the 6 CSVs into dataset/<profile>/
@@ -129,9 +139,9 @@ scale). **Only `full` output is deliverable** (scope doc §7.3).
         │     └──────────────────────────────────────────────────────────────┘
         ▼
  dev:  tmp/generated/crm/dev/qa_pairs/
- full: release/crm/qa-pairs-v<qa_version>/
-       crm_qa_pairs.csv (+_companion) + verification_logs/*.json
-       rephrase/*.csv + rephrase/verification_logs/*.json
+ full: release/<version>/crm/qa_pairs/            (one evaluation-release version shared
+       crm_qa_pairs.csv (+_companion) + verification_logs/*.json      with the dataset — see
+       rephrase/*.csv + rephrase/verification_logs/*.json             utils/release_bundle.py)
  fixtures/<profile>/crm_seed_fixtures.csv (+_companion)  +  verification_logs/*.json
         │
         │  ── pytest tests/ ───────────────────────────────────────────────
@@ -139,7 +149,7 @@ scale). **Only `full` output is deliverable** (scope doc §7.3).
         │     uniqueness · every template var provided · re-execute every SQL and
         │     match the committed result_hash
         │
-        │  ── (downstream, not in this POC) ────────────────────────────────
+        │  ── (downstream, outside Track B) ────────────────────────────────
         │     • independent reviewer re-runs every reference_sql on a clean
         │       DuckDB from the released files only, confirms result_hash
         │     • Track C judge gets question + expected_answer + judge_reference
@@ -296,34 +306,42 @@ equals its §9.1 target, run `gen_family_matrix.py`, and add a seed to
 
 **Add a tier:** unlikely — T1–T5 are fixed by scope doc §9.2.
 
-**Add a domain (Sales, Finance, PM, Logistics):** `utils/` is entirely
-domain-agnostic. Per domain you supply `config.json` (quotas, id prefix,
-held rules), `catalog.json` (param → SQL), `families.json`, `labels.json`
-(enum → business phrase), the
-templates, `schema/`, and the data. The four generator scripts are thin
-drivers over those files. Enforce cross-domain question uniqueness (§9.4)
-with a normalized-text hash across all domains' CSVs.
+**Added domain (how Sales, Finance, Logistics, and Project Management were
+each built on top of CRM's pattern):** `utils/` is entirely domain-agnostic,
+so none of it needed to change. Each domain supplies its own `config.json`
+(quotas, id prefix, resolved open items), `catalog.json` (param → SQL),
+`families.json`, `labels.json` (enum → business phrase), templates,
+`schema/`, and data. The domain's four generator scripts
+(`generate_<domain>.py`, `validate_<domain>.py`, `scale_pairs_<domain>.py`,
+`rephrase.py`) are thin drivers over those files, mirroring CRM's
+`generate_crm.py`/`validate_crm.py`/`scale_pairs.py`/`rephrase.py`
+one-for-one. Cross-domain question uniqueness (§9.4) is enforced by
+`scripts/check_cross_domain_uniqueness.py`, run in CI (`.github/workflows/ci.yml`)
+with a normalized-text hash across all five domains' released CSVs. A sixth
+domain would follow the identical recipe.
 
 ---
 
-## 9. What this POC does not do (real Track B adds)
+## 9. What Track B still does not do
 
-- Cross-corpus duplicate-question hash check across all five domains (§9.4)
-- A **named** independent reviewer — CI now runs the full gate (`ruff`,
+Items resolved since this document was first written (cross-domain
+duplicate-question check, the other four domains, Python 3.11 in CI) have
+been removed from this list; see git history if the original is needed.
+Still outstanding:
+
+- A **named** independent reviewer — CI runs the full gate (`ruff`,
   `black`, `sqlfluff`, `QA_RELEASE=1 pytest` including the clean-room
-  re-execution from the configured full generator release, and a second-build determinism
-  diff — `.github/workflows/qa-pairs-poc.yml`), but §15 still requires a
-  person other than the author to sign
-  `../taxonomy/crm_taxonomy_review_checklist.md`.
-- Ambiguity set for questions with more than one defensible reading
+  re-execution from the configured full generator release, and a
+  second-build determinism diff — `.github/workflows/ci.yml` and
+  `.github/workflows/qa-pairs.yml`), but §15 still requires a person other
+  than the author to sign `../taxonomy/crm_taxonomy_review_checklist.md`.
+- Ambiguity set for questions with more than one defensible reading.
 - "Referential" rephrase class (pronoun / named-entity follow-up) — needs
-  conversational context, out of scope for single questions
-- Git LFS + a `qa-v1.0.0` tag on the delivered set
-- The four remaining domains (Sales, Finance, PM, Logistics)
-- Python 3.11 on the dev box (3.9.6 here, recorded in every manifest; CI
-  runs 3.11). DuckDB is the mandated 0.10.3.
+  conversational context, out of scope for single questions.
+- Git LFS + a `qa-v1.0.0` tag on the delivered set.
 - `scorer_status` moving from `draft` to `approved`/`calibrated` — waits on
   the Platform Owner confirming tolerance=0 and the judge input format.
+
 
 ## 10. Governance documents
 

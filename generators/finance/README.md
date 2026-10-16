@@ -68,11 +68,17 @@ python main.py validate-imperfection-rates --domain finance --profile dev --gene
 
 ## Release Rule
 
-Only the `full` profile can write `release/finance/dataset-v1.0.0/`. Generate
+Only the `full` profile can write a sealed release, under
+`release/<version>/finance/dataset/` (the canonical version-first layout —
+see `qa_pairs/utils/release_bundle.py`; the retired `release/finance/dataset-v1.0.0/`
+domain-first layout is read-only compatibility, never written to). Generate
 the CSVs and support artifacts, run all exported-data checks and clean-room
 reproducibility, and generate `manifest.json` last. A manifest seals the
 directory; issue a new dataset version for any correction.
 
-See `Finance_Distributions_and_Imperfections_Matrix.md` for the exact columns
-changed at each stage and `Currency_and_FX_Handling_Approach.md` for the
-cross-domain currency boundary.
+The distribution/imperfection matrix and the cross-domain currency boundary
+referenced in earlier drafts of this document
+(`Finance_Distributions_and_Imperfections_Matrix.md`,
+`Currency_and_FX_Handling_Approach.md`) were never committed to this
+repository — the Accounting and FX Contract section above is the current,
+authoritative version of that content.

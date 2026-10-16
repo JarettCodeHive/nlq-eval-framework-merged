@@ -382,14 +382,15 @@ def test_a_cross_domain_command_logs_in_the_bundle_it_writes_to(
     monkeypatch, tmp_path: Path
 ) -> None:
     """`score` writes its scorecard to release/<version>/scorecard/, so sending
-    its log to the repo root split one invocation across two places."""
+    its log to release/<version>/logs/ still split one invocation across two
+    places — the log has to land inside the scorecard bundle itself."""
 
     _release_config(tmp_path, "crm", "v1.0.0")
     _release_config(tmp_path, "sales", "v1.0.0")
 
     path = _log_path("score", monkeypatch, tmp_path)
 
-    assert path.parent == tmp_path / "release" / "v1.0.0" / "logs"
+    assert path.parent == tmp_path / "release" / "v1.0.0" / "scorecard" / "logs"
 
 
 def test_an_explicit_version_decides_where_a_cross_domain_command_logs(
@@ -401,7 +402,20 @@ def test_an_explicit_version_decides_where_a_cross_domain_command_logs(
 
     path = main_module._resolve_command_log_path(args)
 
-    assert path.parent == tmp_path / "release" / "v2.0.0" / "logs"
+    assert path.parent == tmp_path / "release" / "v2.0.0" / "scorecard" / "logs"
+
+
+def test_rubric_still_logs_at_the_release_root_not_inside_scorecard(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """`rubric` has no scorecard bundle of its own to nest inside — only `score`
+    gets the scorecard/ nesting."""
+
+    _release_config(tmp_path, "crm", "v1.0.0")
+
+    path = _log_path("rubric", monkeypatch, tmp_path)
+
+    assert path.parent == tmp_path / "release" / "v1.0.0" / "logs"
 
 
 def test_disagreeing_domains_make_a_cross_domain_log_claim_no_version(
@@ -431,7 +445,7 @@ def test_a_malformed_release_config_still_lets_the_command_log(
     path = _log_path("score", monkeypatch, tmp_path)
 
     # The one readable config still agrees with itself.
-    assert path.parent == tmp_path / "release" / "v1.0.0" / "logs"
+    assert path.parent == tmp_path / "release" / "v1.0.0" / "scorecard" / "logs"
 
 
 def test_a_domain_scoped_full_run_logs_inside_that_domains_bundle(
