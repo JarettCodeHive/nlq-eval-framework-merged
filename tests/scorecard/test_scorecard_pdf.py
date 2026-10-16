@@ -36,9 +36,9 @@ def _verdict(score: int = 4) -> JudgeVerdict:
     )
 
 
-def _row(tier: str, result: ExactMatchResult, verdict) -> tuple:
+def _row(tier: str, result: ExactMatchResult, verdict, *, domain: str = "crm") -> tuple:
     return (
-        {"question_id": "q", "domain": "crm", "tier": tier},
+        {"question_id": "q", "domain": domain, "tier": tier},
         SimpleNamespace(
             question="q",
             expected_answer="1",
@@ -56,6 +56,18 @@ def _results(*, passes: int, fails: int, clarifications: int = 0) -> list:
     rows += [
         _row("T1", ExactMatchResult.CLARIFICATION, ClarificationVerdict())
         for _ in range(clarifications)
+    ]
+    return rows
+
+
+def _results_for(domain: str, *, passes: int, fails: int) -> list:
+    rows = [
+        _row("T1", ExactMatchResult.PASS, _verdict(5), domain=domain)
+        for _ in range(passes)
+    ]
+    rows += [
+        _row("T1", ExactMatchResult.FAIL, _verdict(2), domain=domain)
+        for _ in range(fails)
     ]
     return rows
 
@@ -135,6 +147,32 @@ def test_a_passing_run_says_it_meets_the_gate(tmp_path: Path) -> None:
 
     assert "MEETS GATE" in text
     assert "BELOW GATE" not in text
+
+
+# --- the combined tile: pooled, not averaged -----------------------------------
+
+
+def test_the_combined_tile_pools_pass_counts_across_domains(tmp_path: Path) -> None:
+    """crm: 90/100 (90%), sales: 10/100 (10%) pools to 100/200 (50%) — a mean of
+    the two percentages would say 50% too, so this also checks the raw counts
+    to catch a scorer that silently averaged instead of pooling."""
+
+    results = _results_for("crm", passes=90, fails=10) + _results_for(
+        "sales", passes=10, fails=90
+    )
+    text = _text(tmp_path, results, _ctx())
+
+    assert "ALL DOMAINS COMBINED" in text
+    assert "100 of 200 eligible across 2 domains" in text
+    assert "50.0%" in text
+
+
+def test_the_combined_tile_is_absent_for_a_single_domain(tmp_path: Path) -> None:
+    """It would just repeat the one tile already above it."""
+
+    text = _text(tmp_path, _results(passes=96, fails=4), _ctx())
+
+    assert "ALL DOMAINS COMBINED" not in text
 
 
 # --- warnings -----------------------------------------------------------------
