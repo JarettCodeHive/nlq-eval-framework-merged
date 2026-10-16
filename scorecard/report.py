@@ -1324,6 +1324,15 @@ def write_scorecard_pdf(
     # are deliberately sub-3:1 and must not be used as text).
     domain_rows = [r for r in rows if r["tier"] == "ALL"]
     if domain_rows:
+        # Sized to however many domains are actually present, with a
+        # 4-wide minimum so a 1- or 2-domain selection doesn't stretch its
+        # tile(s) across the full page width. A fixed "always 4" here (and
+        # a matching fixed 2.35in per tile below) is what clipped the 5th
+        # tile off the page the moment a 5th domain (Project Management)
+        # existed — both now scale with the actual domain count instead.
+        tile_count = max(len(domain_rows), 4)
+        tile_width = (10.1 * inch) / tile_count
+        inner_tile_width = tile_width - 8  # minus this row's own RIGHTPADDING below
         tiles: list = []
         for row in domain_rows:
             pct = row.get("exact_match_pct")
@@ -1380,7 +1389,7 @@ def write_scorecard_pdf(
                             )
                         ],
                     ],
-                    colWidths=[2.35 * inch],
+                    colWidths=[inner_tile_width],
                 )
             )
             tiles[-1].setStyle(
@@ -1404,10 +1413,11 @@ def write_scorecard_pdf(
                     ]
                 )
             )
-        # Laid out in one row, padded so a single domain does not stretch.
+        # Laid out in one row, padded out to `tile_count` so the grid
+        # width stays consistent regardless of how many domains are present.
         tile_row = Table(
-            [tiles + [""] * max(0, 4 - len(tiles))],
-            colWidths=[2.55 * inch] * 4,
+            [tiles + [""] * (tile_count - len(tiles))],
+            colWidths=[tile_width] * tile_count,
             hAlign="LEFT",
         )
         tile_row.setStyle(
@@ -1423,6 +1433,128 @@ def write_scorecard_pdf(
             )
         )
         story.append(tile_row)
+        story.append(Spacer(1, 0.18 * inch))
+
+    # --- one pooled tile across every domain selected ----------------------
+    # Pooled (total pass / total eligible), not a mean of the percentages above —
+    # averaging the five percentages would weight an 80-question domain the same
+    # as a 180-question one. Only shown when there's more than one domain to
+    # combine; with a single domain it would just repeat the tile above it.
+    if len(domain_rows) > 1:
+        combined_total = sum(int(r.get("questions_total") or 0) for r in domain_rows)
+        combined_pass = sum(int(r.get("exact_match_pass") or 0) for r in domain_rows)
+        combined_pct = (
+            (combined_pass / combined_total * 100) if combined_total else None
+        )
+
+        judge_weighted = [
+            (r["judge_overall"], int(r.get("questions_total") or 0))
+            for r in domain_rows
+            if isinstance(r.get("judge_overall"), (int, float))
+            and r.get("questions_total")
+        ]
+        judge_weight_total = sum(w for _, w in judge_weighted)
+        combined_judge = (
+            sum(v * w for v, w in judge_weighted) / judge_weight_total
+            if judge_weight_total
+            else None
+        )
+
+        deltas = [r.get("delta_pct") for r in domain_rows]
+        if deltas and all(isinstance(d, (int, float)) for d in deltas):
+            weights = [int(r.get("questions_total") or 0) for r in domain_rows]
+            weight_total = sum(weights)
+            combined_delta = (
+                sum(d * w for d, w in zip(deltas, weights)) / weight_total
+                if weight_total
+                else None
+            )
+        else:
+            combined_delta = None
+
+        gate_word = (
+            "—"
+            if combined_pct is None
+            else ("MEETS GATE" if combined_pct >= ACCURACY_GATE_PCT else "BELOW GATE")
+        )
+        combined_tile = Table(
+            [
+                [
+                    Paragraph(
+                        f"<font size=8 color='{_INK_MUTED}'>"
+                        f"<b>ALL DOMAINS COMBINED</b>  exact-match</font>",
+                        body,
+                    )
+                ],
+                [
+                    Paragraph(
+                        (
+                            f"<font size=26 color='{_INK}'>{combined_pct:.1f}%</font>"
+                            if combined_pct is not None
+                            else "—"
+                        ),
+                        ParagraphStyle("hero_combined", parent=body, leading=30),
+                    )
+                ],
+                [
+                    Paragraph(
+                        f"<font size=8 color='{_INK_MUTED}'>"
+                        f"{combined_pass} of {combined_total} eligible across "
+                        f"{len(domain_rows)} domains · "
+                        f"judge {_fmt(combined_judge)}/5</font>",
+                        body,
+                    )
+                ],
+                [
+                    Paragraph(
+                        f"<font size=8 color='{_pct_ink_hex(combined_pct)}'><b>"
+                        f"{gate_word}</b></font>"
+                        f"<font size=8 color='{_INK_MUTED}'>"
+                        + (
+                            "  ·  no baseline"
+                            if combined_delta is None
+                            else f"  ·  {combined_delta:+.2f} pp vs baseline"
+                        )
+                        + "</font>",
+                        body,
+                    )
+                ],
+            ],
+            colWidths=[10.1 * inch - 18],
+        )
+        combined_tile.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, -1), _FONT),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9ced6")),
+                    (
+                        "LINEBEFORE",
+                        (0, 0),
+                        (0, -1),
+                        3,
+                        colors.HexColor(_status_fill(combined_pct)),
+                    ),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+                    ("TOPPADDING", (0, 0), (-1, 0), 7),
+                    ("BOTTOMPADDING", (0, -1), (-1, -1), 7),
+                    ("TOPPADDING", (0, 1), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -2), 1),
+                ]
+            )
+        )
+        combined_row = Table([[combined_tile]], colWidths=[10.1 * inch], hAlign="LEFT")
+        combined_row.setStyle(
+            TableStyle(
+                [
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        story.append(combined_row)
         story.append(Spacer(1, 0.18 * inch))
 
     # --- anything alarming, before the detail -----------------------------

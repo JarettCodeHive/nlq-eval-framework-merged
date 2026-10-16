@@ -148,14 +148,20 @@ def _resolve_command_log_path(args: argparse.Namespace) -> Path:
     filename = f"{args.command}_{timestamp}.log"
 
     if args.command in _UNSCOPED_LOG_COMMANDS:
-        # Mirrors where the combined scorecard goes — release/<version>/scorecard/
-        # — so one invocation's deliverable and its log stay in one bundle.
         version = args.release_version or _agreed_release_version()
         if version:
             try:
-                return release_root(version, repo_root=REPO_ROOT) / "logs" / filename
+                root = release_root(version, repo_root=REPO_ROOT)
             except ValueError:
-                pass  # an invalid --version is the command's error to report
+                root = None  # an invalid --version is the command's error to report
+            if root is not None:
+                if args.command == "score":
+                    # Mirrors where the combined scorecard actually goes —
+                    # release/<version>/scorecard/ — so one invocation's
+                    # deliverable and its log stay in the same bundle, instead
+                    # of the log landing a level up in release/<version>/logs/.
+                    return root / "scorecard" / "logs" / filename
+                return root / "logs" / filename
         return REPO_ROOT / "logs" / filename
 
     domain = getattr(args, "domain", None) or "shared"
