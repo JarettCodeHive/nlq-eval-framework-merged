@@ -86,6 +86,8 @@ narrative:
   client-facing demo script.
 - [`judge_rubric.pdf`](judge_rubric.pdf) — the §14.1 rubric deliverable
   (regenerate with `python -m judge.rubric`, never hand-edit).
+- [`client_updates/`](client_updates/README.md) — dated snapshots of the
+  client-facing progress deck, one file per update.
 
 ## Path F — "Where do audit/findings records live?"
 
