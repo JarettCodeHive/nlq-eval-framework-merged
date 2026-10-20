@@ -35,7 +35,8 @@ Q&A evaluation pairs, judge scoring, and regression scorecards.
 ```text
 nlq-eval-framework/
   config/        Per-domain generation, schema, and judge configs.
-  docs/          System architecture, rubric, audit findings, and handover docs.
+  docs/          System architecture, rubric, audit findings, client progress
+                 updates, and handover docs.
   generators/    Seeded generation, transformation, export, and validation modules.
   judge/         LLM-as-Judge prompts, calibration anchors, and scoring code.
   orchestrator/  Design documentation and config contract only.
@@ -180,3 +181,10 @@ requirements and provider setup.
 For individual generation stages, validation gates, full-release
 troubleshooting, advanced Q&A commands, and detailed judge operations, see the
 [Development Guide](DEVELOPMENT.md).
+
+### Further Reading
+
+New to this repository, or need a module's documentation rather than this
+file's? [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md) is a reading path
+through the rest of the documentation, organized by what you're trying to do
+rather than by file name.

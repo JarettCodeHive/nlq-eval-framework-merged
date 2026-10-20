@@ -33,3 +33,10 @@ There are no per-domain folders — everything lives under `categories/`.
 | [NULL rows counted together with orphan rows](categories/null_vs_orphan_v1.0.0-fixed.md) | 1 | Logistics | No — platform query generation |
 | [One-cent rounding difference](categories/one_cent_rounding_v1.0.0-fixed.md) | 1 | CRM | No — not a real defect |
 | [A number written as a word, not a digit](categories/number_as_word_v1.0.0-fixed.md) | 1 | Project Management | No — this evaluation's own, deliberate design decision |
+
+## Experiments
+
+| Experiment | Result |
+|---|---|
+| [AI generated data context — Sales](categories/ai_context_experiment_sales.md) | Closed 100% of `categorical_literal_mismatch` for Sales (20/20) and part of `breakdown_computation_mismatch` (4/19), but also broke 6 previously-passing questions — net +19 passing, not a clean fix. |
+
